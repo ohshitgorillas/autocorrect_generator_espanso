@@ -2,6 +2,8 @@
 
 from collections import defaultdict
 
+from tqdm import tqdm
+
 from .boundaries import would_trigger_at_end
 from .config import BoundaryType, Correction
 
@@ -22,22 +24,16 @@ def find_suffix_patterns(
 
     for length_group in corrections_by_len.values():
         for typo, word, boundary in length_group:
-            # Only generalize suffix patterns for RIGHT or NONE boundaries
-            if boundary not in (BoundaryType.RIGHT, BoundaryType.NONE):
-                continue
-
-            # Iterate from a sensible minimum suffix length up to the full word length
-            for length in range(2, len(word) + 1):
-                if len(typo) < length:
-                    continue
-
-                typo_suffix = typo[-length:]
-                word_suffix = word[-length:]
-                # Keep the same boundary type as the original corrections
-                # NONE boundary patterns can fix compound typos like "natoinal" → "national"
-                pattern_key = (typo_suffix, word_suffix, boundary)
-                # Store the original correction with its original boundary for later removal
-                patterns[pattern_key].append((typo, word, boundary))
+            # Only extract suffix patterns from corrections 
+            # that are already suffix patterns (RIGHT boundary)
+            if boundary == BoundaryType.RIGHT:
+                for length in range(2, len(word) + 1):
+                    if len(typo) < length:
+                        continue
+                    typo_suffix = typo[-length:]
+                    word_suffix = word[-length:]
+                    pattern_key = (typo_suffix, word_suffix, boundary)
+                    patterns[pattern_key].append((typo, word, boundary))
 
     return patterns
 
@@ -45,14 +41,26 @@ def find_suffix_patterns(
 def generalize_patterns(
     corrections: list[Correction],
     validation_set: set[str],
+    source_words: set[str],
     min_typo_length: int,
+    verbose: bool = False,
 ) -> tuple[list[Correction], set[Correction]]:
     """Find repeated patterns, create generalized rules, and return corrections to be removed."""
     patterns = []
     corrections_to_remove = set()
     suffix_patterns = find_suffix_patterns(corrections)
 
-    for (typo_suffix, word_suffix, boundary), occurrences in suffix_patterns.items():
+    # Wrap with progress bar if verbose
+    pattern_items = suffix_patterns.items()
+    if verbose:
+        pattern_items = tqdm(
+            pattern_items,
+            total=len(suffix_patterns),
+            desc="Generalizing patterns",
+            unit="pattern",
+        )
+
+    for (typo_suffix, word_suffix, boundary), occurrences in pattern_items:
         if len(occurrences) < 2:
             continue
 
@@ -64,9 +72,33 @@ def generalize_patterns(
             continue
 
         if not would_trigger_at_end(typo_suffix, validation_set):
-            patterns.append((typo_suffix, word_suffix, boundary))
-            # Mark original corrections that generated this pattern for removal
-            for typo, word, orig_boundary in occurrences:
-                corrections_to_remove.add((typo, word, orig_boundary))
+            # Check if this pattern would incorrectly trigger on any source words
+            # For RIGHT boundary patterns, they trigger when followed by a word boundary
+            # So check if pattern appears in source word followed by non-letter
+            would_corrupt_source = False
+
+            for source_word in source_words:
+                idx = source_word.find(typo_suffix)
+                while idx != -1:
+                    # Check if there's a word boundary after this occurrence
+                    char_after_idx = idx + len(typo_suffix)
+                    if (
+                        char_after_idx >= len(source_word)
+                        or not source_word[char_after_idx].isalpha()
+                    ):
+                        # Pattern would trigger here and corrupt the source word
+                        would_corrupt_source = True
+                        break
+                    # Look for next occurrence
+                    idx = source_word.find(typo_suffix, idx + 1)
+                if would_corrupt_source:
+                    break
+
+            if not would_corrupt_source:
+                patterns.append((typo_suffix, word_suffix, boundary))
+
+                # Mark original corrections for removal
+                for typo, word, orig_boundary in occurrences:
+                    corrections_to_remove.add((typo, word, orig_boundary))
 
     return patterns, corrections_to_remove

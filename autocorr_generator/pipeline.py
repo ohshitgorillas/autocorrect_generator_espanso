@@ -258,6 +258,10 @@ def run_pipeline(config: Config) -> None:
         exclusion_matcher,
     )
 
+    # Remove substring conflicts from patterns
+    # Patterns can also have redundancies (e.g., "lectiona" is redundant if "ectiona" exists)
+    resolved_patterns = remove_substring_conflicts(resolved_patterns, verbose=False)
+
     # Add resolved patterns to final corrections
     final_corrections.extend(resolved_patterns)
 

@@ -59,10 +59,7 @@ Example config.json:
     parser.add_argument(
         "--include", type=str, help="File with additional words to include"
     )
-    parser.add_argument(
-        "--exclude", action="append", help="Words to exclude from validation"
-    )
-    parser.add_argument("--exclude-file", type=str, help="File with exclusion patterns")
+    parser.add_argument("--exclude", type=str, help="File with exclusion patterns")
     parser.add_argument(
         "--adjacent-letters", type=str, help="File mapping keys to adjacent letters"
     )

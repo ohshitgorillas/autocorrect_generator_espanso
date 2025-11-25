@@ -19,14 +19,17 @@ This project originated as a tool for [QMK Firmware](https://qmk.fm/) and still 
 
 After manually entering my own mistakes for a while, I realized I didn't need a pre-existing dictionary—I could generate an arbitrarily large corpus of typos algorithmically. This insight led to the creation of this project.
 
-However, keyboard microcontrollers have limited storage capacity. My personal QMK keyboard can only store about 1,100 corrections, while we can algorithmically generate 20,000+ unique corrections in minutes. Espanso runs on the host OS and supports arbitrarily large dictionaries, making it the perfect platform for this project.
+However, keyboard microcontrollers have limited storage capacity. My personal QMK keyboard can only store about 1,100 corrections, while we can algorithmically generate tens of thousands of unique patterns. Espanso runs on the host OS and supports arbitrarily large dictionaries, making it the perfect platform for this project.
 
 ## Features
 
 * **Smart Boundary Detection**: Automatically assigns Espanso word boundaries (`word: true`, `left_word: true`, etc.) to prevent typos from triggering inside other valid words (e.g., prevents `no` → `on` from triggering inside the word `noon`).
 * **Collision Resolution**: If a typo maps to multiple valid words (e.g., `thn` could be `then`, `than`, or `thin`), the script uses frequency analysis to pick the statistically likely correction or discards it if ambiguous. (`then` and `than` are far more frequent than `thin`, but themselves have a frequency ratio close to 1, so `thn` is considered ambiguous and skipped.)
+* **Pattern Generalization**: Automatically detects repeated suffix patterns (e.g., `-atoin` → `-ation` and `-ntoin` → `-ntion` are simplified to `-toin` → `-toin`) and creates generalized rules, reducing dictionary size.
+* **Comprehensive Reporting**: Generate detailed reports showing collisions, pattern decisions, substring conflicts, and performance metrics—invaluable for understanding and tuning the generator.
 * **Espanso Optimization**: Outputs alphabetically organized YAML files to keep sizes manageable and organization clean.
 * **Highly Configurable**: Customize input lists, exclusion patterns, adjacent key mappings, and frequency thresholds.
+* **Progress Tracking**: Real-time progress bars for word processing, pattern generalization, and conflict removal.
 * **Estimates RAM Usage**: Estimates the total RAM consumed by the dictionary in Espanso (~21,500 entries → 1.5MB).
 
 ---
@@ -51,6 +54,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Set up directories (optional)
 mkdir corrections
 mkdir settings
+mkdir reports
 
 # Install dependencies
 pip install -r requirements.txt
@@ -72,6 +76,13 @@ project_root/
 │   ├── config.json
 │   ├── exclude.txt
 │   └── include.txt
+├── reports/            <-- Timestamped reports (optional)
+│   ├── 2025-11-25_14-30-15/
+│   │   ├── summary.txt
+│   │   ├── collisions.txt
+│   │   ├── patterns.txt
+│   │   └── ...
+│   └── ...
 ├── settings/           <-- Recommended location for personalization files
 │   ├── adjacent.txt    (optional)
 │   ├── config.json     (optional)
@@ -126,6 +137,32 @@ python -m autocorr_generator \
 
 Using `--typo-freq-threshold` is recommended to catch conjugations and other transformations of words that may not otherwise occur in `english-words`. The word `juts`, for example, both a transposition of `just` *and* a conjugation of the verb `jut`, does not occur in `english-words` (only `jut`), but does occur in `wordfreq` with a frequency of ~2e-7. Without this option, the script would (incorrectly) generate the correction `juts` → `just`. Lower values catch less common words.
 
+### Generating Reports
+
+Generate detailed reports to analyze what the generator is doing:
+
+```bash
+python -m autocorr_generator \
+    --top-n 5000 \
+    --output corrections \
+    --reports reports \
+    --verbose
+```
+
+This creates a timestamped directory (e.g., `reports/2025-11-25_14-30-15/`) with:
+- **`summary.txt`** - Overall statistics and timing breakdown
+- **`collisions.txt`** - Ambiguous typos that were skipped (with suggestions)
+- **`patterns.txt`** - Generalized patterns and rejected patterns
+- **`conflicts_none.txt`** - Substring conflicts (no boundary)
+- **`conflicts_left.txt`** - Substring conflicts (left boundary)
+- **`conflicts_right.txt`** - Substring conflicts (right boundary)
+- **`conflicts_both.txt`** - Substring conflicts (both boundaries)
+- **`short_typos.txt`** - Typos skipped for being too short (if any)
+- **`exclusions.txt`** - Corrections blocked by exclusion rules (if any)
+- **`statistics.csv`** - Machine-readable statistics for analysis
+
+Reports are invaluable for understanding the generator's decisions and fine-tuning your configuration.
+
 ---
 
 ## Configuration Options
@@ -135,6 +172,7 @@ You can configure the generator via Command Line Arguments or a `config.json` fi
 | Argument | Default | Description |
 | :--- | :--- | :--- |
 | `--output`, `-o` | `None` | Directory to output YAML files. (Prints to stdout if omitted). |
+| `--reports` | `None` | Directory to generate detailed reports (creates timestamped subdirectories). |
 | `--jobs`, `-j` | CPU Count | Number of parallel worker processes. |
 | `--top-n` | `None` | Process the top N most frequent English words. |
 | `--include` | `None` | Path to a file containing specific words to process. |
@@ -155,6 +193,7 @@ Instead of long CLI strings, you can use a `config.json`:
 {
   "top_n": 5000,
   "output": "corrections",
+  "reports": "reports",
   "min_typo_length": 4,
   "exclude": "settings/exclusions.txt",
   "adjacent_letters": "settings/qwerty.txt",

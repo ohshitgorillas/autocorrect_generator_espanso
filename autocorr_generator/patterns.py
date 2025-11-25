@@ -76,6 +76,30 @@ def generalize_patterns(
             )
             continue
 
+        # Validate: Check if this pattern actually works for all occurrences
+        # For RIGHT boundaries, when the pattern triggers, it should produce correct results
+        pattern_valid = True
+        for full_typo, full_word, _ in occurrences:
+            # When user types full_typo, the pattern would trigger on typo_suffix
+            # Calculate what the result would be
+            remaining_prefix = full_typo[: -len(typo_suffix)]
+            expected_result = remaining_prefix + word_suffix
+
+            if expected_result != full_word:
+                # This pattern would create garbage for this word
+                pattern_valid = False
+                rejected_patterns.append(
+                    (
+                        typo_suffix,
+                        word_suffix,
+                        f"Creates '{expected_result}' instead of '{full_word}' for typo '{full_typo}'",
+                    )
+                )
+                break
+
+        if not pattern_valid:
+            continue
+
         # Check for conflicts with existing words before generalizing
         if typo_suffix in validation_set:
             rejected_patterns.append(

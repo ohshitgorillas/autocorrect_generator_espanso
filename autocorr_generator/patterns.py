@@ -8,8 +8,12 @@ from .config import BoundaryType, Correction
 
 def find_suffix_patterns(
     corrections: list[Correction],
-) -> dict[tuple[str, str, BoundaryType], list[str]]:
-    """Find common suffix patterns."""
+) -> dict[tuple[str, str, BoundaryType], list[tuple[str, str, BoundaryType]]]:
+    """Find common suffix patterns.
+
+    Returns a dict mapping (typo_suffix, word_suffix, boundary) to list of
+    (full_typo, full_word, original_boundary) tuples that match this pattern.
+    """
     patterns = defaultdict(list)
     # Group corrections by word length to make suffix comparison more efficient
     corrections_by_len = defaultdict(list)
@@ -18,7 +22,8 @@ def find_suffix_patterns(
 
     for length_group in corrections_by_len.values():
         for typo, word, boundary in length_group:
-            if boundary != BoundaryType.RIGHT:
+            # Only generalize suffix patterns for RIGHT or NONE boundaries
+            if boundary not in (BoundaryType.RIGHT, BoundaryType.NONE):
                 continue
 
             # Iterate from a sensible minimum suffix length up to the full word length
@@ -28,8 +33,11 @@ def find_suffix_patterns(
 
                 typo_suffix = typo[-length:]
                 word_suffix = word[-length:]
+                # Keep the same boundary type as the original corrections
+                # NONE boundary patterns can fix compound typos like "natoinal" → "national"
                 pattern_key = (typo_suffix, word_suffix, boundary)
-                patterns[pattern_key].append((typo, word))
+                # Store the original correction with its original boundary for later removal
+                patterns[pattern_key].append((typo, word, boundary))
 
     return patterns
 
@@ -58,7 +66,7 @@ def generalize_patterns(
         if not would_trigger_at_end(typo_suffix, validation_set):
             patterns.append((typo_suffix, word_suffix, boundary))
             # Mark original corrections that generated this pattern for removal
-            for typo, word in occurrences:
-                corrections_to_remove.add((typo, word, boundary))
+            for typo, word, orig_boundary in occurrences:
+                corrections_to_remove.add((typo, word, orig_boundary))
 
     return patterns, corrections_to_remove

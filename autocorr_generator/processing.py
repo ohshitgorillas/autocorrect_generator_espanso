@@ -1,6 +1,6 @@
 """Word processing and collision resolution."""
 
-from multiprocessing import Pool
+from collections import defaultdict
 
 from tqdm import tqdm
 from wordfreq import word_frequency
@@ -182,37 +182,71 @@ def _process_boundary_group(
     Returns:
         List of corrections with substring conflicts removed
     """
-    _, group = args
+    boundary, group = args
     typo_to_correction = {c[0]: c for c in group}
-    all_typos = set(typo_to_correction.keys())
 
-    # Find substring relationships within this boundary group
-    substring_groups = {}
-    for short_typo in all_typos:
-        containing = [
-            long_typo
-            for long_typo in all_typos
-            if long_typo.startswith(short_typo) and short_typo != long_typo
-        ]
-        if containing:
-            substring_groups[short_typo] = containing
+    # Sort typos by length for efficient checking
+    sorted_typos = sorted(typo_to_correction.keys(), key=len)
 
     typos_to_remove = set()
 
-    for short_typo, long_typos in substring_groups.items():
-        if short_typo in typos_to_remove:
-            continue
+    # For RIGHT boundaries, check suffixes (endswith) with validation
+    # For other boundaries, check prefixes (startswith)
+    if boundary == BoundaryType.RIGHT:
+        # Group active suffixes by last character for faster lookup
+        suffixes_by_char = defaultdict(list)
 
-        # Espanso triggers on shortest match first (left-to-right greedy)
-        # So always keep shorter typo, remove longer ones that contain it
-        typos_to_remove.update(long_typos)
+        for typo in sorted_typos:
+            is_blocked = False
+            if typo and typo[-1] in suffixes_by_char:
+                for suffix in suffixes_by_char[typo[-1]]:
+                    if typo.endswith(suffix):
+                        # Validate: check if removal would create correct result
+                        # Get corrections for both typos
+                        long_correction = typo_to_correction[
+                            typo
+                        ]  # (typo, word, boundary)
+                        short_correction = typo_to_correction[suffix]
+
+                        long_word = long_correction[1]
+                        short_word = short_correction[1]
+
+                        # Calculate what would happen when user types long_typo:
+                        # Espanso triggers on suffix → short_word
+                        # Remaining prefix stays
+                        remaining_prefix = typo[: -len(suffix)]
+                        expected_result = remaining_prefix + short_word
+
+                        # Only block if the result would be correct
+                        if expected_result == long_word:
+                            typos_to_remove.add(typo)
+                            is_blocked = True
+                            break
+
+            if not is_blocked and typo:
+                suffixes_by_char[typo[-1]].append(typo)
+    else:
+        # Group active prefixes by first character for faster lookup
+        prefixes_by_char = defaultdict(list)
+
+        for typo in sorted_typos:
+            is_blocked = False
+            if typo and typo[0] in prefixes_by_char:
+                for prefix in prefixes_by_char[typo[0]]:
+                    if typo.startswith(prefix):
+                        typos_to_remove.add(typo)
+                        is_blocked = True
+                        break
+
+            if not is_blocked and typo:
+                prefixes_by_char[typo[0]].append(typo)
 
     # Return corrections from this boundary group that weren't removed
     return [c for c in group if c[0] not in typos_to_remove]
 
 
 def remove_substring_conflicts(
-    corrections: list[Correction], jobs: int = 1, verbose: bool = False
+    corrections: list[Correction], verbose: bool = False
 ) -> list[Correction]:
     """Remove corrections where one typo is a substring of another WITH THE SAME BOUNDARY.
 
@@ -242,34 +276,20 @@ def remove_substring_conflicts(
             by_boundary[boundary] = []
         by_boundary[boundary].append(correction)
 
-    boundary_groups = list(by_boundary.items())
+    # Process each boundary group (no parallelization - only ~4 groups max)
+    # The optimization is in the algorithm itself, not parallelization
+    final_corrections = []
 
-    # Process boundary groups in parallel if jobs > 1
-    if jobs > 1 and len(boundary_groups) > 1:
-        with Pool(processes=min(jobs, len(boundary_groups))) as pool:
-            if verbose:
-                # Use imap for progress tracking
-                results = list(
-                    tqdm(
-                        pool.imap(_process_boundary_group, boundary_groups),
-                        desc="Removing conflicts",
-                        unit="group",
-                        total=len(boundary_groups),
-                    )
-                )
-            else:
-                # Use map for efficiency when no progress bar needed
-                results = pool.map(_process_boundary_group, boundary_groups)
-        # Flatten results
-        final_corrections = [corr for group_result in results for corr in group_result]
-    else:
-        # Single-threaded processing
-        final_corrections = []
-        groups_iter = boundary_groups
-        if verbose and len(boundary_groups) > 1:
-            groups_iter = tqdm(boundary_groups, desc="Removing conflicts", unit="group")
+    groups_iter = by_boundary.items()
+    if verbose and len(by_boundary) > 1:
+        groups_iter = tqdm(
+            by_boundary.items(),
+            desc="Removing conflicts",
+            unit="boundary",
+            total=len(by_boundary),
+        )
 
-        for boundary_group in groups_iter:
-            final_corrections.extend(_process_boundary_group(boundary_group))
+    for boundary_group in groups_iter:
+        final_corrections.extend(_process_boundary_group(boundary_group))
 
     return final_corrections

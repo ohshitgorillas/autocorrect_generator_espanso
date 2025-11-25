@@ -4,5 +4,6 @@ p -> o
 o -> pi
 i -> uo
 c -> v
-e -> w
+e -> wdr
 n -> bm
+l -> k;

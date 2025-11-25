@@ -2,7 +2,7 @@
 b -> vn
 p -> o
 o -> pi
-i -> uo
+i -> uo8
 c -> v
 e -> wdr
 n -> bm

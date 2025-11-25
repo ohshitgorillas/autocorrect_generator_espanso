@@ -5,6 +5,7 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from multiprocessing import cpu_count
+from argparse import ArgumentParser
 
 
 class BoundaryType(Enum):
@@ -38,8 +39,7 @@ class Config:
     jobs: int = field(default_factory=cpu_count)
     max_entries_per_file: int = 500
 
-
-def load_config(json_path: str | None, cli_args) -> Config:
+def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Config:
     """Load JSON config, override with CLI args, return Config object."""
     json_config = {}
     if json_path:
@@ -47,53 +47,30 @@ def load_config(json_path: str | None, cli_args) -> Config:
         with open(json_path, "r", encoding="utf-8") as f:
             json_config = json.load(f)
 
+    def get_value(key: str, fallback):
+        """Get value with correct priority: CLI > JSON > Fallback."""
+        cli_value = getattr(cli_args, key)
+        default_value = parser.get_default(key)
+        # Use CLI value only if it was explicitly set by the user
+        if cli_value != default_value:
+            return cli_value
+        # Otherwise, try JSON, then the hardcoded fallback
+        return json_config.get(key, fallback)
+
     # Build config with CLI args taking precedence over JSON
     return Config(
-        top_n=(
-            cli_args.top_n if cli_args.top_n is not None else json_config.get("top_n")
-        ),
-        max_word_length=(
-            cli_args.max_word_length
-            if cli_args.max_word_length is not None
-            else json_config.get("max_word_length", 10)
-        ),
-        min_word_length=(
-            cli_args.min_word_length
-            if cli_args.min_word_length is not None
-            else json_config.get("min_word_length", 3)
-        ),
-        min_typo_length=(
-            cli_args.min_typo_length
-            if cli_args.min_typo_length is not None
-            else json_config.get("min_typo_length", 3)
-        ),
-        freq_ratio=(
-            cli_args.freq_ratio
-            if cli_args.freq_ratio is not None
-            else json_config.get("freq_ratio", 10.0)
-        ),
-        typo_freq_threshold=(
-            cli_args.typo_freq_threshold
-            if cli_args.typo_freq_threshold is not None
-            else json_config.get("typo_freq_threshold", 0.0)
-        ),
-        output=cli_args.output if cli_args.output else json_config.get("output"),
-        include=cli_args.include if cli_args.include else json_config.get("include"),
-        exclude=cli_args.exclude if cli_args.exclude else json_config.get("exclude"),
-        adjacent_letters=(
-            cli_args.adjacent_letters
-            if cli_args.adjacent_letters
-            else json_config.get("adjacent_letters")
-        ),
+        top_n=get_value("top_n", None),
+        max_word_length=get_value("max_word_length", 10),
+        min_word_length=get_value("min_word_length", 3),
+        min_typo_length=get_value("min_typo_length", 3),
+        freq_ratio=get_value("freq_ratio", 10.0),
+        typo_freq_threshold=get_value("typo_freq_threshold", 0.0),
+        output=get_value("output", None),
+        include=get_value("include", None),
+        exclude=get_value("exclude", None),
+        adjacent_letters=get_value("adjacent_letters", None),
         verbose=cli_args.verbose or json_config.get("verbose", False),
-        jobs=(
-            cli_args.jobs
-            if cli_args.jobs is not None
-            else json_config.get("jobs", cpu_count())
-        ),
-        max_entries_per_file=(
-            cli_args.max_entries_per_file
-            if cli_args.max_entries_per_file is not None
-            else json_config.get("max_entries_per_file", 500)
-        ),
+        jobs=get_value("jobs", cpu_count()),
+        max_entries_per_file=get_value("max_entries_per_file", 500),
     )
+

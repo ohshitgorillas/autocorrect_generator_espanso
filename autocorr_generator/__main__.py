@@ -11,7 +11,7 @@ def main():
     args = parser.parse_args()
 
     # Load configuration
-    config = load_config(args.config, args)
+    config = load_config(args.config, args, parser)
 
     # Validate
     if not config.top_n and not config.include:

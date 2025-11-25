@@ -27,14 +27,6 @@ def would_trigger_at_end(typo: str, validation_set: set[str]) -> bool:
     return False
 
 
-def would_trigger_as_substring(typo: str, validation_set: set[str]) -> bool:
-    """Check if typo appears as substring."""
-    for word in validation_set:
-        if typo in word and word != typo:
-            return True
-    return False
-
-
 def determine_boundaries(
     typo: str,
     validation_set: set[str],
@@ -42,7 +34,7 @@ def determine_boundaries(
 ) -> BoundaryType | None:
     """Determine what boundaries are needed for a typo."""
     is_substring_source = is_substring_of_any(typo, source_words)
-    is_substring_validation = would_trigger_as_substring(typo, validation_set)
+    is_substring_validation = is_substring_of_any(typo, validation_set)
 
     if not is_substring_source and not is_substring_validation:
         return BoundaryType.NONE

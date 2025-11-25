@@ -69,7 +69,9 @@ def run_pipeline(config: Config) -> None:
     verbose = config.verbose
 
     # Load dictionaries and mappings
-    validation_set = load_validation_dictionary(config.exclude, verbose)
+    validation_set = load_validation_dictionary(
+        config.exclude, config.include, verbose
+    )
     exclusions = load_exclusions(config.exclude, verbose)
     exclusion_matcher = ExclusionMatcher(exclusions)
 
@@ -149,6 +151,7 @@ def run_pipeline(config: Config) -> None:
         typo_map,
         config.freq_ratio,
         config.min_typo_length,
+        config.min_word_length,
         user_words_set,
         exclusion_matcher,
     )

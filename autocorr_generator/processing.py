@@ -6,6 +6,7 @@ from .boundaries import determine_boundaries
 from .config import BoundaryType, Correction
 from .exclusions import ExclusionMatcher
 from .typos import generate_all_typos
+from .utils import compile_wildcard_regex
 
 
 def process_word(
@@ -15,6 +16,7 @@ def process_word(
     source_words: set[str],
     typo_freq_threshold: float,
     adj_letters_map: dict[str, str] | None,
+    exclusions: set[str],
 ) -> list[Correction]:
     """Process a single word and generate all valid corrections.
 
@@ -29,6 +31,11 @@ def process_word(
     corrections = []
     typos = generate_all_typos(word, adj_letters_map)
 
+    # Compile exclusion patterns once for efficiency
+    exact_exclusions = {p for p in exclusions if "*" not in p and "->" not in p}
+    wildcard_patterns = {p for p in exclusions if "*" in p and "->" not in p}
+    wildcard_regexes = [compile_wildcard_regex(p) for p in wildcard_patterns]
+
     for typo in typos:
         if typo == word:
             continue
@@ -37,7 +44,18 @@ def process_word(
         if typo in validation_set:
             continue
 
-        if typo_freq_threshold > 0.0:
+        # If user explicitly excludes a typo, it bypasses the frequency check.
+        # This makes the user's exclusion the final authority.
+        is_explicitly_excluded = False
+        if typo in exact_exclusions:
+            is_explicitly_excluded = True
+        else:
+            for pat in wildcard_regexes:
+                if pat.match(typo):
+                    is_explicitly_excluded = True
+                    break
+
+        if not is_explicitly_excluded and typo_freq_threshold > 0.0:
             typo_freq = word_frequency(typo, "en")
             if typo_freq >= typo_freq_threshold:
                 continue

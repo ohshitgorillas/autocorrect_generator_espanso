@@ -199,24 +199,50 @@ keyboard
 ```
 
 ### Exclusion File (`--exclude`)
-The script will not generate autocorrect rules for these typo patterns. Supports wildcards (`*`).
+Provides powerful control over what corrections are generated and what words are considered valid. The file supports three types of rules:
+
+#### 1. Word Exclusions
+These patterns remove words from the validation dictionary at the start of the process. Any word matching these patterns is treated as a non-word, which is useful for enabling corrections like `teh -> the`. Wildcards (`*`) are supported.
 
 ```text
-# Exact typo exclusion
-rpi         # Don't correct "rpi" to anything
+# Exclude "teh" from the dictionary, allowing it to be a typo for "the".
+*teh*
 
-# Wildcards (skip typo families)
-pre*        # Skip typos starting with "pre"
-*ball       # Skip typos ending with "ball"
+# Exclude any word ending in "ball".
+*ball
+```
 
-# The following wildcard prevents chemistry terms like "allantoin" 
-# from blocking the correction *toin -> tion.
+#### 2. Pattern Exclusions for Boundary Detection
+These patterns are used to prevent certain dictionary words from incorrectly blocking valid typo patterns. For example, if you want to generate corrections for suffixes like `-tion` (which might have a typo `-toin`), you don't want a dictionary word like "allantoin" to block it.
+
+```text
+# Prevents words like "allantoin" from blocking the generalization of "-toin" as a typo for "-tion".
 *toin
 ```
 
-**How Exclusions Work:**
-1. Typos matching patterns won't generate corrections (e.g., `rpi` won't correct to anything)
-2. Dictionary words matching patterns won't block typo boundary detection (e.g., `*toin` prevents "allantoin" from blocking "toin" as a valid typo)
+#### 3. Advanced Correction Filtering
+For fine-grained control, you can block specific `(typo, correction)` pairs using the `->` syntax. This supports wildcards and a special colon (`:`) syntax for word boundary requirements.
+
+```text
+# Block a specific, exact correction
+thn -> thin
+
+# Block typos starting with 'in' from correcting to 'ni'
+in* -> ni
+
+# Block corrections where a typo ends in 'in', corrects to 'ing',
+# and requires a right word boundary (e.g., runnin -> running)
+*in: -> ing
+
+# Block corrections where a typo starts with 'in', has a left boundary,
+# and corrects to a word starting with 'ni'.
+:in* -> ni*
+```
+
+**Boundary Specifiers:**
+- `pattern:`: Requires a **right** word boundary.
+- `:pattern`: Requires a **left** word boundary.
+- `:pattern:`: Requires **both** word boundaries (a standalone word).
 
 ---
 
@@ -263,3 +289,9 @@ This prevents false corrections like `no` → `on` triggering inside `noon`.
 MIT License
 
 Copyright © 2025 Adam Goldsmith
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

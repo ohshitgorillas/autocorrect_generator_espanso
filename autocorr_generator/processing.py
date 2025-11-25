@@ -128,23 +128,22 @@ def resolve_collisions(
 
 
 def remove_substring_conflicts(corrections: list[Correction]) -> list[Correction]:
-    """Remove corrections where one typo is substring of another."""
-    typo_to_correction = {corr[0]: corr for corr in corrections}
-    typos_to_remove = set()
-    typo_list = list(typo_to_correction.keys())
+    """Remove corrections where one typo is a substring of another.
 
-    for i, typo1 in enumerate(typo_list):
-        if typo1 in typos_to_remove:
+    """
+    # Sort corrections by typo length in descending order
+    corrections.sort(key=lambda c: len(c[0]), reverse=True)
+
+    final_corrections = []
+    kept_typos = set()
+
+    for typo, word, boundary in corrections:
+        # If this typo is a substring of any typo we've already kept, skip it.
+        # Since we sorted by length, we only need to check this one way.
+        if any(typo in kept for kept in kept_typos):
             continue
-        for typo2 in typo_list[i + 1 :]:
-            if typo2 in typos_to_remove:
-                continue
 
-            if typo1 in typo2:
-                typos_to_remove.add(typo2)
-            elif typo2 in typo1:
-                typos_to_remove.add(typo1)
+        final_corrections.append((typo, word, boundary))
+        kept_typos.add(typo)
 
-    return [
-        typo_to_correction[t] for t in typo_to_correction if t not in typos_to_remove
-    ]
+    return final_corrections

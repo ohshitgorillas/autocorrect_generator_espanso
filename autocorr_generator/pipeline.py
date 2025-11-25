@@ -7,7 +7,7 @@ from multiprocessing import Pool
 
 from tqdm import tqdm
 
-from .config import Config, Correction
+from .config import BoundaryType, Config, Correction
 from .dictionary import (
     load_adjacent_letters,
     load_exclusions,
@@ -290,9 +290,7 @@ def run_pipeline(config: Config) -> None:
     if report_data:
         pre_conflict_corrections = {c: c for c in final_corrections}
 
-    final_corrections = remove_substring_conflicts(
-        final_corrections, config.jobs, verbose
-    )
+    final_corrections = remove_substring_conflicts(final_corrections, verbose)
 
     if report_data:
         report_data.stage_times["Removing conflicts"] = time.time() - stage_start
@@ -301,18 +299,25 @@ def run_pipeline(config: Config) -> None:
         final_set = set(final_corrections)
         for typo, word, boundary in pre_conflict_corrections.values():
             if (typo, word, boundary) not in final_set:
-                # Find what blocked it (simple heuristic: find shorter typos)
+                # Find what blocked it and what it corrects to
                 blocking_typo = "unknown"
-                for other_typo, _, other_boundary in final_corrections:
-                    if (
-                        other_boundary == boundary
-                        and typo.startswith(other_typo)
-                        and typo != other_typo
-                    ):
-                        blocking_typo = other_typo
-                        break
+                blocking_word = "unknown"
+                for other_typo, other_word, other_boundary in final_corrections:
+                    if other_boundary == boundary and typo != other_typo:
+                        # For RIGHT boundaries (suffixes), check if typo ends with shorter typo
+                        # For other boundaries, check if typo starts with shorter typo
+                        if boundary == BoundaryType.RIGHT:
+                            if typo.endswith(other_typo):
+                                blocking_typo = other_typo
+                                blocking_word = other_word
+                                break
+                        else:
+                            if typo.startswith(other_typo):
+                                blocking_typo = other_typo
+                                blocking_word = other_word
+                                break
                 report_data.removed_conflicts.append(
-                    (typo, word, blocking_typo, boundary)
+                    (typo, word, blocking_typo, blocking_word, boundary)
                 )
 
     if verbose:

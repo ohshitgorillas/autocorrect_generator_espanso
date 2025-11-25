@@ -88,6 +88,7 @@ def resolve_collisions(
     typo_map: dict[str, list[tuple[str, BoundaryType]]],
     freq_ratio: float,
     min_typo_length: int,
+    min_word_length: int,
     user_words: set[str],
     exclusion_matcher: ExclusionMatcher,
 ) -> tuple[list[Correction], list, list]:
@@ -108,7 +109,9 @@ def resolve_collisions(
             if word in user_words and len(word) == 2:
                 boundary = BoundaryType.BOTH
 
-            if len(typo) < min_typo_length:
+            # A short typo is permissible if it corrects to a word that is also short,
+            # using the user's `min_word_length` as the threshold.
+            if len(typo) < min_typo_length and len(word) > min_word_length:
                 skipped_short.append((typo, word, len(typo)))
             else:
                 correction = (typo, word, boundary)
@@ -133,7 +136,9 @@ def resolve_collisions(
                 if word in user_words and len(word) == 2:
                     boundary = BoundaryType.BOTH
 
-                if len(typo) < min_typo_length:
+                # A short typo is permissible if it corrects to a word that is also short,
+                # using the user's `min_word_length` as the threshold.
+                if len(typo) < min_typo_length and len(word) > min_word_length:
                     skipped_short.append((typo, word, len(typo)))
                 else:
                     correction = (typo, word, boundary)
@@ -147,21 +152,22 @@ def resolve_collisions(
 
 def remove_substring_conflicts(corrections: list[Correction]) -> list[Correction]:
     """Remove corrections where one typo is a substring of another.
-
+    
+    If we have both 'teh' and 'tehir', we keep only 'teh' because the longer
+    typo will never be triggered.
     """
-    # Sort corrections by typo length in descending order
-    corrections.sort(key=lambda c: len(c[0]), reverse=True)
+    # Sort by length ascending so we process shorter typos first
+    corrections.sort(key=lambda c: len(c[0]))
 
     final_corrections = []
     kept_typos = set()
 
     for typo, word, boundary in corrections:
-        # If this typo is a substring of any typo we've already kept, skip it.
-        # Since we sorted by length, we only need to check this one way.
-        if any(typo in kept for kept in kept_typos):
-            continue
-
-        final_corrections.append((typo, word, boundary))
-        kept_typos.add(typo)
+        # Check if any already-kept typo is a substring of this one
+        is_compound = any(kept_typo in typo for kept_typo in kept_typos if kept_typo != typo)
+        
+        if not is_compound:
+            final_corrections.append((typo, word, boundary))
+            kept_typos.add(typo)
 
     return final_corrections

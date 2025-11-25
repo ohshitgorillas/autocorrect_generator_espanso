@@ -12,17 +12,25 @@ from .utils import compile_wildcard_regex
 
 
 def load_validation_dictionary(
-    exclude_filepath: str | None, verbose: bool = False
+    exclude_filepath: str | None,
+    include_filepath: str | None,
+    verbose: bool = False,
 ) -> set[str]:
     """Load english-words dictionary for validation.
 
-    Removes words from the `exclude` file.
-    Handles exact words and wildcard (*) patterns.
+    Removes words from the `exclude` file and adds words from the `include` file.
+    Handles exact words and wildcard (*) patterns for exclusions.
     """
     if verbose:
         print("Loading English words dictionary...", file=sys.stderr)
 
     words = get_english_words_set(["web2", "gcide"], lower=True)
+    original_word_count = len(words)
+
+    # Add custom words from the main include file to the validation set
+    custom_words = load_word_list(include_filepath)  # No verbose here
+    words.update(custom_words)
+    added_count = len(words) - original_word_count
 
     # Load exclusions from file
     exclusion_patterns = load_exclusions(exclude_filepath)  # No verbose here
@@ -52,6 +60,11 @@ def load_validation_dictionary(
 
     if verbose:
         print(f"Loaded {len(validation_set)} words for validation", file=sys.stderr)
+        if added_count > 0:
+            print(
+                f"Added {added_count} custom words from the include file.",
+                file=sys.stderr,
+            )
         if removed_count > 0:
             print(
                 f"Removed {removed_count} words based on the exclude file (including wildcards).",

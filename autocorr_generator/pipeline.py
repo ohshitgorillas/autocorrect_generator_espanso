@@ -1,6 +1,7 @@
 """Main processing pipeline and multiprocessing support."""
 
 import sys
+import time
 from collections import defaultdict
 from multiprocessing import Pool
 
@@ -71,6 +72,7 @@ def process_word_worker(word: str) -> tuple[str, list[Correction]]:
 
 def run_pipeline(config: Config) -> None:
     """Main processing pipeline."""
+    start_time = time.time()
     verbose = config.verbose
 
     # Load dictionaries and mappings
@@ -237,7 +239,9 @@ def run_pipeline(config: Config) -> None:
 
     # Remove substring conflicts
     pre_conflict_count = len(final_corrections)
-    final_corrections = remove_substring_conflicts(final_corrections)
+    final_corrections = remove_substring_conflicts(
+        final_corrections, config.jobs, verbose
+    )
 
     if verbose:
         conflicts_removed = pre_conflict_count - len(final_corrections)
@@ -251,3 +255,15 @@ def run_pipeline(config: Config) -> None:
     generate_espanso_yaml(
         final_corrections, config.output, verbose, config.max_entries_per_file
     )
+
+    # Print total time
+    elapsed_time = time.time() - start_time
+    if verbose:
+        minutes, seconds = divmod(elapsed_time, 60)
+        if minutes > 0:
+            print(
+                f"\n✓ Total processing time: {int(minutes)}m {seconds:.1f}s",
+                file=sys.stderr,
+            )
+        else:
+            print(f"\n✓ Total processing time: {seconds:.1f}s", file=sys.stderr)

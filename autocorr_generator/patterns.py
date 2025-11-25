@@ -38,9 +38,10 @@ def generalize_patterns(
     corrections: list[Correction],
     validation_set: set[str],
     min_typo_length: int,
-) -> list[Correction]:
-    """Find repeated patterns and create generalized rules."""
+) -> tuple[list[Correction], set[Correction]]:
+    """Find repeated patterns, create generalized rules, and return corrections to be removed."""
     patterns = []
+    corrections_to_remove = set()
     suffix_patterns = find_suffix_patterns(corrections)
 
     for (typo_suffix, word_suffix, boundary), occurrences in suffix_patterns.items():
@@ -56,5 +57,8 @@ def generalize_patterns(
 
         if not would_trigger_at_end(typo_suffix, validation_set):
             patterns.append((typo_suffix, word_suffix, boundary))
+            # Mark original corrections that generated this pattern for removal
+            for typo, word in occurrences:
+                corrections_to_remove.add((typo, word, boundary))
 
-    return patterns
+    return patterns, corrections_to_remove

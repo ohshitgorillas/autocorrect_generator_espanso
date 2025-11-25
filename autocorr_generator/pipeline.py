@@ -167,12 +167,24 @@ def run_pipeline(config: Config) -> None:
                 print(f"#   {typo}: {words} (ratio: {ratio:.2f})", file=sys.stderr)
 
     # Generalize patterns
-    patterns = generalize_patterns(
+    patterns, to_remove = generalize_patterns(
         final_corrections, validation_set, config.min_typo_length
     )
+
+    # Remove original corrections that have been generalized
+    pre_generalization_count = len(final_corrections)
+    final_corrections = [c for c in final_corrections if c not in to_remove]
+    removed_count = pre_generalization_count - len(final_corrections)
+
+    # Add the new generalized patterns
     final_corrections.extend(patterns)
 
     if verbose:
+        if patterns:
+            print(
+                f"# Generalized {len(patterns)} patterns, removing {removed_count} specific corrections.",
+                file=sys.stderr,
+            )
         print(
             f"# After pattern generalization: {len(final_corrections)} entries",
             file=sys.stderr,

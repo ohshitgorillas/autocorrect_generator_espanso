@@ -27,13 +27,12 @@ class Config:
     top_n: int | None = None
     max_word_length: int = 10
     min_word_length: int = 3
-    min_typo_length: int = 5
+    min_typo_length: int = 3
     freq_ratio: float = 10.0
     typo_freq_threshold: float = 0.0
     output: str | None = None
     include: str | None = None
-    exclude: list[str] = field(default_factory=list)
-    exclude_file: str | None = None
+    exclude: str | None = None
     adjacent_letters: str | None = None
     verbose: bool = False
     jobs: int = field(default_factory=cpu_count)
@@ -65,7 +64,7 @@ def load_config(json_path: str | None, cli_args) -> Config:
         min_typo_length=(
             cli_args.min_typo_length
             if cli_args.min_typo_length is not None
-            else json_config.get("min_typo_length", 5)
+            else json_config.get("min_typo_length", 3)
         ),
         freq_ratio=(
             cli_args.freq_ratio
@@ -79,14 +78,7 @@ def load_config(json_path: str | None, cli_args) -> Config:
         ),
         output=cli_args.output if cli_args.output else json_config.get("output"),
         include=cli_args.include if cli_args.include else json_config.get("include"),
-        exclude=(
-            cli_args.exclude if cli_args.exclude else json_config.get("exclude", [])
-        ),
-        exclude_file=(
-            cli_args.exclude_file
-            if cli_args.exclude_file
-            else json_config.get("exclude_file")
-        ),
+        exclude=cli_args.exclude if cli_args.exclude else json_config.get("exclude"),
         adjacent_letters=(
             cli_args.adjacent_letters
             if cli_args.adjacent_letters

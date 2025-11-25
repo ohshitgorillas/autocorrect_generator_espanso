@@ -173,13 +173,15 @@ Defines which keys are next to each other to generate **Replacement** and **Inse
 Format: `key -> neighbors`
 
 ```text
-# QWERTY examples
+# the letter you wanted -> the letter you got
 a -> s
 s -> ad
 e -> wrd
 ```
 * **Replacement:** `e -> w` generates `wxample` and `examplw` for `example`.
 * **Insertion:** `e -> w` generates `wexample`, `ewxample`, `examplwe`, and `examplew`.
+
+Symbols can also be replacements/insertions, e.g., `l -> k;:`.
 
 ### Include File (`--include`)
 Allows the user to specify words for which corrections should be generated.

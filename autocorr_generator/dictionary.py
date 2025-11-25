@@ -2,7 +2,6 @@
 
 import itertools
 import os
-import re
 import sys
 from english_words import get_english_words_set
 from wordfreq import top_n_list

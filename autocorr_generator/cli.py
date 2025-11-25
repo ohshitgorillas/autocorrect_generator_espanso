@@ -84,7 +84,7 @@ Example config.json:
         "--min-typo-length",
         type=int,
         help="Minimum typo length to include in output",
-        default=4,
+        default=3,
     )
     parser.add_argument(
         "--typo-freq-threshold",

@@ -1,5 +1,6 @@
 """Dictionary and word list loading."""
 
+import itertools
 import os
 import sys
 from english_words import get_english_words_set
@@ -15,8 +16,8 @@ def load_validation_dictionary(
     if verbose:
         print("Loading English words dictionary...", file=sys.stderr)
 
-    web2_words = get_english_words_set(["web2"], lower=True)
-    validation_set = web2_words - set(exclude_words)
+    words = get_english_words_set(["web2", "gcide"], lower=True)
+    validation_set = words - set(exclude_words)
 
     if verbose:
         print(f"Loaded {len(validation_set)} words for validation", file=sys.stderr)
@@ -100,21 +101,20 @@ def load_source_words(config: Config, verbose: bool = False) -> list[str]:
     if verbose:
         print(f"Loading top {config.top_n} words from wordfreq...", file=sys.stderr)
 
-    # Get words from wordfreq
-    all_words = top_n_list("en", config.top_n * 3)  # Get extra words for filtering
+    # Get words from wordfreq, fetch extra for filtering
+    all_words = top_n_list("en", config.top_n * 3)
 
-    # Filter by length and validate
-    filtered = []
-    for word in all_words:
-        if len(filtered) >= config.top_n:
-            break
-        if len(word) < config.min_word_length:
-            continue
-        if config.max_word_length and len(word) > config.max_word_length:
-            continue
-        # Basic validation
-        if any(c in word for c in ["\n", "\r", "\t", "\\"]):
-            continue
-        filtered.append(word.lower())
+    # Filter words using a generator expression for efficiency
+    max_len = config.max_word_length or float("inf")
+    valid_words = (
+        word.lower()
+        for word in all_words
+        if config.min_word_length <= len(word) <= max_len
+        and not any(c in word for c in "\n\r\t\\")
+    )
+
+    # Take the top N valid words
+    filtered = list(itertools.islice(valid_words, config.top_n))
+
 
     return filtered

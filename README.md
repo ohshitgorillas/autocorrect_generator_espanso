@@ -96,7 +96,7 @@ project_root/
 
 ## Usage
 
-It's recommended to generate the dictionaries into the local `corrections` folder for manual review before importing them into Espanso. A quick once-over is sufficient—you don't need to check all 10,000+ entries.
+It's recommended to generate the dictionaries into the local `corrections` folder for manual review before importing them into Espanso. A quick once-over of the reports to check for garbage corrections is sufficient.
 
 Once you're satisfied with the generated corrections, copy the files to your Espanso configuration directory and restart Espanso.
 
@@ -322,6 +322,133 @@ The generator automatically determines which boundary constraints are needed:
 - **No boundary** - Typo can trigger anywhere (e.g., `taht` → `that`)
 
 This prevents false corrections like `no` → `on` triggering inside `noon`.
+
+---
+
+## Pattern Generalization & Conflict Resolution
+
+The generator employs sophisticated algorithms to optimize the dictionary and prevent garbage corrections. These optimizations are critical for ensuring Espanso's left-to-right, greedy matching behavior produces correct results.
+
+### Pattern Generalization
+
+When multiple corrections share a common suffix pattern, the generator attempts to create a single generalized rule instead of multiple specific corrections.
+
+**Example - Valid Generalization:**
+```
+Specific corrections:
+  - loev → love
+  - moev → move
+
+Generalized to:
+  - oev → ove (RIGHT boundary)
+```
+
+This works because:
+- Typing "loev": triggers `oev → ove`, prefix "l" remains → "l" + "ove" = "love" ✓
+- Typing "moev": triggers `oev → ove`, prefix "m" remains → "m" + "ove" = "move" ✓
+
+**Validation Process:**
+
+The generator validates each pattern by checking if Espanso's mechanics would produce the correct result:
+
+```python
+for each correction in pattern:
+    remaining_prefix = full_typo[:-len(pattern_typo)]
+    expected_result = remaining_prefix + pattern_correction
+    
+    if expected_result != full_word:
+        reject_pattern()  # Would create garbage!
+```
+
+**Example - Rejected Pattern:**
+```
+Attempted generalization:
+  - herew → here
+  - therew → there  
+  - wherew → where
+
+Pattern: erew → here (REJECTED)
+```
+
+Why rejected? Typing "wherew" would trigger `erew → here`, leaving "wh", producing "wh" + "here" = "**whhere**" instead of "where". The pattern is rejected and all three specific corrections are kept.
+
+### Substring Conflict Resolution
+
+Espanso triggers on the first (shortest) match when processing text left-to-right. If one typo is a substring of another with the same boundary type, the longer typo might be unreachable.
+
+**Safe Removal Example (RIGHT boundary):**
+```
+Corrections:
+  - herre → here
+  - wherre → where
+
+Analysis for "wherre":
+  - Typing triggers: herre → here
+  - Remaining prefix: "w"
+  - Result: "w" + "here" = "where" ✓ Correct!
+  
+Action: Remove "wherre" (redundant)
+```
+
+**Unsafe Removal Example (RIGHT boundary):**
+```
+Corrections:
+  - anb → man
+  - canb → can
+
+Analysis for "canb":
+  - Typing triggers: anb → man
+  - Remaining prefix: "c"
+  - Result: "c" + "anb" = "cman" ✗ Wrong!
+  
+Action: Keep both corrections (not redundant)
+```
+
+**The algorithm validates each potential removal:**
+
+For **RIGHT boundaries** (suffixes):
+```python
+remaining_prefix = long_typo[:-len(short_typo)]
+expected_result = remaining_prefix + short_word
+
+if expected_result == long_word:
+    remove(long_typo)  # Safe - produces correct result
+else:
+    keep_both()  # Unsafe - would create garbage
+```
+
+For **LEFT/NONE/BOTH boundaries** (prefixes):
+```python
+remaining_suffix = long_typo[len(short_typo):]
+expected_result = short_word + remaining_suffix
+
+if expected_result == long_word:
+    remove(long_typo)  # Safe - produces correct result
+else:
+    keep_both()  # Unsafe - would create garbage
+```
+
+### Why This Matters
+
+Without validation, the generator would create corrections that produce garbage output:
+
+❌ **Without Validation:**
+- Typing "canb" triggers `anb → man` → produces "cman" (garbage)
+- Pattern `erew → here` makes "wherew" → "whhere" (garbage)
+
+✓ **With Validation:**
+- Both "canb → can" and "anb → man" are kept
+- Pattern rejected, specific corrections preserved
+- All corrections produce correct results
+
+### Viewing Optimization Results
+
+Use the `--reports` flag to see detailed information about:
+- **`patterns.txt`**: Which patterns were generalized and which were rejected (with reasons)
+- **`conflicts_*.txt`**: Which corrections were removed as redundant and which blocking pattern caused each removal
+- **`summary.txt`**: Overall statistics showing how many patterns and conflicts were found
+
+These reports are invaluable for understanding the generator's decisions and verifying correct behavior.
 
 ---
 

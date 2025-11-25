@@ -23,17 +23,23 @@ from .processing import (
 
 # Global state for multiprocessing workers
 _VALIDATION_SET = None
+_FILTERED_VALIDATION_SET = None
 _SOURCE_WORDS_SET = None
 _TYPO_FREQ_THRESHOLD = 0.0
 _ADJ_LETTERS_MAP = None
 
 
 def init_worker(
-    validation_set, source_words_set, typo_freq_threshold, adj_letters_map
+    validation_set,
+    filtered_validation_set,
+    source_words_set,
+    typo_freq_threshold,
+    adj_letters_map,
 ):
     """Initialize worker process."""
-    global _VALIDATION_SET, _SOURCE_WORDS_SET, _TYPO_FREQ_THRESHOLD, _ADJ_LETTERS_MAP
+    global _VALIDATION_SET, _FILTERED_VALIDATION_SET, _SOURCE_WORDS_SET, _TYPO_FREQ_THRESHOLD, _ADJ_LETTERS_MAP
     _VALIDATION_SET = validation_set
+    _FILTERED_VALIDATION_SET = filtered_validation_set
     _SOURCE_WORDS_SET = source_words_set
     _TYPO_FREQ_THRESHOLD = typo_freq_threshold
     _ADJ_LETTERS_MAP = adj_letters_map
@@ -46,6 +52,7 @@ def process_word_worker(word: str) -> tuple[str, list[Correction]]:
         process_word(
             word,
             _VALIDATION_SET,
+            _FILTERED_VALIDATION_SET,
             _SOURCE_WORDS_SET,
             _TYPO_FREQ_THRESHOLD,
             _ADJ_LETTERS_MAP,
@@ -61,6 +68,18 @@ def run_pipeline(config: Config) -> None:
     validation_set = load_validation_dictionary(config.exclude, verbose)
     exclusions = load_exclusions(config.exclude_file, verbose)
     exclusion_matcher = ExclusionMatcher(exclusions)
+
+    # Filter validation set for boundary detection
+    # This removes words matching exclusion patterns so they don't block valid typos
+    filtered_validation_set = exclusion_matcher.filter_validation_set(validation_set)
+
+    if verbose and len(filtered_validation_set) != len(validation_set):
+        removed = len(validation_set) - len(filtered_validation_set)
+        print(
+            f"Filtered {removed} words from validation set using exclusion patterns",
+            file=sys.stderr,
+        )
+
     adjacent_letters_map = load_adjacent_letters(config.adjacent_letters, verbose)
 
     # Load source words
@@ -95,6 +114,7 @@ def run_pipeline(config: Config) -> None:
             initializer=init_worker,
             initargs=(
                 validation_set,
+                filtered_validation_set,  # Use filtered set for boundary detection
                 source_words_set,
                 config.typo_freq_threshold,
                 adjacent_letters_map,
@@ -110,6 +130,7 @@ def run_pipeline(config: Config) -> None:
             corrections = process_word(
                 word,
                 validation_set,
+                filtered_validation_set,  # Use filtered set for boundary detection
                 source_words_set,
                 config.typo_freq_threshold,
                 adjacent_letters_map,

@@ -64,7 +64,11 @@ def generate_all_typos(
     word: str, adj_letters_map: dict[str, str] | None = None
 ) -> list[str]:
     """Generate all types of typos for a word."""
-    typos = generate_transpositions(word) + generate_omissions(word) + generate_duplications(word)
+    typos = (
+        generate_transpositions(word)
+        + generate_omissions(word)
+        + generate_duplications(word)
+    )
 
     if adj_letters_map:
         typos.extend(generate_insertions(word, adj_letters_map))

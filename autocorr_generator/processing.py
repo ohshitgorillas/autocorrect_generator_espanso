@@ -11,11 +11,21 @@ from .typos import generate_all_typos
 def process_word(
     word: str,
     validation_set: set[str],
+    filtered_validation_set: set[str],
     source_words: set[str],
     typo_freq_threshold: float,
     adj_letters_map: dict[str, str] | None,
 ) -> list[Correction]:
-    """Process a single word and generate all valid corrections."""
+    """Process a single word and generate all valid corrections.
+
+    Args:
+        word: The word to generate typos for
+        validation_set: Full validation dictionary (for checking if typo is a real word)
+        filtered_validation_set: Filtered validation set (for boundary detection, excludes exclusion patterns)
+        source_words: Set of source words
+        typo_freq_threshold: Frequency threshold for typos
+        adj_letters_map: Adjacent letters map for insertions/replacements
+    """
     corrections = []
     typos = generate_all_typos(word, adj_letters_map)
 
@@ -23,6 +33,7 @@ def process_word(
         if typo == word:
             continue
 
+        # Use full validation set to check if typo is a real word
         if typo in validation_set:
             continue
 
@@ -31,7 +42,11 @@ def process_word(
             if typo_freq >= typo_freq_threshold:
                 continue
 
-        boundary_type = determine_boundaries(typo, validation_set, source_words)
+        # Use filtered validation set for boundary detection
+        # This allows excluded patterns to not block valid typos
+        boundary_type = determine_boundaries(
+            typo, filtered_validation_set, source_words
+        )
         if boundary_type is not None:
             corrections.append((typo, word, boundary_type))
 

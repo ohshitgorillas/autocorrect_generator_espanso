@@ -46,6 +46,10 @@ cd /path/to/project
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
+# set up the autocorrect generator environment (optional)
+mkdir corrections
+mkdir settings
+
 # Install dependencies
 pip install -r requirements.txt # install dependencies
 ```
@@ -79,7 +83,7 @@ project_root/
 
 ## Usage
 
-Run the script using the Python module syntax (`-m`) from the project root. It's recommended to generate the dictionaries into the local `corrections` folder for manual review before importing them into Espanso. A quick once-over is sufficient—you don't need to check all 10,000+ entries.
+It's recommended to generate the dictionaries into the local `corrections` folder for manual review before importing them into Espanso. A quick once-over is sufficient—you don't need to check all 10,000+ entries.
 
 Once you're satisfied with the generated corrections, copy the files to your Espanso configuration directory and restart Espanso.
 
@@ -87,7 +91,7 @@ Once you're satisfied with the generated corrections, copy the files to your Esp
 Generate transpositions, deletions, and duplications for the top 1,000 most common English words and output to a local folder:
 
 ```bash
-python -m autocorr_generator --top-n 1000 --output ./my_typos
+python -m autocorr_generator --top-n 1000 --output corrections
 ```
 
 ### generating directly to Espanso
@@ -110,11 +114,11 @@ Generate typos using a custom word list, a specific "fat finger" key map, and ex
 python -m autocorr_generator \
     --verbose \
     --top-n 2000 \
-    --include my_custom_words.txt \
-    --exclude exclusions.txt \
+    --include settings/my_custom_words.txt \
+    --exclude settings/exclusions.txt \
     --typo-freq-threshold 1e-8 \
     --max-word-length 12 \
-    --adjacent-letters qwerty_map.txt \
+    --adjacent-letters settings/qwerty_map.txt \
     --output ./espanso_matches \
 ```
 
@@ -147,17 +151,17 @@ Instead of long CLI strings, you can use a `config.json`:
 ```json
 {
   "top_n": 5000,
-  "output": "~/.config/espanso/match/autocorrect",
+  "output": "corrections",
   "min_typo_length": 4,
-  "exclude_file": "exclusions.txt",
-  "adjacent_letters": "qwerty.txt",
+  "exclude_file": "settings/exclusions.txt",
+  "adjacent_letters": "settings/qwerty.txt",
   "verbose": true
 }
 ```
 
 Run with:
 ```bash
-python -m autocorr_generator --config config.json
+python -m autocorr_generator --config settings/config.json
 ```
 
 ---

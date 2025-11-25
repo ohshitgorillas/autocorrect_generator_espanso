@@ -39,6 +39,7 @@ class Config:
     jobs: int = field(default_factory=cpu_count)
     max_entries_per_file: int = 500
 
+
 def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Config:
     """Load JSON config, override with CLI args, return Config object."""
     json_config = {}
@@ -73,4 +74,3 @@ def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Conf
         jobs=get_value("jobs", cpu_count()),
         max_entries_per_file=get_value("max_entries_per_file", 500),
     )
-

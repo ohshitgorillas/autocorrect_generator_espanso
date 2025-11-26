@@ -406,13 +406,13 @@ Action: Remove "wherre" (redundant)
 **Unsafe Removal Example (LEFT boundary):**
 ```
 Corrections:
-  - reathe → breathe
-  - reather → rather
+  - thi → this
+  - thign → thing
 
-Analysis for "reather":
-  - Typing would trigger: reathe → breathe
-  - Remaining suffix: "r"
-  - Result: "breathe" + "r" = "breather" ✗ Wrong! (expected "rather")
+Analysis for "thign":
+  - Typing would trigger: thi → this
+  - Remaining suffix: "gn"
+  - Result: "this" + "gn" = "thisgn" ✗ Wrong! (expected "thing")
   
 Action: Keep both corrections (not redundant - would create garbage)
 ```

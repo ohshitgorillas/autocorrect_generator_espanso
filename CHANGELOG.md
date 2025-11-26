@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.1] - 2025-11-26
+
+### Fixed
+
+**Critical Bug: Race Condition with Fast Typing**
+
+- **Fixed race condition causing garbage output for fast typists**: When typing quickly, corrections without word boundaries could trigger on partial words mid-keystroke, leading to doubled letters or incorrect replacements (e.g., typing "whiule" fast would produce "wwhile" instead of "while").
+
+- **New boundary rule**: Corrections now automatically get `word: true` boundary when the typo contains the correction as a substring or vice versa. This prevents Espanso from partially matching while the user is still typing.
+
+- **Examples of fixed corrections**:
+  - `whiule → while`: Now has `word: true` (prevents "wwhile")
+  - `rreally → really`: Now has `word: true` (prevents " really" with extra space)
+  - `ssometimes → sometimes`: Now has `word: true` (prevents malformed output)
+
+This fix is essential for fast typists and eliminates a major class of intermittent bugs.
+
+---
+
 ## [0.1.0] - 2025-11-26
 
 ### Initial Beta Release
@@ -80,5 +99,6 @@ This is the first beta release of the Autocorrect Dictionary Generator for Espan
 
 ## Version History
 
+- **0.1.1** (2025-11-26): Critical bug fix for race conditions with fast typing
 - **0.1.0** (2025-11-26): Initial beta release
 

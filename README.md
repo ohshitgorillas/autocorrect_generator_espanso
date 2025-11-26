@@ -1,6 +1,6 @@
 # Autocorrect Dictionary Generator for Espanso
 
-**Version 0.1.0 (Beta)** | [Changelog](CHANGELOG.md)
+**Version 0.1.1 (Beta)** | [Changelog](CHANGELOG.md)
 
 This is a Python module which generates a personalized autocorrect dictionary for use with the [Espanso](https://espanso.org/) text expander software.
 
@@ -9,7 +9,7 @@ It uses `english-words` and `wordfreq` to algorithmically "fuzz" lists of Englis
 It generates five types of typos:
 * **Transpositions**: Swapped characters (e.g., `word` → `wrod`).
 * **Omissions**: Missing characters (e.g., `because` → `becuse`).
-* **Duplications**: Duplicate characters (e.g., `word` → `worrd`). 
+* **Duplications**: Doubled characters (e.g., `word` → `worrd`). 
 * **Replacements**: Wrong characters (e.g., `apple` → `applw` via `e→w` map).
 * **Insertions**: Additional characters (e.g., `apple` → `applew` via `e→w`).
 
@@ -53,9 +53,7 @@ python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Set up directories (optional)
-mkdir corrections
-mkdir settings
-mkdir reports
+mkdir corrections settings reports
 
 # Install dependencies
 pip install -r requirements.txt
@@ -68,7 +66,7 @@ project_root/
 │   ├── __init__.py
 │   ├── __main__.py
 │   └── ... (other .py files)
-├── corrections/        <-- Recommended location to write corrections to
+├── corrections/        <-- Optional location to write corrections to
 │   ├── typos_am_to_anyone.yml
 │   ├── typos_baby_to_battery.yml
 │   └── ...
@@ -78,18 +76,18 @@ project_root/
 │   ├── config.json
 │   ├── exclude.txt
 │   └── include.txt
-├── reports/            <-- Timestamped reports (optional)
+├── reports/            <-- Optional Timestamped reports
 │   ├── 2025-11-25_14-30-15/
 │   │   ├── summary.txt
 │   │   ├── collisions.txt
 │   │   ├── patterns.txt
 │   │   └── ...
 │   └── ...
-├── settings/           <-- Recommended location for personalization files
-│   ├── adjacent.txt    (optional)
-│   ├── config.json     (optional)
-│   ├── exclude.txt     (optional)
-│   └── include.txt     (optional)
+├── settings/           <-- Optional location for personalization files
+│   ├── adjacent.txt
+│   ├── config.json
+│   ├── exclude.txt
+│   └── include.txt
 ├── README.md           <-- This file
 └── requirements.txt    <-- Dependencies
 ```
@@ -220,7 +218,7 @@ Run with:
 python -m autocorr_generator --config settings/config.json
 ```
 
-The `config.json` file supports all configuration options, just convert `-` into `_`, e.g., `--typo-freq-threshold 1e-8` becomes `"typo_freq_threshold": 1e-8`.
+The `config.json` file supports all configuration options: just convert `-` into `_`; e.g., `--typo-freq-threshold 1e-8` becomes `"typo_freq_threshold": 1e-8`.
 
 ---
 

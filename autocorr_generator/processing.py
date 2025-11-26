@@ -71,7 +71,7 @@ def process_word(
         # Use filtered validation set for boundary detection
         # This allows excluded patterns to not block valid typos
         boundary_type = determine_boundaries(
-            typo, filtered_validation_set, source_words
+            typo, word, filtered_validation_set, source_words
         )
         if boundary_type is not None:
             corrections.append((typo, word, boundary_type))

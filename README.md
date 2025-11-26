@@ -7,11 +7,11 @@ A Python-based autocorrect dictionary generator for the [Espanso](https://espans
 It uses `english-words` and `wordfreq` to algorithmically "fuzz" lists of English words, generating thousands of typos mapped to their correct spellings.
 
 It generates five types of typing errors:
-* **Transpositions**: Swapped characters (e.g., `word` → `wrod`).
+* **Transpositions**: Swapped characters (e.g., `the` → `teh`).
 * **Omissions**: Missing characters (e.g., `because` → `becuse`).
-* **Duplications**: Doubled characters (e.g., `word` → `worrd`). 
-* **Replacements**: Wrong characters (e.g., `apple` → `applw` via `e→w` map).
-* **Insertions**: Additional characters (e.g., `apple` → `applew` via `e→w`).
+* **Duplications**: Doubled characters (e.g., `entropy` → `entroppy`). 
+* **Replacements**: Wrong characters (e.g., `apple` → `applw`).
+* **Insertions**: Additional characters (e.g., `food` → `foopd`).
 
 ## Inspiration / Why Espanso?
 This project originated as a tool for [QMK Firmware](https://qmk.fm/) and still has a [sibling for generating QMK dictionaries](https://github.com/ohshitgorillas/qmk_userspace/tree/main/autocorrect/ac_generator). I was dissatisfied with existing autocorrect dictionaries, which were bloated with spelling mistakes caused by genuine lack of knowledge rather than mechanical typing errors (e.g., `definately` → `definitely`). I know how to spell, I just have fat fingers.
@@ -406,34 +406,27 @@ Action: Remove "wherre" (redundant)
 **Unsafe Removal Example (LEFT boundary):**
 ```
 Corrections:
-  - thi → this
-  - thign → thing
+  - aer → are
+  - aerly → early
 
-Analysis for "thign":
-  - Typing would trigger: thi → this
-  - Remaining suffix: "gn"
-  - Result: "this" + "gn" = "thisgn" ✗ Wrong! (expected "thing")
+Analysis for "aerly":
+  - Typing would trigger: aer → are
+  - Remaining suffix: "ly"
+  - Result: "aer" + "ly" = "arely" ✗ Wrong! (expected "early")
   
 Action: Keep both corrections (not redundant - would create garbage)
 ```
 
 **The algorithm validates each potential removal:**
 
-For **RIGHT boundaries** (suffixes):
 ```python
-remaining_prefix = long_typo[:-len(short_typo)]
-expected_result = remaining_prefix + short_word
+# For RIGHT boundaries (suffixes):
+remaining = long_typo[:-len(short_typo)]
+expected_result = remaining + short_word
 
-if expected_result == long_word:
-    remove(long_typo)  # Safe - produces correct result
-else:
-    keep_both()  # Unsafe - would create garbage
-```
-
-For **LEFT/NONE/BOTH boundaries** (prefixes):
-```python
-remaining_suffix = long_typo[len(short_typo):]
-expected_result = short_word + remaining_suffix
+# For LEFT/NONE/BOTH boundaries (prefixes):
+remaining = long_typo[len(short_typo):]
+expected_result = short_word + remaining
 
 if expected_result == long_word:
     remove(long_typo)  # Safe - produces correct result

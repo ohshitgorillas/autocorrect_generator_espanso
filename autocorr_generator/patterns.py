@@ -32,6 +32,9 @@ def find_suffix_patterns(
                         continue
                     typo_suffix = typo[-length:]
                     word_suffix = word[-length:]
+                    # Skip if typo and word suffixes are identical (useless pattern)
+                    if typo_suffix == word_suffix:
+                        continue
                     pattern_key = (typo_suffix, word_suffix, boundary)
                     patterns[pattern_key].append((typo, word, boundary))
 

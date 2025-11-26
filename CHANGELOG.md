@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.2] - 2025-11-26
+
+### Fixed
+
+**Pattern Generation: Useless No-Op Patterns**
+
+- **Fixed generation of identity patterns**: Pattern extraction was creating useless patterns where typo and correction suffixes were identical (e.g., `ip → ip`, `im → im`, `aw → aw`).
+
+- These patterns occurred when processing duplication typos (e.g., `shipp → ship`, `tripp → trip` both ending in "ip").
+
+- Added filter in `find_suffix_patterns()` to skip patterns where `typo_suffix == word_suffix`.
+
+---
+
 ## [0.1.1] - 2025-11-26
 
 ### Fixed
@@ -99,6 +113,7 @@ This is the first beta release of the Autocorrect Dictionary Generator for Espan
 
 ## Version History
 
+- **0.1.2** (2025-11-26): Fixed useless no-op pattern generation
 - **0.1.1** (2025-11-26): Critical bug fix for race conditions with fast typing
 - **0.1.0** (2025-11-26): Initial beta release
 

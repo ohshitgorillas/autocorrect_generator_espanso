@@ -1,6 +1,6 @@
 # Autocorrect Dictionary Generator for Espanso
 
-**Version 0.1.1 (Beta)** | [Changelog](CHANGELOG.md)
+**Version 0.1.2 (Beta)** | [Changelog](CHANGELOG.md)
 
 This is a Python module which generates a personalized autocorrect dictionary for use with the [Espanso](https://espanso.org/) text expander software.
 

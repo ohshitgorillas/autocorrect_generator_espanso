@@ -329,14 +329,22 @@ def run_pipeline(config: Config) -> None:
                     # For other boundaries, check if typo starts with shorter typo
                     if boundary == BoundaryType.RIGHT:
                         if typo.endswith(other_typo):
-                            blocking_typo = other_typo
-                            blocking_word = other_word
-                            break
+                            # Validate: check if this actually would have caused the blocking
+                            remaining_prefix = typo[:-len(other_typo)]
+                            expected_result = remaining_prefix + other_word
+                            if expected_result == word:
+                                blocking_typo = other_typo
+                                blocking_word = other_word
+                                break
                     else:
                         if typo.startswith(other_typo):
-                            blocking_typo = other_typo
-                            blocking_word = other_word
-                            break
+                            # Validate: check if this actually would have caused the blocking
+                            remaining_suffix = typo[len(other_typo):]
+                            expected_result = other_word + remaining_suffix
+                            if expected_result == word:
+                                blocking_typo = other_typo
+                                blocking_word = other_word
+                                break
             report_data.removed_conflicts.append(
                 (typo, word, blocking_typo, blocking_word, boundary)
             )

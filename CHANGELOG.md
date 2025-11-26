@@ -4,12 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.5] - 2025-11-26
+
+### Fixed
+
+**Report Generation: Incorrect Blocker Identification**
+
+- **Fixed conflict report misidentifying blockers**: The report generation code was incorrectly identifying which typo blocked another typo's removal. It was finding ANY substring match without validating whether that match actually caused the blocking.
+
+- **Example of misreporting**: `monutored → monitored` was reported as blocked by `monut → mount`, even though `mount` + `ored` = `mountored` ≠ `monitored`, so no actual blocking occurred.
+
+- **Root cause**: Report generation lacked the same validation logic that the actual conflict removal algorithm uses. The conflict removal was working correctly—only the report was wrong.
+
+- **Fix**: Added validation to report generation to match the conflict removal logic. Reports now only identify a typo as a blocker if it would actually produce the correct result when triggered by Espanso.
+
+---
+
 ## [0.1.4] - 2025-11-26
-
-### Changed
-
-- **Project renamed to EntropPy**: The project is now officially named "EntropPy" (a play on Python, entropy/chaos, and a spelling mistake).
-- **Streamlined progress indicators**: Progress bars are now only shown for truly long-running operations (word processing, conflict removal, report analysis). Quick operations (<5 seconds) show simple status messages instead of cluttering output with unnecessary progress bars.
 
 ### Performance
 
@@ -19,6 +30,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Progress bar for report analysis**: Added progress tracking for the conflict analysis step during report generation, which was previously silent and could take minutes on large datasets.
 - **Status messages for output stages**: Added feedback for sorting, organizing corrections, pattern generalization, and YAML file writing to eliminate silent pauses.
+
+### Changed
+
+- **Streamlined progress indicators**: Progress bars are now only shown for truly long-running operations (word processing, conflict removal, report analysis). Quick operations (<5 seconds) show simple status messages instead of cluttering output with unnecessary progress bars.
 
 ---
 
@@ -139,6 +154,7 @@ This is the first beta release of the Autocorrect Dictionary Generator for Espan
 
 ## Version History
 
+- **0.1.5** (2025-11-26): Fixed conflict report incorrectly identifying blockers
 - **0.1.4** (2025-11-26): Parallelized YAML file generation with progress tracking
 - **0.1.3** (2025-11-26): Reverted v0.1.1 containment check (Espanso bug, not generator issue)
 - **0.1.2** (2025-11-26): Fixed useless no-op pattern generation

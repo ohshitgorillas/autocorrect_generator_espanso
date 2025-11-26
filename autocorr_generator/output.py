@@ -3,6 +3,7 @@
 import os
 import sys
 from collections import defaultdict
+from multiprocessing import Pool
 
 import yaml
 
@@ -25,9 +26,14 @@ def correction_to_yaml_dict(correction: Correction) -> dict:
     return match_dict
 
 
-def organize_by_letter(corrections: list[Correction]) -> dict[str, list[dict]]:
+def organize_by_letter(
+    corrections: list[Correction], verbose: bool = False
+) -> dict[str, list[dict]]:
     """Group corrections by first letter of correct word."""
     by_letter = defaultdict(list)
+
+    if verbose:
+        print(f"Organizing {len(corrections)} corrections...", file=sys.stderr)
 
     for correction in corrections:
         _, word, _ = correction
@@ -110,18 +116,38 @@ def estimate_ram_usage(
     return estimate
 
 
+def _write_single_yaml_file(args: tuple) -> tuple[str, int]:
+    """Worker function to write a single YAML file."""
+    filename, chunk = args
+
+    yaml_output = {"matches": chunk}
+
+    with open(filename, "w", encoding="utf-8") as f:
+        yaml.safe_dump(
+            yaml_output,
+            f,
+            allow_unicode=True,
+            default_flow_style=False,
+            sort_keys=False,
+            width=float("inf"),
+        )
+
+    return (os.path.basename(filename), len(chunk))
+
+
 def write_yaml_files(
     corrections_by_letter: dict[str, list[dict]],
     output_dir: str,
     verbose: bool,
     max_entries_per_file: int = 500,
+    jobs: int = 1,
 ) -> None:
-    """Write YAML files, splitting large files into word-range chunks."""
+    """Write YAML files in parallel, splitting large files into word-range chunks."""
     output_dir = os.path.expanduser(output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
-    total_entries = 0
-    total_files = 0
+    # Prepare all file writing tasks
+    write_tasks = []
 
     for letter, matches in sorted(corrections_by_letter.items()):
         # Sort matches by the replacement word for consistent ordering
@@ -154,25 +180,34 @@ def write_yaml_files(
                         output_dir, f"typos_{first_word}_to_{last_word}.yml"
                     )
 
-            yaml_output = {"matches": chunk}
+            write_tasks.append((filename, chunk))
 
-            with open(filename, "w", encoding="utf-8") as f:
-                yaml.safe_dump(
-                    yaml_output,
-                    f,
-                    allow_unicode=True,
-                    default_flow_style=False,
-                    sort_keys=False,
-                    width=float("inf"),
-                )
+    # Write files in parallel
+    total_entries = 0
+    total_files = 0
 
-            total_entries += len(chunk)
+    if jobs > 1 and len(write_tasks) > 1:
+        if verbose:
+            print(
+                f"Writing {len(write_tasks)} YAML files using {jobs} workers...",
+                file=sys.stderr,
+            )
+
+        with Pool(processes=jobs) as pool:
+            results = pool.map(_write_single_yaml_file, write_tasks)
+
+            for _, entry_count in results:
+                total_entries += entry_count
+                total_files += 1
+    else:
+        # Sequential writing for single job or single file
+        if verbose:
+            print(f"Writing {len(write_tasks)} YAML files...", file=sys.stderr)
+
+        for filename, chunk in write_tasks:
+            _, entry_count = _write_single_yaml_file((filename, chunk))
+            total_entries += entry_count
             total_files += 1
-            if verbose:
-                print(
-                    f"Wrote {len(chunk)} corrections to {os.path.basename(filename)}",
-                    file=sys.stderr,
-                )
 
     if verbose:
         print(
@@ -186,16 +221,23 @@ def generate_espanso_yaml(
     output: str | None,
     verbose: bool,
     max_entries_per_file: int = 500,
+    jobs: int = 1,
 ) -> None:
     """Generate Espanso YAML output."""
+    if verbose:
+        print(f"Sorting {len(corrections)} corrections...", file=sys.stderr)
     sorted_corrections = sorted(corrections, key=lambda c: (c[1], c[0]))
+    if verbose:
+        print("Sorting complete.", file=sys.stderr)
 
     # Estimate RAM usage
     estimate_ram_usage(sorted_corrections, verbose)
 
     if output:
-        corrections_by_letter = organize_by_letter(sorted_corrections)
-        write_yaml_files(corrections_by_letter, output, verbose, max_entries_per_file)
+        corrections_by_letter = organize_by_letter(sorted_corrections, verbose)
+        write_yaml_files(
+            corrections_by_letter, output, verbose, max_entries_per_file, jobs
+        )
     else:
         yaml_dicts = [correction_to_yaml_dict(c) for c in sorted_corrections]
         yaml_output = {"matches": yaml_dicts}

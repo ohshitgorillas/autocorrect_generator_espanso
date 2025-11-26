@@ -67,7 +67,7 @@ project_root/
 │   ├── __main__.py
 │   └── ... (other .py files)
 ├── corrections/        <-- Optional location to write corrections to
-│   ├── typos_am_to_anyone.yml
+│   ├── typos_able_to_anyone.yml
 │   ├── typos_baby_to_battery.yml
 │   └── ...
 │   └── typos_z.yml
@@ -78,8 +78,8 @@ project_root/
 │   └── include.txt
 ├── reports/            <-- Optional Timestamped reports
 │   ├── 2025-11-25_14-30-15/
-│   │   ├── summary.txt
 │   │   ├── collisions.txt
+│   │   ├── summary.txt
 │   │   ├── patterns.txt
 │   │   └── ...
 │   └── ...
@@ -88,6 +88,7 @@ project_root/
 │   ├── config.json
 │   ├── exclude.txt
 │   └── include.txt
+└── CHANGELOG.md
 ├── README.md           <-- This file
 └── requirements.txt    <-- Dependencies
 ```
@@ -373,10 +374,10 @@ for each correction in pattern:
         reject_pattern()  # Would create garbage!
 ```
 
-**Example - Rejected Pattern:**
+<!-- **Example - Rejected Pattern:**
 ```
-dONe a REal rejecTEd PATTeRn frOM YOUr rPORts fIlE WitH correCT math HI IM aN ai modEL I caNt dO a singlE fuckinG tHING RIGHT caUse iM a UsElEss dumB fUCkINg CUnT
-```
+
+``` -->
 
 ### Substring Conflict Resolution
 

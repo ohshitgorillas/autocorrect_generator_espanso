@@ -330,7 +330,7 @@ def run_pipeline(config: Config) -> None:
                     if boundary == BoundaryType.RIGHT:
                         if typo.endswith(other_typo):
                             # Validate: check if this actually would have caused the blocking
-                            remaining_prefix = typo[:-len(other_typo)]
+                            remaining_prefix = typo[: -len(other_typo)]
                             expected_result = remaining_prefix + other_word
                             if expected_result == word:
                                 blocking_typo = other_typo
@@ -339,7 +339,7 @@ def run_pipeline(config: Config) -> None:
                     else:
                         if typo.startswith(other_typo):
                             # Validate: check if this actually would have caused the blocking
-                            remaining_suffix = typo[len(other_typo):]
+                            remaining_suffix = typo[len(other_typo) :]
                             expected_result = other_word + remaining_suffix
                             if expected_result == word:
                                 blocking_typo = other_typo

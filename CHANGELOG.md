@@ -28,6 +28,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Fix**: Added validation to report generation to match the conflict removal logic. Reports now only identify a typo as a blocker if it would actually produce the correct result when triggered by Espanso.
 
+**Pattern Generation: Garbage Suffix Simplifications**
+
+- **Fixed generation of invalid suffix patterns**: The script was generating nonsensical suffix simplifications (e.g., `chg` → `tch`) because it did not validate that the prefixes of the typo and the correct word were identical.
+
+- **Example**: `watchg` → `watch` was incorrectly generalized to `chg` → `tch` because the script did not check that the prefixes (`wat` vs. `wa`) were different.
+
+- **Fix**: Pattern generation now requires prefixes to be identical, eliminating this entire class of garbage corrections.
+
 **Pattern Generation: Nonsensical Candidate Patterns**
 
 - **Fixed extraction of meaningless suffix patterns**: Pattern extraction was generating nonsensical candidates like `ayt → lay` by extracting suffixes that were nearly the entire word length.

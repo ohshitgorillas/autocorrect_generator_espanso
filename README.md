@@ -254,9 +254,9 @@ keyboard
 ```
 
 ### Exclusion File (`--exclude`)
-Provides powerful control over what corrections are generated and what words are considered valid. The file supports three types of rules:
+Provides powerful control over what corrections are generated and what words are considered valid. The file supports two types of rules:
 
-#### 1. Word Exclusions
+#### 1. Word and Pattern Exclusions
 These patterns remove words from the validation dictionary at the start of the process. Any word matching these patterns is treated as a non-word, which is useful for enabling corrections like `teh -> the` which are otherwise blocked by rare words like "tehsildar". Wildcards (`*`) are supported.
 
 ```text
@@ -265,17 +265,12 @@ These patterns remove words from the validation dictionary at the start of the p
 
 # Exclude any word ending in "ball".
 *ball
-```
 
-#### 2. Pattern Exclusions for Boundary Detection
-These patterns are used to prevent certain dictionary words from incorrectly blocking valid typo patterns. For example, if you want to generate corrections for suffixes like `-tion` (which might have a typo `-toin`), you don't want a dictionary word like "allantoin" to block it.
-
-```text
-# Prevents words like "allantoin" from blocking the generalization of "-toin" as a typo for "-tion".
+# prevents chemistry terms like "cotoin" from blocking the generalization of "-toin" as a typo for "-tion".
 *toin
 ```
 
-#### 3. Advanced Correction Filtering
+#### 2. Correction Filtering
 For fine-grained control, you can block specific `(typo, correction)` pairs using the `->` syntax. This supports wildcards and a special colon (`:`) syntax for word boundary requirements.
 
 ```text

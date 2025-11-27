@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.6] - 2025-11-27
+
+### Fixed
+
+**Exclusion Filtering: Ignored Boundary Specifiers**
+
+- **Fixed a critical bug where boundary specifiers (`:`) in exclusion patterns were ignored.** The script was matching exclusion rules against typo and correction text only, without checking if the correction's boundary type also matched.
+- **Example**: A rule like `*in: -> *ing` was incorrectly blocking all `*in -> *ing` corrections, not just the ones with a `right_word` boundary.
+- **Fix**: The `ExclusionMatcher` now correctly parses and enforces boundary specifiers, allowing for fine-grained control over which corrections are excluded based on their required boundaries.
+
+---
+
 ## [0.1.5] - 2025-11-26
 
 ### Changed

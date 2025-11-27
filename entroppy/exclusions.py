@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from re import Pattern
 
-from .config import Correction
+from .config import BoundaryType, Correction
 from .utils import compile_wildcard_regex
 
 
@@ -15,23 +15,36 @@ class ExclusionMatcher:
         self.exact = set()
         self.wildcards = []
         self.exact_typo_map: dict[str, str] = {}
-        self.wildcard_typo_map: list[tuple[Pattern, str]] = []
+        self.wildcard_typo_map: list[tuple[Pattern, str, BoundaryType | None]] = []
         self.wildcard_words: set[Pattern] = set()
         self.exact_words: set[str] = set()
 
         for exclusion in exclusion_set:
-            if "*" in exclusion:
+            if "*" in exclusion or ":" in exclusion:
                 self.wildcards.append(exclusion)
             else:
                 self.exact.add(exclusion)
 
-        # e.g., "accel* -> accelerate"
+        # e.g., "accel* -> accelerate" or ":*ing -> *in"
         for pattern in exclusion_set:
             if "->" in pattern:
                 typo_pat, word_pat = (p.strip() for p in pattern.split("->", 1))
+
+                # Check for boundary specifiers
+                required_boundary = None
+                if typo_pat.startswith(":") and typo_pat.endswith(":"):
+                    required_boundary = BoundaryType.BOTH
+                    typo_pat = typo_pat[1:-1]
+                elif typo_pat.startswith(":"):
+                    required_boundary = BoundaryType.LEFT
+                    typo_pat = typo_pat[1:]
+                elif typo_pat.endswith(":"):
+                    required_boundary = BoundaryType.RIGHT
+                    typo_pat = typo_pat[:-1]
+
                 if "*" in typo_pat:
                     regex = compile_wildcard_regex(typo_pat)
-                    self.wildcard_typo_map.append((regex, word_pat))
+                    self.wildcard_typo_map.append((regex, word_pat, required_boundary))
                 else:
                     self.exact_typo_map[typo_pat] = word_pat
             else:
@@ -52,16 +65,18 @@ class ExclusionMatcher:
 
     def should_exclude(self, correction: Correction) -> bool:
         """Check if a (typo, word) correction should be excluded."""
-        typo, word, _ = correction
+        typo, word, boundary = correction
 
-        # Check for exact typo -> word match, e.g., "teh -> tehcnology"
+        # Check for exact typo -> word match (no boundary support for exact)
         if self.exact_typo_map.get(typo) == word:
             return True
 
         # Check for wildcard typo -> word match, e.g., "accel* -> accelerate"
-        for typo_re, word_pat in self.wildcard_typo_map:
+        for typo_re, word_pat, required_boundary in self.wildcard_typo_map:
             if typo_re.match(typo) and self._match_wildcard(word, word_pat):
-                return True
+                # If boundary is specified, it must match
+                if required_boundary is None or required_boundary == boundary:
+                    return True
 
         return False
 
@@ -74,12 +89,15 @@ class ExclusionMatcher:
             return f"{typo} -> {word}"
 
         # Check for wildcard typo -> word match
-        for typo_re, word_pat in self.wildcard_typo_map:
+        for typo_re, word_pat, _ in self.wildcard_typo_map:
             if typo_re.match(typo) and self._match_wildcard(word, word_pat):
-                # Find the original pattern that created this regex
-                for pattern in self.wildcards:
-                    if "->" in pattern:
-                        return pattern
+                # This is imperfect, as it doesn't store the original rule with the parsed
+                # components, but it's good enough for reporting.
+                # We just find the first wildcard rule that could have produced this match.
+                clean_re = typo_re.pattern.replace("^", "").replace("$", "")
+                for original_pattern in self.wildcards:
+                    if "->" in original_pattern and clean_re in original_pattern:
+                        return original_pattern
 
         return "unknown rule"
 

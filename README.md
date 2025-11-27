@@ -1,6 +1,6 @@
 # EntropPy
 
-**Version 0.1.5 (Beta)** | [Changelog](CHANGELOG.md)
+**Version 0.1.6 (Beta)** | [Changelog](CHANGELOG.md)
 
 A Python-based autocorrect dictionary generator for the [Espanso](https://espanso.org/) text expander.
 
@@ -275,10 +275,10 @@ For fine-grained control, you can block specific `(typo, correction)` pairs usin
 
 ```text
 # Block a specific, exact correction
-thn -> thin
+word -> correction
 
-# Block typos starting with 'in' from correcting to 'ni'
-in* -> ni
+# Block typos starting with 'xy' from correcting to 'yz'
+xy* -> yz
 
 # Block corrections where a typo ends in 'in', corrects to 'ing',
 # and requires a right word boundary (e.g., runnin -> running)
@@ -394,20 +394,6 @@ Analysis for "wherre":
   - Result: "w" + "herre" = "where" ✓ Correct!
   
 Action: Remove "wherre" (redundant)
-```
-
-**Unsafe Simplification Example:**
-```
-Corrections:
-  - aer → are
-  - aerly → early
-
-Analysis for "aerly":
-  - Typing would trigger: aer → are
-  - Remaining suffix: "ly"
-  - Result: "aer" + "ly" = "arely" ✗ Wrong! (expected "early")
-  
-Action: Keep both corrections (not redundant - simplification would create garbage)
 ```
 
 **The algorithm validates each potential removal:**

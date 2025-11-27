@@ -303,19 +303,23 @@ The script generates multiple YAML files, organized alphabetically by the correc
 **Example YAML Entry:**
 ```yaml
 matches:
-  - trigger: wrod
-    replace: word
-    right_word: true    # Must be at the word end or isolated
+  - trigger: becuse
+    replace: because    # No "word" requirement, will trigger anywhere
     propagate_case: true
 
-  - trigger: becuse
-    replace: because
-    left_word: true     # Must be at word start or isolated
+  - trigger: milse
+    replace: miles
+    word: true          # Must be an isolated word
+    propagate_case: true
+
+  - trigger: toin
+    replace: tion
+    right_word: true    # Must be at the word end or isolated
     propagate_case: true
 
   - trigger: teh
     replace: the
-    word: true          # Must be an isolated word
+    left_word: true     # Must be at word start or isolated
     propagate_case: true
 ```
 

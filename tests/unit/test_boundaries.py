@@ -12,8 +12,6 @@ from entroppy.boundaries import (
 )
 from entroppy.config import BoundaryType
 
-# pylint: disable=missing-function-docstring
-
 
 class TestIsSubstringOfAny:
     """Test substring detection behavior."""

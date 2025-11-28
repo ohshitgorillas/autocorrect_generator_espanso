@@ -12,8 +12,6 @@ from entroppy.typos import (
     generate_all_typos,
 )
 
-# pylint: disable=missing-function-docstring
-
 
 class TestGenerateTranspositions:
     """Test adjacent character transposition behavior."""

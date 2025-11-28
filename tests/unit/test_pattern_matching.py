@@ -8,7 +8,7 @@ import pytest
 
 from entroppy.pattern_matching import PatternMatcher
 
-# pylint: disable=missing-function-docstring, protected-access
+# pylint: disable=protected-access
 
 
 class TestPatternMatcherBehavior:

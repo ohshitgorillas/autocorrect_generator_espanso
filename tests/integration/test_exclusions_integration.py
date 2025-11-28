@@ -12,7 +12,6 @@ from entroppy.exclusions import ExclusionMatcher
 from entroppy.processing import process_word
 from entroppy.config import BoundaryType
 
-# pylint: disable=missing-function-docstring, protected-access
 
 class TestProcessingIntegration:
     """Verify process_word() behavior unchanged after refactoring."""

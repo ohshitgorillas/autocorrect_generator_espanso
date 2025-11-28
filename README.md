@@ -416,7 +416,8 @@ Example - Pattern Rejection:
   
   Pattern candidate (Stage 4):
     - teh(n,ir) → then,their (RIGHT boundary)
-    - Would create: teh → the (right boundary)
+    - (ba,la)teh → bathe,lathe (LEFT boundary)
+    - Would create: teh → the (NONE, LEFT, and RIGHT boundaries)
   
   Action: Reject pattern entirely
   Reason: Same (typo, word) pair exists with different boundary
@@ -428,11 +429,6 @@ When a pattern is rejected for cross-boundary conflicts, all corrections it was 
 - No disambiguation windows appear in Espanso
 - Direct corrections (Stage 3) always take priority over patterns (Stage 4)
 
-
-<!-- **Example - Rejected Pattern:**
-```
-
-``` -->
 
 ### Substring Conflict Resolution
 

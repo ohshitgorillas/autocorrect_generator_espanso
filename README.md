@@ -1,6 +1,6 @@
 # EntropPy
 
-**Version 0.1.6 (Beta)** | [Changelog](CHANGELOG.md)
+**Version 0.2.0 (Beta)** | [Changelog](CHANGELOG.md)
 
 A Python-based autocorrect dictionary generator for the [Espanso](https://espanso.org/) text expander.
 
@@ -62,35 +62,64 @@ pip install -r requirements.txt
 ### 3. Directory Structure
 ```text
 project_root/
-├── entroppy/           <-- The package directory
+├── entroppy/                    <-- The package directory
 │   ├── __init__.py
 │   ├── __main__.py
-│   └── ... (other .py files)
-├── corrections/        <-- Optional location to write corrections to
+│   ├── boundaries.py            <-- Boundary detection
+│   ├── cli.py                   <-- Command-line interface
+│   ├── config.py                <-- Configuration management
+│   ├── conflict_resolution.py   <-- Conflict detection strategies
+│   ├── dictionary.py            <-- Dictionary loading
+│   ├── exclusions.py            <-- Exclusion pattern matching
+│   ├── output.py                <-- YAML output generation
+│   ├── pattern_matching.py      <-- Unified pattern matching
+│   ├── patterns.py              <-- Pattern generalization
+│   ├── pipeline.py              <-- Pipeline orchestration
+│   ├── processing.py            <-- Word processing and collision resolution
+│   ├── reports.py               <-- Report generation
+│   ├── typos.py                 <-- Typo generation algorithms
+│   ├── utils.py                 <-- Utility functions
+│   └── stages/                  <-- Modular pipeline stages
+│       ├── __init__.py
+│       ├── collision_resolution.py
+│       ├── conflict_removal.py
+│       ├── data_models.py       <-- Data transfer objects
+│       ├── dictionary_loading.py
+│       ├── output_generation.py
+│       ├── pattern_generalization.py
+│       ├── typo_generation.py
+│       └── worker_context.py    <-- Thread-safe worker context
+├── corrections/                 <-- Optional location to write corrections to
 │   ├── typos_able_to_anyone.yml
 │   ├── typos_baby_to_battery.yml
 │   └── ...
 │   └── typos_z.yml
-├── examples/           <-- Example files
+├── examples/                    <-- Example files
 │   ├── adjacent.txt
 │   ├── config.json
 │   ├── exclude.txt
 │   └── include.txt
-├── reports/            <-- Optional Timestamped reports
+├── reports/                     <-- Optional Timestamped reports
 │   ├── 2025-11-25_14-30-15/
 │   │   ├── collisions.txt
-│   │   ├── summary.txt
+│   │   ├── conflicts_*.txt
 │   │   ├── patterns.txt
-│   │   └── ...
+│   │   ├── statistics.csv
+│   │   └── summary.txt
 │   └── ...
-├── settings/           <-- Optional location for personalization files
+├── settings/                    <-- Optional location for personalization files
 │   ├── adjacent.txt
 │   ├── config.json
 │   ├── exclude.txt
 │   └── include.txt
-└── CHANGELOG.md
-├── README.md           <-- This file
-└── requirements.txt    <-- Dependencies
+├── tests/                       <-- Test suite
+│   ├── test_conflict_resolution.py
+│   ├── test_conflict_resolution_integration.py
+│   ├── ...
+├── CHANGELOG.md
+├── README.md                    <-- This file
+├── requirements.txt             <-- Dependencies
+└── requirements-testing.txt     <-- Testing dependencies
 ```
 
 ---

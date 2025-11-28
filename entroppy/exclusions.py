@@ -5,6 +5,7 @@ from __future__ import annotations
 from re import Pattern
 
 from .config import BoundaryType, Correction
+from .pattern_matching import PatternMatcher
 from .utils import compile_wildcard_regex
 
 
@@ -14,10 +15,11 @@ class ExclusionMatcher:
     def __init__(self, exclusion_set: set[str]):
         self.exact = set()
         self.wildcards = []
-        self.exact_typo_map: dict[str, str] = {}
+        self.exact_typo_map: dict[str, tuple[str, BoundaryType | None]] = {}
         self.wildcard_typo_map: list[tuple[Pattern, str, BoundaryType | None]] = []
-        self.wildcard_words: set[Pattern] = set()
-        self.exact_words: set[str] = set()
+
+        # Collect word-only exclusion patterns
+        word_only_patterns = set()
 
         for exclusion in exclusion_set:
             if "*" in exclusion or ":" in exclusion:
@@ -46,15 +48,20 @@ class ExclusionMatcher:
                     regex = compile_wildcard_regex(typo_pat)
                     self.wildcard_typo_map.append((regex, word_pat, required_boundary))
                 else:
-                    self.exact_typo_map[typo_pat] = word_pat
+                    self.exact_typo_map[typo_pat] = (word_pat, required_boundary)
             else:
-                # These are word-only exclusions (e.g., "*ball") used for dictionary filtering.
-                # We can safely ignore them here, as they are not meant to filter
-                # (typo, word) correction pairs.
-                if "*" in pattern:
-                    self.wildcard_words.add(compile_wildcard_regex(pattern))
-                else:
-                    self.exact_words.add(pattern)
+                # These are word-only exclusions (e.g., "*ball") used for dictionary filtering
+                word_only_patterns.add(pattern)
+
+        # Use PatternMatcher for word-only exclusions
+        self.word_pattern_matcher = PatternMatcher(word_only_patterns)
+
+        # Create a PatternMatcher for word patterns used in typo->word mappings
+        word_patterns_in_mappings = {
+            word_pat for _, word_pat, _ in self.wildcard_typo_map
+        }
+        word_patterns_in_mappings.update(self.exact_typo_map.values())
+        self.word_matcher = PatternMatcher(word_patterns_in_mappings)
 
     def _match_wildcard(self, text: str, pattern: str) -> bool:
         """Helper to match a string against a simple wildcard pattern."""
@@ -67,9 +74,13 @@ class ExclusionMatcher:
         """Check if a (typo, word) correction should be excluded."""
         typo, word, boundary = correction
 
-        # Check for exact typo -> word match (no boundary support for exact)
-        if self.exact_typo_map.get(typo) == word:
-            return True
+        # Check for exact typo -> word match (with boundary support)
+        exact_match = self.exact_typo_map.get(typo)
+        if exact_match:
+            word_pat, required_boundary = exact_match
+            if word == word_pat:
+                if required_boundary is None or required_boundary == boundary:
+                    return True
 
         # Check for wildcard typo -> word match, e.g., "accel* -> accelerate"
         for typo_re, word_pat, required_boundary in self.wildcard_typo_map:
@@ -85,7 +96,8 @@ class ExclusionMatcher:
         typo, word, _ = correction
 
         # Check for exact typo -> word match
-        if self.exact_typo_map.get(typo) == word:
+        exact_match = self.exact_typo_map.get(typo)
+        if exact_match and exact_match[0] == word:
             return f"{typo} -> {word}"
 
         # Check for wildcard typo -> word match
@@ -108,14 +120,7 @@ class ExclusionMatcher:
         This allows excluded patterns to not block valid typos.
         For example, if "*toin" is excluded, "allantoin" won't block "toin" as a typo.
         """
-        if word in self.exact:
-            return True
-
-        for pattern in self.wildcards:
-            if self._match_wildcard(word, pattern):
-                return True
-
-        return False
+        return self.word_pattern_matcher.matches(word)
 
     def filter_validation_set(self, validation_set: set[str]) -> set[str]:
         """
@@ -123,8 +128,4 @@ class ExclusionMatcher:
 
         Removes words matching exclusion patterns so they don't block valid typos.
         """
-        return {
-            word
-            for word in validation_set
-            if not self.should_ignore_in_validation(word)
-        }
+        return self.word_pattern_matcher.filter_set(validation_set)

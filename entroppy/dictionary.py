@@ -7,7 +7,7 @@ from english_words import get_english_words_set
 from wordfreq import top_n_list
 
 from .config import Config
-from .utils import compile_wildcard_regex
+from .pattern_matching import PatternMatcher
 
 
 def load_validation_dictionary(
@@ -45,16 +45,10 @@ def load_validation_dictionary(
             )
         return words
 
-    # Compile all patterns into regexes
-    compiled_patterns = [compile_wildcard_regex(p) for p in word_exclusion_patterns]
-
-    # Use a generator expression for memory efficiency, then build the set to remove
-    words_to_remove = {
-        word for word in words if any(pat.match(word) for pat in compiled_patterns)
-    }
-
-    validation_set = words - words_to_remove
-    removed_count = len(words_to_remove)
+    # Filter words using pattern matcher
+    pattern_matcher = PatternMatcher(word_exclusion_patterns)
+    validation_set = pattern_matcher.filter_set(words)
+    removed_count = len(words) - len(validation_set)
 
     if verbose:
         print(f"Loaded {len(validation_set)} words for validation", file=sys.stderr)

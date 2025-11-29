@@ -198,6 +198,78 @@ python -m entroppy --platform espanso --top-n 1000 --output corrections --debug
 
 All logging output goes to stderr, keeping stdout available for piped data.
 
+### Debug Tracing Flags
+
+For deep debugging and understanding why specific corrections are or aren't generated, use the specialized tracing flags. **Both require `--debug` and `--verbose` to be enabled.**
+
+#### `--debug-words` - Trace Specific Words
+
+Track specific words through the entire pipeline with exact matching (case-insensitive):
+
+```bash
+python -m entroppy \
+    --platform espanso \
+    --top-n 1000 \
+    --output corrections \
+    --debug --verbose \
+    --debug-words "the,because,action"
+```
+
+**Logs show:**
+- Whether the word is in the source dictionary (with frequency and rank)
+- All typos generated from the word
+- Why typos were filtered (valid word, frequency threshold, etc.)
+- Collision resolution decisions
+- Final boundary determination
+
+#### `--debug-typos` - Trace Typos with Pattern Support
+
+Track specific typos with powerful pattern matching:
+
+```bash
+# Exact matches
+python -m entroppy --debug --verbose --debug-typos "teh,adn,becuse" --top-n 1000 --output corrections
+
+# Wildcards - match any characters
+python -m entroppy --debug --verbose --debug-typos "*tion,err*,*the*" --top-n 5000 --output corrections
+
+# Boundaries - match specific boundary types
+python -m entroppy --debug --verbose --debug-typos ":teh,ing:,:teh:" --top-n 1000 --output corrections
+
+# Combined patterns
+python -m entroppy --debug --verbose --debug-typos "err*:,*ing:,:the" --top-n 1000 --output corrections
+```
+
+**Pattern Syntax:**
+- **Exact**: `teh` - matches "teh" with any boundary type
+- **Wildcards**:
+  - `*tion` - matches typos ending in "tion" (e.g., "actoin", "metnoin")
+  - `err*` - matches typos starting with "err" (e.g., "erro", "errro")
+  - `*the*` - matches typos containing "the" (e.g., "thhe", "theer")
+- **Boundaries**:
+  - `:teh` - matches "teh" with LEFT or BOTH boundary only
+  - `teh:` - matches "teh" with RIGHT or BOTH boundary only
+  - `:teh:` - matches "teh" with BOTH boundaries only
+- **Combined**: `err*:` - wildcards + boundaries work together
+
+**Logs show:**
+- Which pattern matched the typo (for wildcard/boundary patterns)
+- Which word generated the typo
+- Boundary determination logic
+- Collision winners and losers
+- Why typos were filtered or excluded
+
+**Example Output:**
+```
+[DEBUG WORD: 'the'] [Stage 1] Included from wordfreq (rank: 1, zipf freq: 7.73)
+[DEBUG WORD: 'the'] [Stage 2] Generating typos for debug word
+[DEBUG WORD: 'the'] [Stage 2] Generated typo: teh
+[DEBUG WORD: 'the'] [Stage 2] Created correction: teh → the (boundary: right)
+[DEBUG TYPO: 'teh' (matched: teh)] [Stage 2] Generated from word: the (boundary: right)
+[DEBUG WORD: 'the'] [Stage 3] Selected (no collision, boundary: right) (typo: teh)
+[DEBUG TYPO: 'teh' (matched: teh)] [Stage 3] Selected (no collision, boundary: right) (word: the)
+```
+
 ### Generating Reports
 
 Reports provide detailed analysis of EntropPy's decisions and are essential for understanding and tuning configuration:

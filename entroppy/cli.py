@@ -142,4 +142,16 @@ Example config.json:
         help=f"Number of parallel workers (default: {cpu_count()})",
     )
 
+    # Debug tracing
+    parser.add_argument(
+        "--debug-words",
+        type=str,
+        help="Comma-separated list of words to trace through pipeline (requires --debug and --verbose)",
+    )
+    parser.add_argument(
+        "--debug-typos",
+        type=str,
+        help="Comma-separated list of typo patterns to trace (supports wildcards * and boundaries :, requires --debug and --verbose)",
+    )
+
     return parser

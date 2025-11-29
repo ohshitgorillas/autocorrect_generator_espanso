@@ -40,6 +40,8 @@ def resolve_typo_collisions(
             config.min_word_length,
             dict_data.user_words_set,
             dict_data.exclusion_matcher,
+            config.debug_words,
+            config.debug_typo_matcher,
         )
     )
 

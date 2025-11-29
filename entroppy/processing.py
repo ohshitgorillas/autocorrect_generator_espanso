@@ -1,14 +1,20 @@
 """Word processing and collision resolution."""
 
+from typing import TYPE_CHECKING
+
 from tqdm import tqdm
 from wordfreq import word_frequency
 
 from .boundaries import determine_boundaries
 from .config import BoundaryType, Correction
 from .conflict_resolution import resolve_conflicts_for_group
+from .debug_utils import is_debug_word, is_debug_typo
 from .exclusions import ExclusionMatcher
 from .typos import generate_all_typos
 from .pattern_matching import PatternMatcher
+
+if TYPE_CHECKING:
+    from .debug_utils import DebugTypoMatcher
 
 
 def process_word(
@@ -19,7 +25,9 @@ def process_word(
     typo_freq_threshold: float,
     adj_letters_map: dict[str, str] | None,
     exclusions: set[str],
-) -> list[Correction]:
+    debug_words: frozenset[str] = frozenset(),
+    debug_typo_matcher: "DebugTypoMatcher | None" = None,
+) -> tuple[list[Correction], list[str]]:
     """Process a single word and generate all valid corrections.
 
     Args:
@@ -30,8 +38,20 @@ def process_word(
         source_words: Set of source words
         typo_freq_threshold: Frequency threshold for typos
         adj_letters_map: Adjacent letters map for insertions/replacements
+        exclusions: Set of exclusion patterns
+        debug_words: Set of words to debug (exact matches)
+        debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
+
+    Returns:
+        Tuple of (corrections list, debug messages list)
     """
     corrections = []
+    debug_messages = []
+    is_debug = is_debug_word(word, debug_words)
+
+    if is_debug:
+        debug_messages.append(f"[DEBUG WORD: '{word}'] [Stage 2] Generating typos for debug word")
+
     typos = generate_all_typos(word, adj_letters_map)
 
     # Filter out typo->word patterns, keep only single word exclusion patterns
@@ -42,12 +62,35 @@ def process_word(
         if typo == word:
             continue
 
+        # Check if this typo is being debugged (before we know boundary)
+        # For now, check with NONE boundary as a placeholder
+        typo_debug_check = is_debug_typo(typo, BoundaryType.NONE, debug_typo_matcher)
+
+        if is_debug:
+            debug_messages.append(f"[DEBUG WORD: '{word}'] [Stage 2] Generated typo: {typo}")
+
         # Skip if typo is a source word (from includes file)
         if typo in source_words:
+            if is_debug:
+                debug_messages.append(
+                    f"[DEBUG WORD: '{word}'] [Stage 2] Typo '{typo}' filtered - is a source word"
+                )
+            if typo_debug_check:
+                debug_messages.append(
+                    f"[DEBUG TYPO: '{typo}'] [Stage 2] Filtered - is a source word"
+                )
             continue
 
         # Use full validation set to check if typo is a real word
         if typo in validation_set:
+            if is_debug:
+                debug_messages.append(
+                    f"[DEBUG WORD: '{word}'] [Stage 2] Typo '{typo}' filtered - is a valid word"
+                )
+            if typo_debug_check:
+                debug_messages.append(
+                    f"[DEBUG TYPO: '{typo}'] [Stage 2] Filtered - is a valid word in dictionary"
+                )
             continue
 
         # If user explicitly excludes a typo, it bypasses the frequency check.
@@ -57,6 +100,14 @@ def process_word(
         if not is_explicitly_excluded and typo_freq_threshold > 0.0:
             typo_freq = word_frequency(typo, "en")
             if typo_freq >= typo_freq_threshold:
+                if is_debug:
+                    debug_messages.append(
+                        f"[DEBUG WORD: '{word}'] [Stage 2] Typo '{typo}' filtered - frequency {typo_freq:.2e} >= threshold {typo_freq_threshold:.2e}"
+                    )
+                if typo_debug_check:
+                    debug_messages.append(
+                        f"[DEBUG TYPO: '{typo}'] [Stage 2] Filtered - frequency {typo_freq:.2e} >= threshold {typo_freq_threshold:.2e}"
+                    )
                 continue
 
         # Use filtered validation set for boundary detection
@@ -64,10 +115,35 @@ def process_word(
         boundary_type = determine_boundaries(
             typo, filtered_validation_set, source_words
         )
-        if boundary_type is not None:
-            corrections.append((typo, word, boundary_type))
 
-    return corrections
+        if boundary_type is not None:
+            # Now that we have the boundary, check if this typo matches any debug patterns
+            if debug_typo_matcher:
+                matched_patterns = debug_typo_matcher.get_matching_patterns(typo, boundary_type)
+                if matched_patterns:
+                    patterns_str = ", ".join(matched_patterns)
+                    debug_messages.append(
+                        f"[DEBUG TYPO: '{typo}' (matched: {patterns_str})] [Stage 2] Generated from word: {word} (boundary: {boundary_type.value})"
+                    )
+
+            if is_debug:
+                debug_messages.append(
+                    f"[DEBUG WORD: '{word}'] [Stage 2] Created correction: {typo} → {word} (boundary: {boundary_type.value})"
+                )
+
+            corrections.append((typo, word, boundary_type))
+        else:
+            # Boundary detection failed
+            if is_debug:
+                debug_messages.append(
+                    f"[DEBUG WORD: '{word}'] [Stage 2] Typo '{typo}' filtered - boundary detection failed"
+                )
+            if typo_debug_check:
+                debug_messages.append(
+                    f"[DEBUG TYPO: '{typo}'] [Stage 2] Filtered - boundary detection failed"
+                )
+
+    return corrections, debug_messages
 
 
 def choose_strictest_boundary(boundaries: list[BoundaryType]) -> BoundaryType:
@@ -90,12 +166,26 @@ def resolve_collisions(
     min_word_length: int,
     user_words: set[str],
     exclusion_matcher: ExclusionMatcher,
+    debug_words: set[str] = set(),
+    debug_typo_matcher: "DebugTypoMatcher | None" = None,
 ) -> tuple[list[Correction], list, list, list]:
     """Resolve collisions where multiple words map to same typo.
+
+    Args:
+        typo_map: Map of typos to (word, boundary) pairs
+        freq_ratio: Minimum frequency ratio for collision resolution
+        min_typo_length: Minimum typo length
+        min_word_length: Minimum word length
+        user_words: Set of user-provided words
+        exclusion_matcher: Matcher for exclusion rules
+        debug_words: Set of words to debug (exact matches)
+        debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
 
     Returns:
         Tuple of (final_corrections, skipped_collisions, skipped_short, excluded_corrections)
     """
+    from .debug_utils import is_debug_correction, log_debug_correction, log_debug_word, log_debug_typo
+
     final_corrections = []
     skipped_collisions = []
     skipped_short = []
@@ -111,21 +201,61 @@ def resolve_collisions(
             boundary = choose_strictest_boundary(boundaries)
 
             if word in user_words and len(word) == 2:
+                orig_boundary = boundary
                 boundary = BoundaryType.BOTH
+                # Debug logging for forced BOTH boundary
+                correction_temp = (typo, word, boundary)
+                if is_debug_correction(correction_temp, debug_words, debug_typo_matcher):
+                    log_debug_correction(
+                        correction_temp,
+                        f"Forced BOTH boundary (2-letter user word, was {orig_boundary.value})",
+                        debug_words,
+                        debug_typo_matcher,
+                        "Stage 3"
+                    )
 
             # A short typo is permissible if it corrects to a word that is also short,
             # using the user's `min_word_length` as the threshold.
             if len(typo) < min_typo_length and len(word) > min_word_length:
                 skipped_short.append((typo, word, len(typo)))
+                # Debug logging
+                correction_temp = (typo, word, boundary)
+                if is_debug_correction(correction_temp, debug_words, debug_typo_matcher):
+                    log_debug_correction(
+                        correction_temp,
+                        f"SKIPPED - typo length {len(typo)} < min_typo_length {min_typo_length} (word length {len(word)} > min_word_length {min_word_length})",
+                        debug_words,
+                        debug_typo_matcher,
+                        "Stage 3"
+                    )
             else:
                 correction = (typo, word, boundary)
                 if not exclusion_matcher.should_exclude(correction):
                     final_corrections.append(correction)
+                    # Debug logging
+                    if is_debug_correction(correction, debug_words, debug_typo_matcher):
+                        log_debug_correction(
+                            correction,
+                            f"Selected (no collision, boundary: {boundary.value})",
+                            debug_words,
+                            debug_typo_matcher,
+                            "Stage 3"
+                        )
                 else:
                     # Track which rule excluded this correction
                     matching_rule = exclusion_matcher.get_matching_rule(correction)
                     excluded_corrections.append((typo, word, matching_rule))
+                    # Debug logging
+                    if is_debug_correction(correction, debug_words, debug_typo_matcher):
+                        log_debug_correction(
+                            correction,
+                            f"EXCLUDED by rule: {matching_rule}",
+                            debug_words,
+                            debug_typo_matcher,
+                            "Stage 3"
+                        )
         else:
+            # Collision: multiple words compete for same typo
             word_freqs = [(w, word_frequency(w, "en")) for w in unique_words]
             word_freqs.sort(key=lambda x: x[1], reverse=True)
 
@@ -136,10 +266,35 @@ def resolve_collisions(
                 most_common[1] / second_most[1] if second_most[1] > 0 else float("inf")
             )
 
+            # Check if any of the competing words are being debugged
+            is_debug_collision = any(
+                is_debug_correction((typo, w, BoundaryType.NONE), debug_words, debug_typo_matcher)
+                for w in unique_words
+            )
+
+            if is_debug_collision:
+                # Log collision details
+                words_with_freqs = ", ".join([f"{w} (freq: {f:.2e})" for w, f in word_freqs])
+                log_debug_typo(
+                    typo,
+                    f"Collision detected: {typo} → [{words_with_freqs}] (ratio: {ratio:.2f})",
+                    [],
+                    "Stage 3"
+                )
+
             if ratio > freq_ratio:
                 word = most_common[0]
                 boundaries = [b for w, b in unique_pairs if w == word]
                 boundary = choose_strictest_boundary(boundaries)
+
+                if is_debug_collision:
+                    log_debug_correction(
+                        (typo, word, boundary),
+                        f"Selected '{word}' (freq: {most_common[1]:.2e}) over '{second_most[0]}' (freq: {second_most[1]:.2e}), ratio: {ratio:.2f} > threshold {freq_ratio}",
+                        debug_words,
+                        debug_typo_matcher,
+                        "Stage 3"
+                    )
 
                 if word in user_words and len(word) == 2:
                     boundary = BoundaryType.BOTH
@@ -148,6 +303,16 @@ def resolve_collisions(
                 # using the user's `min_word_length` as the threshold.
                 if len(typo) < min_typo_length and len(word) > min_word_length:
                     skipped_short.append((typo, word, len(typo)))
+                    # Debug logging
+                    correction_temp = (typo, word, boundary)
+                    if is_debug_correction(correction_temp, debug_words, debug_typo_matcher):
+                        log_debug_correction(
+                            correction_temp,
+                            f"SKIPPED after collision resolution - typo length {len(typo)} < min_typo_length {min_typo_length}",
+                            debug_words,
+                            debug_typo_matcher,
+                            "Stage 3"
+                        )
                 else:
                     correction = (typo, word, boundary)
                     if not exclusion_matcher.should_exclude(correction):
@@ -156,8 +321,25 @@ def resolve_collisions(
                         # Track which rule excluded this correction
                         matching_rule = exclusion_matcher.get_matching_rule(correction)
                         excluded_corrections.append((typo, word, matching_rule))
+                        # Debug logging
+                        if is_debug_correction(correction, debug_words, debug_typo_matcher):
+                            log_debug_correction(
+                                correction,
+                                f"EXCLUDED after collision resolution by rule: {matching_rule}",
+                                debug_words,
+                                debug_typo_matcher,
+                                "Stage 3"
+                            )
             else:
                 skipped_collisions.append((typo, unique_words, ratio))
+                # Debug logging
+                if is_debug_collision:
+                    log_debug_typo(
+                        typo,
+                        f"SKIPPED - ambiguous collision, ratio {ratio:.2f} <= threshold {freq_ratio}",
+                        [],
+                        "Stage 3"
+                    )
 
     return final_corrections, skipped_collisions, skipped_short, excluded_corrections
 

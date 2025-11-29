@@ -45,6 +45,11 @@ class Config:
     platform: str = "espanso"  # "espanso", "qmk", etc.
     max_corrections: int | None = None  # QMK memory limit
 
+    # Debug tracing
+    debug_words: set[str] = field(default_factory=set)  # Exact word matches only
+    debug_typos: set[str] = field(default_factory=set)  # Raw patterns with wildcards/boundaries
+    debug_typo_matcher: "DebugTypoMatcher | None" = field(default=None, init=False)  # Created after parsing
+
 
 def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Config:
     """Load JSON config, override with CLI args, return Config object."""
@@ -59,14 +64,32 @@ def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Conf
         # Otherwise, try JSON, then the hardcoded fallback
         return json_config.get(key, fallback)
 
+    def parse_string_set(value) -> set[str]:
+        """Parse comma-separated string or array into set of lowercase, stripped strings."""
+        if value is None or value == "":
+            return set()
+        if isinstance(value, list):
+            # JSON array format
+            return {s.strip().lower() for s in value if s.strip()}
+        if isinstance(value, str):
+            # Comma-separated string format
+            return {s.strip().lower() for s in value.split(",") if s.strip()}
+        return set()
+
     json_config = {}
     if json_path:
         json_path = os.path.expanduser(json_path)
         with open(json_path, "r", encoding="utf-8") as f:
             json_config = json.load(f)
 
+    # Parse debug words and typos
+    debug_words_raw = get_value("debug_words", None)
+    debug_typos_raw = get_value("debug_typos", None)
+    debug_words = parse_string_set(debug_words_raw)
+    debug_typos = parse_string_set(debug_typos_raw)
+
     # Build config with CLI args taking precedence over JSON
-    return Config(
+    config = Config(
         platform=get_value("platform", "espanso"),
         top_n=get_value("top_n", None),
         max_word_length=get_value("max_word_length", 10),
@@ -84,4 +107,11 @@ def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Conf
         max_entries_per_file=get_value("max_entries_per_file", 500),
         reports=get_value("reports", None),
         max_corrections=get_value("max_corrections", None),
+        debug_words=debug_words,
+        debug_typos=debug_typos,
     )
+
+    # Create debug typo matcher after config object is created (post-init)
+    # This will be done in the main module after debug_utils is imported
+
+    return config

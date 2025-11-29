@@ -2,6 +2,10 @@
 
 import threading
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from entroppy.debug_utils import DebugTypoMatcher
 
 
 @dataclass(frozen=True)
@@ -20,6 +24,8 @@ class WorkerContext:
         typo_freq_threshold: Frequency threshold for filtering typos
         adjacent_letters_map: Adjacent letters map for insertions/replacements
         exclusions_set: Set of exclusion patterns
+        debug_words: Set of words to trace through pipeline (exact matches)
+        debug_typo_matcher: Matcher for debug typos (with wildcard/boundary support)
     """
 
     validation_set: frozenset[str]
@@ -28,14 +34,16 @@ class WorkerContext:
     typo_freq_threshold: float
     adjacent_letters_map: dict[str, list[str]]
     exclusions_set: frozenset[str]
+    debug_words: frozenset[str]
+    debug_typo_matcher: "DebugTypoMatcher | None"
 
     @classmethod
-    def from_dict_data(cls, dict_data, typo_freq_threshold: float) -> "WorkerContext":
+    def from_dict_data(cls, dict_data, config) -> "WorkerContext":
         """Create WorkerContext from DictionaryData and config.
 
         Args:
             dict_data: DictionaryData from dictionary loading stage
-            typo_freq_threshold: Frequency threshold from config
+            config: Config object containing threshold and debug settings
 
         Returns:
             New WorkerContext instance
@@ -44,9 +52,11 @@ class WorkerContext:
             validation_set=frozenset(dict_data.validation_set),
             filtered_validation_set=frozenset(dict_data.filtered_validation_set),
             source_words_set=frozenset(dict_data.source_words_set),
-            typo_freq_threshold=typo_freq_threshold,
+            typo_freq_threshold=config.typo_freq_threshold,
             adjacent_letters_map=dict_data.adjacent_letters_map,
             exclusions_set=frozenset(dict_data.exclusions),
+            debug_words=frozenset(config.debug_words),
+            debug_typo_matcher=config.debug_typo_matcher,
         )
 
 

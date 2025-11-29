@@ -4,6 +4,7 @@ from loguru import logger
 
 from .cli import create_parser
 from .config import load_config
+from .debug_utils import DebugTypoMatcher
 from .logger import setup_logger
 from .pipeline import run_pipeline
 
@@ -33,6 +34,14 @@ def main():
         logger.warning("max_entries_per_file is greater than 1000")
         logger.warning("This is not recommended and may cause Espanso performance issues")
         logger.warning("--------------------------------")
+
+    # Validate debug flags
+    if (config.debug_words or config.debug_typos) and not (config.debug and config.verbose):
+        parser.error("--debug-words and --debug-typos require BOTH --debug and --verbose flags")
+
+    # Create debug typo matcher (post-init)
+    if config.debug_typos:
+        config.debug_typo_matcher = DebugTypoMatcher.from_patterns(config.debug_typos)
 
     # Run pipeline
     run_pipeline(config)

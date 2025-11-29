@@ -1,10 +1,6 @@
 """Conflict resolution for substring typo corrections.
 
-When Espanso sees a typo, it triggers on the first (shortest) match from left to right.
-This module detects and removes redundant corrections where a longer typo would never
-trigger because a shorter typo would match first.
-
-Example:
+Example for left-to-right matching:
 - herre → here
 - wherre → where
 
@@ -144,7 +140,7 @@ def get_detector_for_boundary(boundary: BoundaryType) -> ConflictDetector:
         ConflictDetector instance for that boundary type
     """
     if boundary == BoundaryType.RIGHT:
-        return SuffixConflictDetector()    # LEFT, NONE, and BOTH all use prefix matching
+        return SuffixConflictDetector()  # LEFT, NONE, and BOTH all use prefix matching
     return PrefixConflictDetector()
 
 

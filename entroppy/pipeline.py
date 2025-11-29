@@ -68,7 +68,7 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
 
     # Stage 4: Generalize patterns
     pattern_result = generalize_typo_patterns(
-        collision_result, dict_data, config, verbose
+        collision_result, dict_data, config, constraints.match_direction, verbose
     )
 
     if report_data:

@@ -38,7 +38,7 @@ def _filter_cross_boundary_conflicts(
         Tuple of (final_corrections with restored replacements, safe patterns)
     """
     # Build index of (typo, word) pairs from direct corrections
-    direct_pairs = {(typo, word) for typo, word, boundary in final_corrections}
+    direct_pairs = {(typo, word) for typo, word, _ in final_corrections}
 
     # Check each pattern for conflicts and separate into safe/conflicting
     safe_patterns = []
@@ -86,6 +86,7 @@ def generalize_typo_patterns(
     collision_result: CollisionResolutionResult,
     dict_data: DictionaryData,
     config: Config,
+    match_direction,
     verbose: bool = False,
 ) -> PatternGeneralizationResult:
     """Generalize patterns from corrections.
@@ -94,6 +95,7 @@ def generalize_typo_patterns(
         collision_result: Result from collision resolution stage
         dict_data: Dictionary data from loading stage
         config: Configuration object
+        match_direction: Match direction enum from platform constraints
         verbose: Whether to print verbose output
 
     Returns:
@@ -112,6 +114,7 @@ def generalize_typo_patterns(
         dict_data.filtered_validation_set,
         dict_data.source_words_set,
         config.min_typo_length,
+        match_direction,
         verbose,
     )
 

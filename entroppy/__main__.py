@@ -17,6 +17,17 @@ def main():
     if not config.top_n and not config.include:
         parser.error("Must specify either --top-n or --include (or both)")
 
+    if not config.platform:
+        parser.error("Must specify a platform")
+    if config.platform == "qmk" and not config.max_corrections:
+        parser.error("Must specify --max-corrections for QMK")
+    if config.platform == "espanso" and config.max_entries_per_file > 1000:
+        print("--------------------------------")
+        print("!!! WARNING:")
+        print("max_entries_per_file is greater than 1000")
+        print("This is not recommended and may cause Espanso performance issues")
+        print("--------------------------------")
+
     # Run pipeline
     run_pipeline(config)
 

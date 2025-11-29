@@ -95,6 +95,37 @@ class PlatformBackend(ABC):
             config: Configuration object
         """
 
+    @abstractmethod
+    def generate_platform_report(
+        self,
+        final_corrections: list[Correction],
+        ranked_corrections_before_limit: list[Correction],
+        filtered_corrections: list[Correction],
+        patterns: list[Correction],
+        pattern_replacements: dict,
+        user_words: set[str],
+        filter_metadata: dict,
+        report_dir,
+        config: Config,
+    ) -> dict:
+        """
+        Generate platform-specific report.
+
+        Args:
+            final_corrections: Final corrections after limit applied
+            ranked_corrections_before_limit: All ranked corrections before applying limit
+            filtered_corrections: Corrections after filtering but before ranking
+            patterns: Pattern corrections
+            pattern_replacements: Map of pattern -> list of corrections it replaces
+            user_words: User-specified words
+            filter_metadata: Metadata from filter_corrections()
+            report_dir: Directory to write report to (Path object)
+            config: Configuration object
+
+        Returns:
+            Dictionary containing report metadata (file path, statistics, etc.)
+        """
+
     def get_name(self) -> str:
         """Return platform name for display."""
         return self.__class__.__name__.replace("Backend", "").lower()

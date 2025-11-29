@@ -11,6 +11,7 @@ from .base import (
     MatchDirection,
 )
 from ..config import Correction, Config, BoundaryType
+from .qmk_report import generate_qmk_ranking_report
 
 
 class QMKBackend(PlatformBackend):
@@ -19,7 +20,8 @@ class QMKBackend(PlatformBackend):
 
     Characteristics:
     - Matches right-to-left
-    - Limited corrections (~1500 typical, ~6000 theoretical max)
+    - Limited corrections
+        (6000 theoretical max, effective max depends on flash size)
     - Alphas + apostrophe only
     - Compile-time validation (rejects overlapping patterns)
     - Text output format
@@ -27,6 +29,14 @@ class QMKBackend(PlatformBackend):
 
     # QMK character constraints
     ALLOWED_CHARS = set("abcdefghijklmnopqrstuvwxyz'")
+
+    def __init__(self):
+        """Initialize QMK backend with storage for scoring metadata."""
+        # Store scoring information for report generation
+        self._user_corrections = []
+        self._pattern_scores = []
+        self._direct_scores = []
+        self._all_scored = []
 
     def get_constraints(self) -> PlatformConstraints:
         """Return QMK constraints."""
@@ -278,6 +288,12 @@ class QMKBackend(PlatformBackend):
 
         ranked = user_corrections + [(t, w, b) for _, t, w, b in all_scored]
 
+        # Store scoring information for report generation
+        self._user_corrections = user_corrections
+        self._pattern_scores = pattern_scores
+        self._direct_scores = direct_scores
+        self._all_scored = all_scored
+
         # Apply max_corrections limit if specified
         if config and config.max_corrections:
             ranked = ranked[: config.max_corrections]
@@ -350,6 +366,31 @@ class QMKBackend(PlatformBackend):
                     file=sys.stderr,
                 )
         else:
-
             for line in lines:
                 print(line, file=sys.stdout)
+
+    def generate_platform_report(
+        self,
+        final_corrections: list[Correction],
+        ranked_corrections_before_limit: list[Correction],
+        filtered_corrections: list[Correction],
+        patterns: list[Correction],
+        pattern_replacements: dict,
+        user_words: set[str],
+        filter_metadata: dict,
+        report_dir,
+        config: Config,
+    ) -> dict:
+        """Generate QMK ranking report."""
+        return generate_qmk_ranking_report(
+            final_corrections,
+            ranked_corrections_before_limit,
+            filtered_corrections,
+            patterns,
+            pattern_replacements,
+            self._user_corrections,
+            self._pattern_scores,
+            self._direct_scores,
+            filter_metadata,
+            report_dir,
+        )

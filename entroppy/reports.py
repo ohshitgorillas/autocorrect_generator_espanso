@@ -46,6 +46,12 @@ class ReportData:
     corrections_after_conflicts: int = 0
     total_corrections: int = 0
 
+    # Platform-specific data for reports
+    final_corrections: list[Correction] = field(default_factory=list)
+    ranked_corrections_before_limit: list[Correction] = field(default_factory=list)
+    filtered_corrections: list[Correction] = field(default_factory=list)
+    filter_metadata: dict = field(default_factory=dict)
+
 
 def _format_boundary(boundary: BoundaryType) -> str:
     """Format boundary type for display."""
@@ -351,12 +357,26 @@ def generate_statistics_csv(data: ReportData, report_dir: Path) -> None:
 
 
 def generate_reports(
-    data: ReportData, reports_path: str, verbose: bool = False
-) -> None:
-    """Generate all reports in a timestamped directory."""
-    # Create timestamped directory
+    data: ReportData,
+    reports_path: str,
+    platform_name: str,
+    verbose: bool = False,
+) -> Path:
+    """Generate all reports in a timestamped directory.
+
+    Args:
+        data: Report data collected during pipeline execution
+        reports_path: Base path for reports directory
+        platform_name: Platform name to include in folder name
+        verbose: Whether to print progress messages
+
+    Returns:
+        Path to the created report directory
+    """
+    # Create timestamped directory with platform name
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    report_dir = Path(reports_path) / timestamp
+    folder_name = f"{timestamp}_{platform_name}"
+    report_dir = Path(reports_path) / folder_name
     report_dir.mkdir(parents=True, exist_ok=True)
 
     if verbose:
@@ -373,3 +393,5 @@ def generate_reports(
 
     if verbose:
         print("✓ Reports generated successfully", file=sys.stderr)
+
+    return report_dir

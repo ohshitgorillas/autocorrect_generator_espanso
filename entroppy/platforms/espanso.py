@@ -7,6 +7,7 @@ from multiprocessing import Pool
 
 import yaml
 
+from .espanso_report import generate_espanso_output_report
 from .base import (
     PlatformBackend,
     PlatformConstraints,
@@ -26,6 +27,11 @@ class EspansoBackend(PlatformBackend):
     - Runtime conflict handling
     - YAML output format
     """
+
+    def __init__(self):
+        """Initialize Espanso backend with storage for report metadata."""
+        self._corrections_by_letter = {}
+        self._ram_estimate = {}
 
     def get_constraints(self) -> PlatformConstraints:
         """Return Espanso constraints (minimal - very permissive)."""
@@ -75,15 +81,15 @@ class EspansoBackend(PlatformBackend):
         if config.verbose:
             print("Sorting complete.", file=sys.stderr)
 
-        # Estimate RAM usage
-        self._estimate_ram_usage(sorted_corrections, config.verbose)
+        # Estimate RAM usage and store for report
+        self._ram_estimate = self._estimate_ram_usage(sorted_corrections, config.verbose)
 
         if output_path:
-            corrections_by_letter = self._organize_by_letter(
+            self._corrections_by_letter = self._organize_by_letter(
                 sorted_corrections, config.verbose
             )
             self._write_yaml_files(
-                corrections_by_letter,
+                self._corrections_by_letter,
                 output_path,
                 config.verbose,
                 config.max_entries_per_file,
@@ -279,3 +285,24 @@ class EspansoBackend(PlatformBackend):
                 f"\nTotal: {total_entries} corrections across {total_files} files",
                 file=sys.stderr,
             )
+
+    def generate_platform_report(
+        self,
+        final_corrections: list[Correction],
+        ranked_corrections_before_limit: list[Correction],
+        filtered_corrections: list[Correction],
+        patterns: list[Correction],
+        pattern_replacements: dict,
+        user_words: set[str],
+        filter_metadata: dict,
+        report_dir,
+        config: Config,
+    ) -> dict:
+        """Generate Espanso output summary report."""
+        return generate_espanso_output_report(
+            final_corrections,
+            self._corrections_by_letter,
+            self._ram_estimate,
+            config.max_entries_per_file,
+            report_dir,
+        )

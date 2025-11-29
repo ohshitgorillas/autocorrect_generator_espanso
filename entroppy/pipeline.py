@@ -143,6 +143,11 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     if report_data:
         report_data.stage_times["Platform filtering/ranking"] = filter_elapsed
         report_data.total_corrections = len(final_corrections)
+        # Store platform-specific data for reports
+        report_data.final_corrections = final_corrections
+        report_data.ranked_corrections_before_limit = ranked_corrections
+        report_data.filtered_corrections = filtered_corrections
+        report_data.filter_metadata = filter_metadata
 
     # Stage 6: Generate output
     start_output = time.time()
@@ -164,7 +169,28 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     if config.reports:
         if verbose:
             print(f"# Generating reports in {config.reports}", file=sys.stderr)
-        generate_reports(report_data, config.reports, verbose)
+
+        # Generate standard reports
+        platform_name = platform.get_name()
+        report_dir = generate_reports(
+            report_data, config.reports, platform_name, verbose
+        )
+
+        # Generate platform-specific report
+        platform.generate_platform_report(
+            final_corrections,
+            ranked_corrections,
+            filtered_corrections,
+            pattern_result.patterns,
+            pattern_result.pattern_replacements,
+            dict_data.user_words_set,
+            filter_metadata,
+            report_dir,
+            config,
+        )
+
+        if verbose:
+            print(f"✓ Platform report written to {report_dir}/", file=sys.stderr)
 
     # Print total time
     elapsed_time = time.time() - start_time

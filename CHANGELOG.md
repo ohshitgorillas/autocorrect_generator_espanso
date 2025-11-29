@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Debug tracing flags for pipeline transparency**
+  - `--debug-words` flag for tracing specific words through the pipeline
+    - Exact matching only (case-insensitive)
+    - Example: `--debug-words "the,because,action"`
+    - Shows word inclusion, frequency/rank, all generated typos, filtering decisions
+  - `--debug-typos` flag for tracing typos with pattern support
+    - Exact matches: `--debug-typos "teh,adn"`
+    - Wildcards: `--debug-typos "*tion,err*,*the*"`
+    - Boundary patterns: `--debug-typos ":teh,ing:,:teh:"`
+    - Combined: `--debug-typos "err*:,*ing:"`
+    - Shows which patterns matched, source word, boundary logic, collision resolution
+  - Both flags require `--debug` AND `--verbose` to be enabled
+  - Implemented in new [`entroppy/debug_utils.py`](entroppy/debug_utils.py) module
+  - Added `DebugTypoMatcher` class for pattern matching with wildcard and boundary support
+  - Updated [`WorkerContext`](entroppy/stages/worker_context.py) to pass debug info to multiprocessing workers
+  - Debug logging integrated into:
+    - Stage 1: Dictionary loading (word inclusion, frequencies)
+    - Stage 2: Typo generation (all typos generated, filtering reasons)
+    - Stage 3: Collision resolution (winner selection, exclusions)
+  - Multiprocessing support: collects logs from workers and prints after stage completion
+  - Logging format:
+    - `[DEBUG WORD: 'word'] [Stage N] message`
+    - `[DEBUG TYPO: 'typo' (matched: pattern)] [Stage N] message`
+
 - **Structured logging with loguru**
   - Replaced all `print()` statements with loguru-based structured logging
   - Three log levels: WARNING (default), INFO (verbose), DEBUG (debug)

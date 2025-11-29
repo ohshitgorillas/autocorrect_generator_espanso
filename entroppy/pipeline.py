@@ -87,7 +87,11 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
 
     # Stage 5: Remove conflicts
     conflict_removal_result = remove_typo_conflicts(
-        pattern_result, verbose, collect_details=config.reports is not None
+        pattern_result,
+        verbose,
+        collect_details=config.reports is not None,
+        debug_words=config.debug_words,
+        debug_typo_matcher=config.debug_typo_matcher,
     )
 
     if report_data:

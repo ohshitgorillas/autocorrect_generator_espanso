@@ -6,6 +6,7 @@ from loguru import logger
 
 from .boundaries import would_trigger_at_end
 from .config import BoundaryType, Correction
+from .debug_utils import is_debug_correction
 
 from .platforms.base import MatchDirection
 
@@ -155,12 +156,26 @@ def generalize_patterns(
     min_typo_length: int,
     match_direction: MatchDirection,
     verbose: bool = False,
+    debug_words: set[str] = set(),
+    debug_typo_matcher: "DebugTypoMatcher | None" = None,
 ) -> tuple[list[Correction], set[Correction], dict, list]:
     """Find repeated patterns, create generalized rules, and return corrections to be removed.
+
+    Args:
+        corrections: List of corrections to analyze
+        validation_set: Set of valid words
+        source_words: Set of source words
+        min_typo_length: Minimum typo length
+        match_direction: Platform match direction
+        verbose: Whether to print verbose output
+        debug_words: Set of words to debug (exact matches)
+        debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
 
     Returns:
         Tuple of (patterns, corrections_to_remove, pattern_replacements, rejected_patterns)
     """
+    from .debug_utils import log_debug_correction, log_debug_typo
+
     patterns = []
     corrections_to_remove = set()
     pattern_replacements = {}
@@ -185,10 +200,26 @@ def generalize_patterns(
         if len(occurrences) < 2:
             continue
 
+        # Check if any of the occurrences involve debug items
+        has_debug_occurrence = any(
+            is_debug_correction(occ, debug_words, debug_typo_matcher)
+            for occ in occurrences
+        )
+
         if len(typo_pattern) < min_typo_length:
             rejected_patterns.append(
                 (typo_pattern, word_pattern, f"Too short (< {min_typo_length})")
             )
+            if has_debug_occurrence:
+                # Log that a pattern involving debug items was rejected
+                pattern_correction = (typo_pattern, word_pattern, boundary)
+                log_debug_correction(
+                    pattern_correction,
+                    f"Pattern rejected - too short (< {min_typo_length}), would have replaced {len(occurrences)} corrections",
+                    debug_words,
+                    debug_typo_matcher,
+                    "Stage 4"
+                )
             continue
 
         # Validate: Check if this pattern actually works for all occurrences
@@ -208,6 +239,15 @@ def generalize_patterns(
                         f"'{full_word}' for typo '{full_typo}'",
                     )
                 )
+                if has_debug_occurrence:
+                    pattern_correction = (typo_pattern, word_pattern, boundary)
+                    log_debug_correction(
+                        pattern_correction,
+                        f"Pattern rejected - creates '{expected_result}' instead of '{full_word}' for typo '{full_typo}'",
+                        debug_words,
+                        debug_typo_matcher,
+                        "Stage 4"
+                    )
                 break
 
         if not pattern_valid:
@@ -222,6 +262,15 @@ def generalize_patterns(
                     f"Conflicts with validation word '{typo_pattern}'",
                 )
             )
+            if has_debug_occurrence:
+                pattern_correction = (typo_pattern, word_pattern, boundary)
+                log_debug_correction(
+                    pattern_correction,
+                    f"Pattern rejected - conflicts with validation word '{typo_pattern}'",
+                    debug_words,
+                    debug_typo_matcher,
+                    "Stage 4"
+                )
             continue
 
         if not would_trigger_at_end(typo_pattern, validation_set):
@@ -238,13 +287,46 @@ def generalize_patterns(
                 pattern_key = (typo_pattern, word_pattern, boundary)
                 pattern_replacements[pattern_key] = occurrences
 
+                # Debug logging for pattern acceptance
+                if has_debug_occurrence:
+                    pattern_correction = (typo_pattern, word_pattern, boundary)
+                    replaced_strs = [f"{t}→{w}" for t, w, _ in occurrences[:3]]
+                    if len(occurrences) > 3:
+                        replaced_strs.append(f"... and {len(occurrences) - 3} more")
+                    log_debug_correction(
+                        pattern_correction,
+                        f"Pattern ACCEPTED - replaces {len(occurrences)} corrections: {', '.join(replaced_strs)}",
+                        debug_words,
+                        debug_typo_matcher,
+                        "Stage 4"
+                    )
+
                 # Mark original corrections for removal
                 for typo, word, orig_boundary in occurrences:
                     corrections_to_remove.add((typo, word, orig_boundary))
+                    # Log individual replacements for debug items
+                    correction = (typo, word, orig_boundary)
+                    if is_debug_correction(correction, debug_words, debug_typo_matcher):
+                        log_debug_correction(
+                            correction,
+                            f"Will be replaced by pattern: {typo_pattern} → {word_pattern}",
+                            debug_words,
+                            debug_typo_matcher,
+                            "Stage 4"
+                        )
             else:
                 rejected_patterns.append(
                     (typo_pattern, word_pattern, "Would corrupt source words")
                 )
+                if has_debug_occurrence:
+                    pattern_correction = (typo_pattern, word_pattern, boundary)
+                    log_debug_correction(
+                        pattern_correction,
+                        "Pattern rejected - would corrupt source words",
+                        debug_words,
+                        debug_typo_matcher,
+                        "Stage 4"
+                    )
         else:
             rejected_patterns.append(
                 (typo_pattern, word_pattern, "Would trigger at end of validation words")

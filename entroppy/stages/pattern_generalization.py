@@ -115,6 +115,8 @@ def generalize_typo_patterns(
         config.min_typo_length,
         match_direction,
         verbose,
+        config.debug_words,
+        config.debug_typo_matcher,
     )
 
     # Remove original corrections that have been generalized
@@ -135,11 +137,18 @@ def generalize_typo_patterns(
         config.min_word_length,
         dict_data.user_words_set,
         dict_data.exclusion_matcher,
+        config.debug_words,
+        config.debug_typo_matcher,
     )
 
     # Remove substring conflicts from patterns
     # Patterns can also have redundancies (e.g., "lectiona" is redundant if "ectiona" exists)
-    resolved_patterns = remove_substring_conflicts(resolved_patterns, verbose=False)
+    resolved_patterns = remove_substring_conflicts(
+        resolved_patterns,
+        verbose=False,
+        debug_words=config.debug_words,
+        debug_typo_matcher=config.debug_typo_matcher,
+    )
 
     # Cross-boundary deduplication: filter patterns that conflict with direct corrections
     final_corrections, safe_patterns = _filter_cross_boundary_conflicts(

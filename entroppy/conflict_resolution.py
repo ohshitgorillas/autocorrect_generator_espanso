@@ -14,6 +14,7 @@ from collections import defaultdict
 from abc import ABC, abstractmethod
 
 from .config import BoundaryType, Correction
+from .debug_utils import is_debug_correction
 
 
 class ConflictDetector(ABC):
@@ -147,6 +148,8 @@ def get_detector_for_boundary(boundary: BoundaryType) -> ConflictDetector:
 def resolve_conflicts_for_group(
     corrections: list[Correction],
     boundary: BoundaryType,
+    debug_words: set[str] = set(),
+    debug_typo_matcher: "DebugTypoMatcher | None" = None,
 ) -> list[Correction]:
     """Remove substring conflicts from a group of corrections with the same boundary.
 
@@ -157,10 +160,14 @@ def resolve_conflicts_for_group(
     Args:
         corrections: List of corrections with the same boundary type
         boundary: The boundary type for this group
+        debug_words: Set of words to debug (exact matches)
+        debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
 
     Returns:
         List of corrections with conflicts removed
     """
+    from .debug_utils import log_debug_correction
+
     if not corrections:
         return []
 
@@ -202,12 +209,36 @@ def resolve_conflicts_for_group(
                         ):
                             typos_to_remove.add(typo)
                             is_blocked = True
+
+                            # Debug logging for blocked corrections
+                            if is_debug_correction(long_correction, debug_words, debug_typo_matcher):
+                                # Calculate what would be produced
+                                expected_result = detector.calculate_result(typo, candidate, short_word)
+                                log_debug_correction(
+                                    long_correction,
+                                    f"REMOVED - blocked by shorter correction '{candidate} → {short_word}' "
+                                    f"(typing '{typo}' triggers '{candidate}' producing '{expected_result}' = '{long_word}' ✓)",
+                                    debug_words,
+                                    debug_typo_matcher,
+                                    "Stage 5"
+                                )
                             break
 
         # If not blocked, add to index for future comparisons
         if not is_blocked and typo:
             index_key = detector.get_index_key(typo)
             candidates_by_char[index_key].append(typo)
+
+            # Debug logging for kept corrections
+            correction = typo_to_correction[typo]
+            if is_debug_correction(correction, debug_words, debug_typo_matcher):
+                log_debug_correction(
+                    correction,
+                    f"Kept - no blocking substring conflicts found (boundary: {boundary.value})",
+                    debug_words,
+                    debug_typo_matcher,
+                    "Stage 5"
+                )
 
     # Return corrections that weren't removed
     return [c for c in corrections if c[0] not in typos_to_remove]

@@ -14,6 +14,8 @@ def remove_typo_conflicts(
     pattern_result: PatternGeneralizationResult,
     verbose: bool = False,
     collect_details: bool = False,
+    debug_words: set[str] = set(),
+    debug_typo_matcher: "DebugTypoMatcher | None" = None,
 ) -> ConflictRemovalResult:
     """Remove substring conflicts from corrections.
 
@@ -21,6 +23,8 @@ def remove_typo_conflicts(
         pattern_result: Result from pattern generalization stage
         verbose: Whether to print verbose output
         collect_details: Whether to collect detailed information about removed conflicts
+        debug_words: Set of words to debug (exact matches)
+        debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
 
     Returns:
         ConflictRemovalResult containing final corrections and conflict statistics
@@ -34,7 +38,9 @@ def remove_typo_conflicts(
     if collect_details:
         pre_conflict_corrections = {c: c for c in pattern_result.corrections}
 
-    final_corrections = remove_substring_conflicts(pattern_result.corrections, verbose)
+    final_corrections = remove_substring_conflicts(
+        pattern_result.corrections, verbose, debug_words, debug_typo_matcher
+    )
 
     conflicts_removed = pre_conflict_count - len(final_corrections)
 

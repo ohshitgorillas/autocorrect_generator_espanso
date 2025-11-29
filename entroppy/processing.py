@@ -345,7 +345,10 @@ def resolve_collisions(
 
 
 def remove_substring_conflicts(
-    corrections: list[Correction], verbose: bool = False
+    corrections: list[Correction],
+    verbose: bool = False,
+    debug_words: set[str] = set(),
+    debug_typo_matcher: "DebugTypoMatcher | None" = None,
 ) -> list[Correction]:
     """Remove corrections where one typo is a substring of another WITH THE SAME BOUNDARY.
 
@@ -366,6 +369,15 @@ def remove_substring_conflicts(
     - Both would match at end of "information"
     - "toin" makes "atoin" redundant—the "a" is useless
     - Remove "atoin" in favor of shorter "toin"
+
+    Args:
+        corrections: List of corrections to check for conflicts
+        verbose: Whether to print verbose output
+        debug_words: Set of words to debug (exact matches)
+        debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
+
+    Returns:
+        List of corrections with conflicts removed
     """
     # Group by boundary type - process each separately
     by_boundary = {}
@@ -389,6 +401,8 @@ def remove_substring_conflicts(
         groups_iter = by_boundary.items()
 
     for boundary, group in groups_iter:
-        final_corrections.extend(resolve_conflicts_for_group(group, boundary))
+        final_corrections.extend(
+            resolve_conflicts_for_group(group, boundary, debug_words, debug_typo_matcher)
+        )
 
     return final_corrections

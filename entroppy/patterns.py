@@ -1,7 +1,8 @@
 """Pattern generalization for typo corrections."""
 
-import sys
 from collections import defaultdict
+
+from loguru import logger
 
 from .boundaries import would_trigger_at_end
 from .config import BoundaryType, Correction
@@ -176,9 +177,8 @@ def generalize_patterns(
         pattern_type = "suffix"
 
     if verbose:
-        print(
-            f"Generalizing {len(found_patterns)} {pattern_type} patterns...",
-            file=sys.stderr,
+        logger.info(
+            f"Generalizing {len(found_patterns)} {pattern_type} patterns..."
         )
 
     for (typo_pattern, word_pattern, boundary), occurrences in found_patterns.items():

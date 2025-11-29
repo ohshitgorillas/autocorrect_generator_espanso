@@ -1,7 +1,8 @@
 """Stage 3: Collision resolution."""
 
-import sys
 import time
+
+from loguru import logger
 
 from ..config import Config
 from ..processing import resolve_collisions
@@ -43,23 +44,20 @@ def resolve_typo_collisions(
     )
 
     if verbose:
-        print(
-            f"# Generated {len(corrections)} corrections (before pattern generalization)",
-            file=sys.stderr,
+        logger.info(
+            f"# Generated {len(corrections)} corrections (before pattern generalization)"
         )
         if skipped_short:
-            print(
+            logger.info(
                 f"# Skipped {len(skipped_short)} typos shorter "
-                f"than {config.min_typo_length} characters",
-                file=sys.stderr,
+                f"than {config.min_typo_length} characters"
             )
         if skipped_collisions:
-            print(
-                f"# Skipped {len(skipped_collisions)} ambiguous collisions:",
-                file=sys.stderr,
+            logger.info(
+                f"# Skipped {len(skipped_collisions)} ambiguous collisions:"
             )
             for typo, words, ratio in skipped_collisions[:5]:
-                print(f"#   {typo}: {words} (ratio: {ratio:.2f})", file=sys.stderr)
+                logger.info(f"#   {typo}: {words} (ratio: {ratio:.2f})")
 
     elapsed_time = time.time() - start_time
 

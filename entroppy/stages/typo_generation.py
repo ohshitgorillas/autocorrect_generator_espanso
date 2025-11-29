@@ -1,10 +1,10 @@
 """Stage 2: Typo generation with multiprocessing support."""
 
-import sys
 import time
 from collections import defaultdict
 from multiprocessing import Pool
 
+from loguru import logger
 from tqdm import tqdm
 
 from ..config import Config, Correction
@@ -55,9 +55,8 @@ def generate_typos(
     start_time = time.time()
 
     if verbose:
-        print(
-            f"\nGenerating typos for {len(dict_data.source_words)} words...\n",
-            file=sys.stderr,
+        logger.info(
+            f"\nGenerating typos for {len(dict_data.source_words)} words...\n"
         )
 
     typo_map = defaultdict(list)
@@ -65,7 +64,7 @@ def generate_typos(
     if config.jobs > 1:
         # Multiprocessing mode
         if verbose:
-            print(f"Processing using {config.jobs} workers...", file=sys.stderr)
+            logger.info(f"Processing using {config.jobs} workers...")
 
         # Create worker context (immutable, serializable)
         context = WorkerContext.from_dict_data(dict_data, config.typo_freq_threshold)

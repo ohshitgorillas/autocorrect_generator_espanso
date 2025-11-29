@@ -1,7 +1,8 @@
 """Stage 1: Dictionary loading and initialization."""
 
-import sys
 import time
+
+from loguru import logger
 
 from ..config import Config
 from ..dictionary import (
@@ -40,9 +41,8 @@ def load_dictionaries(config: Config, verbose: bool = False) -> DictionaryData:
 
     if verbose and len(filtered_validation_set) != len(validation_set):
         removed = len(validation_set) - len(filtered_validation_set)
-        print(
-            f"Filtered {removed} words from validation set using exclusion patterns",
-            file=sys.stderr,
+        logger.info(
+            f"Filtered {removed} words from validation set using exclusion patterns"
         )
 
     # Load adjacent letters mapping
@@ -51,16 +51,15 @@ def load_dictionaries(config: Config, verbose: bool = False) -> DictionaryData:
     # Load source words
     user_words = load_word_list(config.include, verbose)
     if verbose and user_words:
-        print(f"Loaded {len(user_words)} words from include file", file=sys.stderr)
+        logger.info(f"Loaded {len(user_words)} words from include file")
 
     user_words_set = set(user_words)
     source_words = load_source_words(config, verbose)
     source_words.extend(user_words)
 
     if verbose and user_words:
-        print(
-            f"Included {len(user_words)} user words (bypassed filters)",
-            file=sys.stderr,
+        logger.info(
+            f"Included {len(user_words)} user words (bypassed filters)"
         )
 
     source_words_set = set(source_words)

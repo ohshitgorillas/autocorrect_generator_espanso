@@ -1,11 +1,11 @@
 """Espanso platform backend implementation."""
 
 import os
-import sys
 from collections import defaultdict
 from multiprocessing import Pool
 
 import yaml
+from loguru import logger
 
 from .espanso_report import generate_espanso_output_report
 from .base import (
@@ -76,10 +76,10 @@ class EspansoBackend(PlatformBackend):
     ) -> None:
         """Generate Espanso YAML output."""
         if config.verbose:
-            print(f"Sorting {len(corrections)} corrections...", file=sys.stderr)
+            logger.info(f"Sorting {len(corrections)} corrections...")
         sorted_corrections = sorted(corrections, key=lambda c: (c[1], c[0]))
         if config.verbose:
-            print("Sorting complete.", file=sys.stderr)
+            logger.info("Sorting complete.")
 
         # Estimate RAM usage and store for report
         self._ram_estimate = self._estimate_ram_usage(sorted_corrections, config.verbose)
@@ -131,7 +131,7 @@ class EspansoBackend(PlatformBackend):
         by_letter = defaultdict(list)
 
         if verbose:
-            print(f"Organizing {len(corrections)} corrections...", file=sys.stderr)
+            logger.info(f"Organizing {len(corrections)} corrections...")
 
         for correction in corrections:
             _, word, _ = correction
@@ -182,17 +182,15 @@ class EspansoBackend(PlatformBackend):
         }
 
         if verbose:
-            print("\n# RAM Usage Estimate:", file=sys.stderr)
-            print(f"#   {estimate['entries']} corrections", file=sys.stderr)
-            print(
-                f"#   ~{estimate['per_entry_bytes']:.0f} bytes per entry",
-                file=sys.stderr,
+            logger.info("\n# RAM Usage Estimate:")
+            logger.info(f"#   {estimate['entries']} corrections")
+            logger.info(
+                f"#   ~{estimate['per_entry_bytes']:.0f} bytes per entry"
             )
-            print(
-                f"#   Total: {estimate['total_kb']:.1f} KB ({estimate['total_mb']:.2f} MB)",
-                file=sys.stderr,
+            logger.info(
+                f"#   Total: {estimate['total_kb']:.1f} KB ({estimate['total_mb']:.2f} MB)"
             )
-            print("#   (Espanso runtime overhead not included)", file=sys.stderr)
+            logger.info("#   (Espanso runtime overhead not included)")
 
         return estimate
 
@@ -260,9 +258,8 @@ class EspansoBackend(PlatformBackend):
 
         if jobs > 1 and len(write_tasks) > 1:
             if verbose:
-                print(
-                    f"Writing {len(write_tasks)} YAML files using {jobs} workers...",
-                    file=sys.stderr,
+                logger.info(
+                    f"Writing {len(write_tasks)} YAML files using {jobs} workers..."
                 )
 
             with Pool(processes=jobs) as pool:
@@ -273,7 +270,7 @@ class EspansoBackend(PlatformBackend):
                     total_files += 1
         else:
             if verbose:
-                print(f"Writing {len(write_tasks)} YAML files...", file=sys.stderr)
+                logger.info(f"Writing {len(write_tasks)} YAML files...")
 
             for filename, chunk in write_tasks:
                 _, entry_count = self._write_single_yaml_file((filename, chunk))
@@ -281,9 +278,8 @@ class EspansoBackend(PlatformBackend):
                 total_files += 1
 
         if verbose:
-            print(
-                f"\nTotal: {total_entries} corrections across {total_files} files",
-                file=sys.stderr,
+            logger.info(
+                f"\nTotal: {total_entries} corrections across {total_files} files"
             )
 
     def generate_platform_report(

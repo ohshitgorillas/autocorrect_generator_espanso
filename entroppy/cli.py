@@ -46,6 +46,7 @@ Example config.json:
   "output": "corrections/autocorrect.txt",
   "reports": "./reports",
   "verbose": true,
+  "debug": false,
   "jobs": 4
 }
         """,
@@ -133,6 +134,7 @@ Example config.json:
 
     # Flags
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging")
     parser.add_argument(
         "-j",
         "--jobs",

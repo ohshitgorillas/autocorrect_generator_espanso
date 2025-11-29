@@ -1,8 +1,8 @@
 """Stage 5: Conflict removal."""
 
-import sys
 import time
 
+from loguru import logger
 from tqdm import tqdm
 
 from ..config import BoundaryType
@@ -44,9 +44,8 @@ def remove_typo_conflicts(
         removed = [c for c in pre_conflict_corrections.values() if c not in final_set]
 
         if removed and verbose:
-            print(
-                f"Analyzing {len(removed)} removed conflicts for report...",
-                file=sys.stderr,
+            logger.info(
+                f"Analyzing {len(removed)} removed conflicts for report..."
             )
 
         corrections_iter = removed
@@ -88,9 +87,8 @@ def remove_typo_conflicts(
             )
 
     if verbose and conflicts_removed > 0:
-        print(
-            f"# Removed {conflicts_removed} typos due to substring conflicts",
-            file=sys.stderr,
+        logger.info(
+            f"# Removed {conflicts_removed} typos due to substring conflicts"
         )
 
     elapsed_time = time.time() - start_time

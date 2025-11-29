@@ -1,9 +1,10 @@
 """Report generation for autocorrect pipeline."""
 
-import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+
+from loguru import logger
 
 from .config import BoundaryType, Correction
 
@@ -380,7 +381,7 @@ def generate_reports(
     report_dir.mkdir(parents=True, exist_ok=True)
 
     if verbose:
-        print(f"\nGenerating reports in {report_dir}/", file=sys.stderr)
+        logger.info(f"\nGenerating reports in {report_dir}/")
 
     # Generate all report files
     generate_summary_report(data, report_dir)
@@ -392,6 +393,6 @@ def generate_reports(
     generate_statistics_csv(data, report_dir)
 
     if verbose:
-        print("✓ Reports generated successfully", file=sys.stderr)
+        logger.info("✓ Reports generated successfully")
 
     return report_dir

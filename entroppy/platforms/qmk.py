@@ -3,6 +3,8 @@
 import os
 import sys
 from collections import defaultdict
+
+from loguru import logger
 from wordfreq import word_frequency
 
 from .base import (
@@ -360,10 +362,8 @@ class QMKBackend(PlatformBackend):
                     f.write(line + "\n")
 
             if config.verbose:
-
-                print(
-                    f"\nWrote {len(lines)} corrections to {output_file}",
-                    file=sys.stderr,
+                logger.info(
+                    f"\nWrote {len(lines)} corrections to {output_file}"
                 )
         else:
             for line in lines:

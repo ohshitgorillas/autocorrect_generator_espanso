@@ -7,39 +7,43 @@ from multiprocessing import cpu_count
 def create_parser() -> argparse.ArgumentParser:
     """Create and configure argument parser."""
     parser = argparse.ArgumentParser(
-        description="Generate Espanso autocorrect dictionary from common typos",
+        description="Generate autocorrect dictionary from common typos",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Espanso (default) - generates multiple YAML files in directory
+  %(prog)s --top-n 1000 -o corrections -v
+  
+  # QMK - generates single text file
+  %(prog)s --platform qmk --top-n 1000 -o corrections/autocorrect.txt -v
+  
+  # With the top 1000 most common English words and custom words
+  %(prog)s --top-n 1000 --include mywords.txt -o corrections
+
+  # With custom words only, do not use dictionary
+  %(prog)s --platform qmk --include mywords.txt -o corrections/autocorrect.txt --max-corrections 800
+  
   # Using JSON config
   %(prog)s --config config.json
-  
-  # Using CLI args
-  %(prog)s --top-n 1000 -o ~/.config/espanso/match/ -v
-  
-  # Mix both (CLI overrides JSON)
-  %(prog)s --config config.json --top-n 500 -v
-  
-  # With the top 1000 most common English words and my custom words
-  %(prog)s --top-n 1000 --include mywords.txt -o ~/.config/espanso/match/
 
-  # With custom words only, do not use english-words dictionary
-  %(prog)s --include mywords.txt -o ~/.config/espanso/match/
-
-Output files are organized alphabetically in the output directory:
-- If corrections exceed max_entries_per_file: typos_<first_word>_to_<last_word>.yml
-- Otherwise: typos_<letter>.yml or typos_symbols.yml
+Output files are organized based on platform:
+- Espanso: Multiple YAML files in output directory
+  - If corrections exceed max_entries_per_file: typos_<first_word>_to_<last_word>.yml
+  - Otherwise: typos_<letter>.yml or typos_symbols.yml
+- QMK: Single text file at output path
+  - Format: typo -> correction (one per line)
 
 Example config.json:
 {
+  "platform": "qmk",
   "top_n": 1000,
+  "max_corrections": 800,
   "max_word_length": 10,
   "min_word_length": 3,
   "min_typo_length": 5,
   "freq_ratio": 10.0,
-  "max_entries_per_file": 750,
   "typo_freq_threshold": 1e-8,
-  "output": "~/.config/espanso/match/",
+  "output": "corrections/autocorrect.txt",
   "reports": "./reports",
   "verbose": true,
   "jobs": 4
@@ -55,9 +59,21 @@ Example config.json:
         help="JSON configuration file (CLI args override JSON values)",
     )
 
+    # Platform selection
+    parser.add_argument(
+        "--platform",
+        type=str,
+        choices=["espanso", "qmk"],
+        default="espanso",
+        help="Target platform (espanso: YAML files, qmk: text file)",
+    )
+
     # Output
     parser.add_argument(
-        "-o", "--output", type=str, help="Output directory for YAML files"
+        "-o",
+        "--output",
+        type=str,
+        help="Output path (directory for Espanso, file for QMK)",
     )
     parser.add_argument(
         "--reports",
@@ -79,6 +95,12 @@ Example config.json:
 
     # Parameters
     parser.add_argument(
+        "--max-corrections",
+        type=int,
+        help="Maximum number of corrections (QMK only, typically 1000-6000)",
+        default=None,
+    )
+    parser.add_argument(
         "--freq-ratio",
         type=float,
         help="Minimum frequency ratio for collision resolution",
@@ -99,7 +121,7 @@ Example config.json:
     parser.add_argument(
         "--max-entries-per-file",
         type=int,
-        help="Maximum corrections per YAML file",
+        help="Maximum corrections per YAML file (Espanso only)",
         default=500,
     )
     parser.add_argument(

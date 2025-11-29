@@ -1,7 +1,10 @@
 """Main entry point for autocorrgen package."""
 
+from loguru import logger
+
 from .cli import create_parser
 from .config import load_config
+from .logger import setup_logger
 from .pipeline import run_pipeline
 
 
@@ -13,6 +16,9 @@ def main():
     # Load configuration
     config = load_config(args.config, args, parser)
 
+    # Setup logging
+    setup_logger(verbose=config.verbose, debug=config.debug)
+
     # Validate
     if not config.top_n and not config.include:
         parser.error("Must specify either --top-n or --include (or both)")
@@ -22,11 +28,11 @@ def main():
     if config.platform == "qmk" and not config.max_corrections:
         parser.error("Must specify --max-corrections for QMK")
     if config.platform == "espanso" and config.max_entries_per_file > 1000:
-        print("--------------------------------")
-        print("!!! WARNING:")
-        print("max_entries_per_file is greater than 1000")
-        print("This is not recommended and may cause Espanso performance issues")
-        print("--------------------------------")
+        logger.warning("--------------------------------")
+        logger.warning("!!! WARNING:")
+        logger.warning("max_entries_per_file is greater than 1000")
+        logger.warning("This is not recommended and may cause Espanso performance issues")
+        logger.warning("--------------------------------")
 
     # Run pipeline
     run_pipeline(config)

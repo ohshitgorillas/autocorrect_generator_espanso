@@ -1,8 +1,9 @@
 """Stage 4: Pattern generalization."""
 
-import sys
 import time
 from collections import defaultdict
+
+from loguru import logger
 
 from ..config import Config, Correction
 from ..patterns import generalize_patterns
@@ -63,21 +64,19 @@ def _filter_cross_boundary_conflicts(
 
     # Verbose output for cross-boundary conflicts
     if verbose and conflicting_patterns:
-        print(
+        logger.info(
             f"# Rejected {len(conflicting_patterns)} patterns due to "
-            f"cross-boundary conflicts with direct corrections.",
-            file=sys.stderr,
+            f"cross-boundary conflicts with direct corrections."
         )
         # Show first few examples
         for pattern in conflicting_patterns[:3]:
             typo, word, boundary = pattern
-            print(
+            logger.info(
                 f"#   - Pattern ({typo}, {word}, {boundary.value}) "
-                f"conflicts with direct correction",
-                file=sys.stderr,
+                f"conflicts with direct correction"
             )
         if len(conflicting_patterns) > 3:
-            print(f"#   ... and {len(conflicting_patterns) - 3} more", file=sys.stderr)
+            logger.info(f"#   ... and {len(conflicting_patterns) - 3} more")
 
     return final_corrections, safe_patterns
 
@@ -156,14 +155,12 @@ def generalize_typo_patterns(
 
     if verbose:
         if patterns:
-            print(
+            logger.info(
                 f"# Generalized {len(resolved_patterns)} patterns, "
-                f"removing {removed_count} specific corrections.",
-                file=sys.stderr,
+                f"removing {removed_count} specific corrections."
             )
-        print(
-            f"# After pattern generalization: {len(final_corrections)} entries",
-            file=sys.stderr,
+        logger.info(
+            f"# After pattern generalization: {len(final_corrections)} entries"
         )
 
     elapsed_time = time.time() - start_time

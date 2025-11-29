@@ -1,7 +1,8 @@
 """Main processing pipeline orchestration."""
 
-import sys
 import time
+
+from loguru import logger
 
 from .config import Config
 from .reports import ReportData, generate_reports
@@ -29,12 +30,14 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     if platform is None:
         platform = get_platform_backend(config.platform)
 
+    # Get platform constraints
+    constraints = platform.get_constraints()
+
     if verbose:
         platform_name = platform.get_name()
-        print(f"# Using platform: {platform_name}", file=sys.stderr)
-        constraints = platform.get_constraints()
+        logger.info(f"# Using platform: {platform_name}")
         if constraints.max_corrections:
-            print(f"# Max corrections: {constraints.max_corrections}", file=sys.stderr)
+            logger.info(f"# Max corrections: {constraints.max_corrections}")
 
     # Initialize report data if reports are enabled
     report_data = None
@@ -100,7 +103,7 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     start_filter = time.time()
 
     if verbose:
-        print("# Applying platform-specific filtering and ranking...", file=sys.stderr)
+        logger.info("# Applying platform-specific filtering and ranking...")
 
     # Filter corrections
     filtered_corrections, filter_metadata = platform.filter_corrections(
@@ -108,9 +111,8 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     )
 
     if verbose and filter_metadata.get("filtered_count", 0) > 0:
-        print(
-            f"# Platform filtered: {filter_metadata['filtered_count']} corrections",
-            file=sys.stderr,
+        logger.info(
+            f"# Platform filtered: {filter_metadata['filtered_count']} corrections"
         )
 
     # Rank corrections
@@ -129,10 +131,9 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
         and len(ranked_corrections) > constraints.max_corrections
     ):
         if verbose:
-            print(
+            logger.info(
                 f"# Limiting to {constraints.max_corrections} corrections "
-                "(platform constraint)",
-                file=sys.stderr,
+                "(platform constraint)"
             )
         final_corrections = ranked_corrections[: constraints.max_corrections]
     else:
@@ -153,9 +154,8 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     start_output = time.time()
 
     if verbose:
-        print(
-            f"# Generating output for {len(final_corrections)} corrections",
-            file=sys.stderr,
+        logger.info(
+            f"# Generating output for {len(final_corrections)} corrections"
         )
 
     platform.generate_output(final_corrections, config.output, config)
@@ -168,7 +168,7 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     # Generate reports if enabled
     if config.reports:
         if verbose:
-            print(f"# Generating reports in {config.reports}", file=sys.stderr)
+            logger.info(f"# Generating reports in {config.reports}")
 
         # Generate standard reports
         platform_name = platform.get_name()
@@ -190,16 +190,15 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
         )
 
         if verbose:
-            print(f"✓ Platform report written to {report_dir}/", file=sys.stderr)
+            logger.info(f"✓ Platform report written to {report_dir}/")
 
     # Print total time
     elapsed_time = time.time() - start_time
     if verbose:
         minutes, seconds = divmod(elapsed_time, 60)
         if minutes > 0:
-            print(
-                f"\n✓ Total processing time: {int(minutes)}m {seconds:.1f}s",
-                file=sys.stderr,
+            logger.info(
+                f"\n✓ Total processing time: {int(minutes)}m {seconds:.1f}s"
             )
         else:
-            print(f"\n✓ Total processing time: {seconds:.1f}s", file=sys.stderr)
+            logger.info(f"\n✓ Total processing time: {seconds:.1f}s")

@@ -2,8 +2,8 @@
 
 import itertools
 import os
-import sys
 from english_words import get_english_words_set
+from loguru import logger
 from wordfreq import top_n_list
 
 from .config import Config
@@ -21,7 +21,7 @@ def load_validation_dictionary(
     Handles exact words and wildcard (*) patterns for exclusions.
     """
     if verbose:
-        print("Loading English words dictionary...", file=sys.stderr)
+        logger.info("Loading English words dictionary...")
 
     words = get_english_words_set(["web2", "gcide"], lower=True)
     original_word_count = len(words)
@@ -39,9 +39,8 @@ def load_validation_dictionary(
 
     if not word_exclusion_patterns:
         if verbose:
-            print(
-                f"Loaded {len(words)} words for validation (no exclusions applied).",
-                file=sys.stderr,
+            logger.info(
+                f"Loaded {len(words)} words for validation (no exclusions applied)."
             )
         return words
 
@@ -51,16 +50,14 @@ def load_validation_dictionary(
     removed_count = len(words) - len(validation_set)
 
     if verbose:
-        print(f"Loaded {len(validation_set)} words for validation", file=sys.stderr)
+        logger.info(f"Loaded {len(validation_set)} words for validation")
         if added_count > 0:
-            print(
-                f"Added {added_count} custom words from the include file.",
-                file=sys.stderr,
+            logger.info(
+                f"Added {added_count} custom words from the include file."
             )
         if removed_count > 0:
-            print(
-                f"Removed {removed_count} words based on the exclude file (including wildcards).",
-                file=sys.stderr,
+            logger.info(
+                f"Removed {removed_count} words based on the exclude file (including wildcards)."
             )
 
     return validation_set
@@ -86,7 +83,7 @@ def load_word_list(filepath: str | None, verbose: bool = False) -> list[str]:
                 words.append(line)
 
     if verbose and invalid_count > 0:
-        print(f"Skipped {invalid_count} words with invalid characters", file=sys.stderr)
+        logger.info(f"Skipped {invalid_count} words with invalid characters")
 
     return words
 
@@ -105,7 +102,7 @@ def load_exclusions(filepath: str | None, verbose: bool = False) -> set[str]:
                 exclusions.add(line)
 
     if verbose:
-        print(f"Loaded {len(exclusions)} exclusion patterns", file=sys.stderr)
+        logger.info(f"Loaded {len(exclusions)} exclusion patterns")
 
     return exclusions
 
@@ -129,7 +126,7 @@ def load_adjacent_letters(
                 adjacent_map[key.strip()] = adjacents.strip()
 
     if verbose:
-        print(f"Loaded adjacency mapping for {len(adjacent_map)} keys", file=sys.stderr)
+        logger.info(f"Loaded adjacency mapping for {len(adjacent_map)} keys")
 
     return adjacent_map
 
@@ -140,7 +137,7 @@ def load_source_words(config: Config, verbose: bool = False) -> list[str]:
         return []
 
     if verbose:
-        print(f"Loading top {config.top_n} words from wordfreq...", file=sys.stderr)
+        logger.info(f"Loading top {config.top_n} words from wordfreq...")
 
     # Get words from wordfreq, fetch extra for filtering
     all_words = top_n_list("en", config.top_n * 3)

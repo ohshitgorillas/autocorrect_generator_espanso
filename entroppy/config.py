@@ -36,6 +36,7 @@ class Config:
     exclude: str | None = None
     adjacent_letters: str | None = None
     verbose: bool = False
+    debug: bool = False
     jobs: int = field(default_factory=cpu_count)
     max_entries_per_file: int = 500
     reports: str | None = None
@@ -78,6 +79,7 @@ def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Conf
         exclude=get_value("exclude", None),
         adjacent_letters=get_value("adjacent_letters", None),
         verbose=cli_args.verbose or json_config.get("verbose", False),
+        debug=cli_args.debug or json_config.get("debug", False),
         jobs=get_value("jobs", cpu_count()),
         max_entries_per_file=get_value("max_entries_per_file", 500),
         reports=get_value("reports", None),

@@ -42,15 +42,11 @@ class Config:
 
     # Platform selection
     platform: str = "espanso"  # "espanso", "qmk", etc.
+    max_corrections: int | None = None  # QMK memory limit
 
 
 def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Config:
     """Load JSON config, override with CLI args, return Config object."""
-    json_config = {}
-    if json_path:
-        json_path = os.path.expanduser(json_path)
-        with open(json_path, "r", encoding="utf-8") as f:
-            json_config = json.load(f)
 
     def get_value(key: str, fallback):
         """Get value with correct priority: CLI > JSON > Fallback."""
@@ -62,8 +58,17 @@ def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Conf
         # Otherwise, try JSON, then the hardcoded fallback
         return json_config.get(key, fallback)
 
+    json_config = {}
+    if json_path:
+        json_path = os.path.expanduser(json_path)
+        with open(json_path, "r", encoding="utf-8") as f:
+            json_config = json.load(f)
+
+    
+
     # Build config with CLI args taking precedence over JSON
     return Config(
+        platform=get_value("platform", "espanso"),
         top_n=get_value("top_n", None),
         max_word_length=get_value("max_word_length", 10),
         min_word_length=get_value("min_word_length", 3),
@@ -78,5 +83,5 @@ def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Conf
         jobs=get_value("jobs", cpu_count()),
         max_entries_per_file=get_value("max_entries_per_file", 500),
         reports=get_value("reports", None),
-        platform=json_config.get("platform", "espanso"),
+        max_corrections=get_value("max_corrections", None),
     )

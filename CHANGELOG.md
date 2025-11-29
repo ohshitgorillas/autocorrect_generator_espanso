@@ -4,6 +4,50 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.1] - 2025-11-29
+
+### Added
+
+- **Platform-specific reporting system**
+  - Abstract `generate_platform_report()` method in [`PlatformBackend`](entroppy/platforms/base.py)
+  - Platform name now included in report folder naming (e.g., `2025-11-29_14-30-15_qmk`)
+  - Updated [`ReportData`](entroppy/reports.py) dataclass with platform-specific fields
+  - Modified [`generate_reports()`](entroppy/reports.py) for platform-aware report generation
+
+- **QMK platform report implementation** ([`entroppy/platforms/qmk_report.py`](entroppy/platforms/qmk_report.py))
+  - Overview statistics with correction counts
+  - Filtering details showing character set violations, same-typo conflicts, and RTL suffix conflicts
+  - User words section listing included words
+  - Patterns section with replacement examples
+  - Direct corrections section
+  - **The Cutoff Bubble** - visualization showing last 10 corrections that made the cut and first 10 that didn't
+
+- **Espanso platform report implementation** ([`entroppy/platforms/espanso_report.py`](entroppy/platforms/espanso_report.py))
+  - Overview with RAM estimation
+  - File breakdown by letter
+  - Largest files by entry count
+  - RAM estimation moved from pipeline to Espanso backend
+
+- **QMK pattern generation support**
+  - Added `find_prefix_patterns()` function in [`entroppy/patterns.py`](entroppy/patterns.py) for RTL (right-to-left) matching
+  - Modified `generalize_patterns()` to accept `match_direction` parameter
+  - Pattern detection strategy now selected based on platform's match direction
+  - Pipeline passes platform's match direction to pattern generation stage
+  - Patterns generated for both LTR (Espanso) and RTL (QMK) platforms
+
+### Changed
+
+- Report folder structure now includes platform name for easier identification
+- Pattern generalization now platform-aware, respecting match direction
+
+### Known Limitations
+
+- **Pattern generation incomplete for QMK**: Current implementation detects some patterns but misses common ones:
+  - `teh` → `the` (and variants: `tehn` → `then`, `bateh` → `bathe`)
+  - `toin` → `tion` (and variants: `-ation`, `-ntion`)
+  
+- **QMK dictionary not fully optimized**: Pattern generation needs further refinement to maximize effectiveness of QMK's limited storage space (~1,500 corrections)
+
 ## [0.3.0] - 2025-11-29
 
 ### Added
@@ -358,6 +402,7 @@ This is the first beta release of the Autocorrect Dictionary Generator for Espan
 
 ## Version History
 
+- **0.3.1** (2025-11-29): Platform-specific reporting and initial QMK pattern generation support
 - **0.3.0** (2025-11-29): Added structure for cross-platform support; currently Espanso only supported
 - **0.2.1** (2025-11-28): Fixed cross-boundary deduplication causing disambiguation windows
 - **0.2.0** (2025-11-28): Major refactoring - modular architecture with comprehensive tests

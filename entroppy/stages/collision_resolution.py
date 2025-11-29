@@ -49,7 +49,8 @@ def resolve_typo_collisions(
         )
         if skipped_short:
             print(
-                f"# Skipped {len(skipped_short)} typos shorter than {config.min_typo_length} characters",
+                f"# Skipped {len(skipped_short)} typos shorter "
+                f"than {config.min_typo_length} characters",
                 file=sys.stderr,
             )
         if skipped_collisions:

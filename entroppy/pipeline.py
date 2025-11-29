@@ -119,6 +119,7 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
         pattern_result.patterns,
         pattern_result.pattern_replacements,
         dict_data.user_words_set,
+        config,
     )
 
     # Apply platform constraints (e.g., max corrections limit)

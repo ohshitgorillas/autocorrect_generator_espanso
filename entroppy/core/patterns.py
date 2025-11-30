@@ -2,7 +2,7 @@
 
 from loguru import logger
 
-from entroppy.core.config import Correction
+from entroppy.core.types import Correction
 from entroppy.core.pattern_extraction import find_prefix_patterns, find_suffix_patterns
 from entroppy.core.pattern_validation import (
     _log_pattern_acceptance,

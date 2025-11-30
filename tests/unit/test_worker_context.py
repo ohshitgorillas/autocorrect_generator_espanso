@@ -36,7 +36,7 @@ class TestWorkerContextBehavior:
             validation_set={"word1", "word2"},
             filtered_validation_set={"word1"},
             source_words_set={"source1"},
-            adjacent_letters_map={"a": ["s", "q"]},
+            adjacent_letters_map={"a": "sq"},
             exclusions={"excl1"},
         )
 
@@ -52,7 +52,7 @@ class TestWorkerContextBehavior:
             filtered_validation_set=frozenset(["word1"]),
             source_words_set=frozenset(["source1"]),
             typo_freq_threshold=0.001,
-            adjacent_letters_map={"a": ["s", "q"]},
+            adjacent_letters_map={"a": "sq"},
             exclusions_set=frozenset(["excl1"]),
             debug_words=frozenset(),
             debug_typo_matcher=None,
@@ -73,7 +73,7 @@ class TestMultiprocessingBehavior:
             filtered_validation_set=frozenset(["word1"]),
             source_words_set=frozenset(["source1"]),
             typo_freq_threshold=2.0,
-            adjacent_letters_map={"a": ["s"]},
+            adjacent_letters_map={"a": "s"},
             exclusions_set=frozenset(),
             debug_words=frozenset(),
             debug_typo_matcher=None,

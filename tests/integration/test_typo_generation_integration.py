@@ -20,13 +20,13 @@ class TestTypoGenerationWithContext:
             source_words=["hello", "world"],
             source_words_set={"hello", "world"},
             adjacent_letters_map={
-                "h": ["g", "j"],
-                "e": ["w", "r"],
-                "l": ["k", "p"],
-                "o": ["i", "p"],
-                "w": ["q", "e"],
-                "r": ["e", "t"],
-                "d": ["s", "f"],
+                "h": "gj",
+                "e": "wr",
+                "l": "kp",
+                "o": "ip",
+                "w": "qe",
+                "r": "et",
+                "d": "sf",
             },
             exclusions=set(),
         )
@@ -92,7 +92,7 @@ class TestConcurrentPipelineExecution:
             filtered_validation_set={"real"},
             source_words=["hello"],
             source_words_set={"hello"},
-            adjacent_letters_map={"h": ["g"], "e": ["w"], "l": ["k"], "o": ["i"]},
+            adjacent_letters_map={"h": "g", "e": "w", "l": "k", "o": "i"},
             exclusions=set(),
         )
 
@@ -101,7 +101,7 @@ class TestConcurrentPipelineExecution:
             filtered_validation_set={"test"},
             source_words=["world"],
             source_words_set={"world"},
-            adjacent_letters_map={"w": ["q"], "o": ["i"], "r": ["e"], "l": ["k"], "d": ["s"]},
+            adjacent_letters_map={"w": "q", "o": "i", "r": "e", "l": "k", "d": "s"},
             exclusions=set(),
         )
 

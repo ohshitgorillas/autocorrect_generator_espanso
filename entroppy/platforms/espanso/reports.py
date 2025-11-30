@@ -17,7 +17,7 @@ def generate_espanso_output_report(
     report_path = report_dir / "espanso_output.txt"
 
     with open(report_path, "w", encoding="utf-8") as f:
-        _write_header(f)
+        write_report_header(f, "ESPANSO OUTPUT SUMMARY")
         _write_overview(f, final_corrections, ram_estimate)
         _write_file_breakdown(f, corrections_by_letter, max_entries_per_file)
         _write_largest_files(f, corrections_by_letter)
@@ -27,11 +27,6 @@ def generate_espanso_output_report(
         "total_corrections": len(final_corrections),
         "estimated_mb": ram_estimate.get("total_mb", 0),
     }
-
-
-def _write_header(f):
-    """Write report header."""
-    write_report_header(f, "ESPANSO OUTPUT SUMMARY")
 
 
 def _write_overview(f, final_corrections: list[Correction], ram_estimate: dict):

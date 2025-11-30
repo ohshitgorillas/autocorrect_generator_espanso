@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ...core import BoundaryType, Correction
+from ...core import BoundaryType, Correction, format_boundary_display, format_boundary_name
 from ...reports import write_report_header
 
 
@@ -22,7 +22,7 @@ def generate_qmk_ranking_report(
     report_path = report_dir / "qmk_ranking.txt"
 
     with open(report_path, "w", encoding="utf-8") as f:
-        _write_header(f)
+        write_report_header(f, "QMK AUTOCORRECT RANKING REPORT")
         _write_overview_statistics(f, final_corrections, filtered_corrections)
         _write_filtering_details(f, filter_metadata)
         _write_user_words_section(f, user_corrections)
@@ -44,11 +44,6 @@ def generate_qmk_ranking_report(
         "patterns": len(pattern_scores),
         "direct": len(direct_scores),
     }
-
-
-def _write_header(f):
-    """Write report header."""
-    write_report_header(f, "QMK AUTOCORRECT RANKING REPORT")
 
 
 def _write_overview_statistics(
@@ -117,7 +112,7 @@ def _write_same_typo_conflicts(f, filter_metadata: dict):
         boundary,
     ) in same_typo_conflicts[:10]:
         f.write(
-            f"    REMOVED: {removed_typo} → {removed_word} ({_format_boundary_name(boundary)})\n"
+            f"    REMOVED: {removed_typo} → {removed_word} ({format_boundary_name(boundary)})\n"
         )
         f.write(f"    KEPT:    {kept_typo} → {kept_word} (less restrictive)\n")
         f.write("\n")
@@ -177,7 +172,7 @@ def _write_patterns_section(
     f.write("Top 20 patterns by score:\n\n")
     sorted_patterns = sorted(pattern_scores, key=lambda x: x[0], reverse=True)
     for i, (score, typo, word, boundary) in enumerate(sorted_patterns[:20], 1):
-        f.write(f"{i}. {typo} → {word} {_format_boundary_display(boundary)}\n")
+        f.write(f"{i}. {typo} → {word} {format_boundary_display(boundary)}\n")
         f.write(f"   Score: {score:.6f} (sum of replaced word frequencies)\n")
 
         pattern_key = (typo, word, boundary)
@@ -210,7 +205,7 @@ def _write_direct_corrections_section(
     f.write("Top 20 by word frequency:\n\n")
     sorted_direct = sorted(direct_scores, key=lambda x: x[0], reverse=True)
     for i, (score, typo, word, boundary) in enumerate(sorted_direct[:20], 1):
-        f.write(f"{i}. {typo} → {word} {_format_boundary_display(boundary)}\n")
+        f.write(f"{i}. {typo} → {word} {format_boundary_display(boundary)}\n")
         f.write(f"   Frequency: {score:.6f}\n\n")
 
     remaining = direct_count - 20
@@ -244,7 +239,7 @@ def _write_cutoff_bubble(
             typo, word, boundary, pattern_scores, direct_scores
         )
         correction_type = _get_correction_type(typo, word, patterns)
-        f.write(f"{i + 1}. {typo} → {word} {_format_boundary_display(boundary)}\n")
+        f.write(f"{i + 1}. {typo} → {word} {format_boundary_display(boundary)}\n")
         f.write(f"   Type: {correction_type}, Score: {score:.6f}\n\n")
 
     # First 10 that got cut
@@ -259,35 +254,10 @@ def _write_cutoff_bubble(
                 typo, word, boundary, pattern_scores, direct_scores
             )
             correction_type = _get_correction_type(typo, word, patterns)
-            f.write(f"{i + 1}. {typo} → {word} {_format_boundary_display(boundary)}\n")
+            f.write(f"{i + 1}. {typo} → {word} {format_boundary_display(boundary)}\n")
             f.write(f"   Type: {correction_type}, Score: {score:.6f}\n\n")
     else:
         f.write("(No corrections were cut - all made the final selection)\n")
-
-
-def _format_boundary_name(boundary: BoundaryType) -> str:
-    """Format boundary type as a name."""
-    if boundary == BoundaryType.NONE:
-        return "NONE"
-    if boundary == BoundaryType.LEFT:
-        return "LEFT"
-    if boundary == BoundaryType.RIGHT:
-        return "RIGHT"
-    if boundary == BoundaryType.BOTH:
-        return "BOTH"
-    raise ValueError(f"Invalid boundary type: {boundary}")
-
-def _format_boundary_display(boundary: BoundaryType) -> str:
-    """Format boundary type for display in report."""
-    if boundary == BoundaryType.NONE:
-        return ""
-    if boundary == BoundaryType.LEFT:
-        return "(LEFT boundary)"
-    if boundary == BoundaryType.RIGHT:
-        return "(RIGHT boundary)"
-    if boundary == BoundaryType.BOTH:
-        return "(BOTH boundaries)"
-    raise ValueError(f"Invalid boundary type: {boundary}")
 
 
 def _get_score_for_correction(

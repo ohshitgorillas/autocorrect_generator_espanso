@@ -84,7 +84,6 @@ def write_report_header(f, title: str):
         f: File object to write to
         title: Title of the report
     """
-    from datetime import datetime
     f.write("=" * 80 + "\n")
     f.write(f"{title}\n")
     f.write("=" * 80 + "\n")

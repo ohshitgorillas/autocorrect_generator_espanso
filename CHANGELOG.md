@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.4.3] - 2025-12-01
+
+### Changed
+
+- **Further DRY improvements and code consolidation**
+  - Removed redundant `_write_header()` wrapper functions in platform report modules
+    - `entroppy/platforms/espanso/reports.py` and `entroppy/platforms/qmk/reports.py` now call `write_report_header()` directly
+    - Eliminated unnecessary indirection layer
+  - Consolidated boundary formatting utilities
+    - Moved `format_boundary_name()` and `format_boundary_display()` from `entroppy/platforms/qmk/reports.py` to `entroppy/core/boundaries.py`
+    - Added exports in `entroppy/core/__init__.py` for shared access
+    - Single source of truth for boundary formatting across all modules
+  - Removed duplicate datetime import in `entroppy/reports/core.py`
+    - Eliminated redundant `from datetime import datetime` inside `write_report_header()` function
+  - **Impact**: Improved code maintainability with shared utilities in appropriate locations
+
 ## [0.4.2] - 2025-12-01
 
 ### Changed

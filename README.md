@@ -19,9 +19,9 @@ It generates five types of typing errors:
 ## Inspiration
 This project originated as a tool for [QMK Firmware](https://qmk.fm/)'s Autocorrect feature. I was dissatisfied with existing autocorrect dictionaries, which were bloated with spelling mistakes caused by genuine lack of knowledge rather than mechanical typing errors (e.g., `definately` → `definitely`). I know how to spell, I just have fat fingers.
 
-After manually entering my own mistakes for a while, I realized I didn't need a pre-existing dictionary. I could generate an arbitrarily large corpus of typos algorithmically, which led to the creation of this project.
+After manually entering my own mistakes for a while, I realized I didn't need a pre-existing dictionary. I could generate an arbitrarily large corpus of typos algorithmically! This realization led to EntropPy, which is capable of generating an arbitrary number of autocorrect entries.
 
-However, different platforms have different constraints. Keyboard firmware has limited storage (my QMK keyboard stores ~1,100 corrections), while host-level tools like Espanso can handle hundreds of thousands. EntropPy generates corrections in 10–20 minutes and can target multiple platforms, optimizing output for each platform's capabilities and constraints.
+However, different platforms have different constraints. Keyboard firmware like QMK has limited storage to work with (my QMK keyboard stores ~1,100 corrections), while host-level tools like Espanso can handle hundreds of thousands of entries without lag. EntropPy generates corrections for multiple platforms, optimizing output for each platform's capabilities and constraints.
 
 ## Features
 
@@ -227,6 +227,8 @@ This option is required to generate replacement and insertion typos.
 
 - **Replacement**: `e -> w` generates `wxample`, `examplw` for `example`
 - **Insertion**: `e -> w` generates `wexample`, `ewxample`, `examplwe`, `examplew`
+
+Note that only Espanso currently supports numbers and non-apostrophe symbols; QMK is limited to letters and apostrophes only.
 
 ### Include File (`--include`)
 

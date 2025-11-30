@@ -181,12 +181,8 @@ class EspansoBackend(PlatformBackend):
         if verbose:
             logger.info("\n# RAM Usage Estimate:")
             logger.info(f"#   {estimate['entries']} corrections")
-            logger.info(
-                f"#   ~{estimate['per_entry_bytes']:.0f} bytes per entry"
-            )
-            logger.info(
-                f"#   Total: {estimate['total_kb']:.1f} KB ({estimate['total_mb']:.2f} MB)"
-            )
+            logger.info(f"#   ~{estimate['per_entry_bytes']:.0f} bytes per entry")
+            logger.info(f"#   Total: {estimate['total_kb']:.1f} KB ({estimate['total_mb']:.2f} MB)")
             logger.info("#   (Espanso runtime overhead not included)")
 
         return estimate
@@ -237,9 +233,7 @@ class EspansoBackend(PlatformBackend):
                         filename = os.path.join(output_dir, "typos_symbols.yml")
                     else:
                         chunk_num = i // max_entries_per_file + 1
-                        filename = os.path.join(
-                            output_dir, f"typos_symbols_{chunk_num:03d}.yml"
-                        )
+                        filename = os.path.join(output_dir, f"typos_symbols_{chunk_num:03d}.yml")
                 else:
                     if len(matches_sorted) <= max_entries_per_file:
                         filename = os.path.join(output_dir, f"typos_{letter}.yml")
@@ -255,9 +249,7 @@ class EspansoBackend(PlatformBackend):
 
         if jobs > 1 and len(write_tasks) > 1:
             if verbose:
-                logger.info(
-                    f"Writing {len(write_tasks)} YAML files using {jobs} workers..."
-                )
+                logger.info(f"Writing {len(write_tasks)} YAML files using {jobs} workers...")
 
             with Pool(processes=jobs) as pool:
                 results = pool.map(self._write_single_yaml_file, write_tasks)
@@ -275,9 +267,7 @@ class EspansoBackend(PlatformBackend):
                 total_files += 1
 
         if verbose:
-            logger.info(
-                f"\nTotal: {total_entries} corrections across {total_files} files"
-            )
+            logger.info(f"\nTotal: {total_entries} corrections across {total_files} files")
 
     def generate_platform_report(
         self,

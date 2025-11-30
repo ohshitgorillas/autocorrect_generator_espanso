@@ -1,6 +1,5 @@
 """CLI interface for EntropPy."""
 
-from .parser import create_parser
+from entroppy.cli.parser import create_parser
 
 __all__ = ["create_parser"]
-

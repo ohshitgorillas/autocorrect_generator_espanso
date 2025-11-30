@@ -1,6 +1,6 @@
 """Data loading and management for EntropPy."""
 
-from .dictionary import (
+from entroppy.data.dictionary import (
     load_adjacent_letters_map,
     load_exclusions,
     load_source_words,

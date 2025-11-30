@@ -5,18 +5,18 @@ from typing import TYPE_CHECKING
 from tqdm import tqdm
 from wordfreq import word_frequency
 
-from ..core import BoundaryType, Correction
-from ..matching import ExclusionMatcher
-from ..utils import is_debug_correction, log_debug_correction, log_debug_typo
-from .boundary_utils import (
+from entroppy.core import BoundaryType, Correction
+from entroppy.matching import ExclusionMatcher
+from entroppy.utils import is_debug_correction, log_debug_correction, log_debug_typo
+from entroppy.resolution.conflicts import resolve_conflicts_for_group
+from entroppy.resolution.boundary_utils import (
     _should_skip_short_typo,
     apply_user_word_boundary_override,
     choose_strictest_boundary,
 )
-from .conflicts import resolve_conflicts_for_group
 
 if TYPE_CHECKING:
-    from ..utils import DebugTypoMatcher
+    from entroppy.utils import DebugTypoMatcher
 
 
 def _handle_exclusion(
@@ -158,9 +158,7 @@ def _process_collision_case(
     most_common = word_freqs[0]
     second_most = word_freqs[1] if len(word_freqs) > 1 else (None, 0)
 
-    ratio = (
-        most_common[1] / second_most[1] if second_most[1] > 0 else float("inf")
-    )
+    ratio = most_common[1] / second_most[1] if second_most[1] > 0 else float("inf")
 
     # Check if any of the competing words are being debugged
     is_debug_collision = any(

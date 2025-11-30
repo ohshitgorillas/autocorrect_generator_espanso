@@ -5,8 +5,8 @@ from re import Pattern
 
 from loguru import logger
 
-from ..core import BoundaryType, Correction
-from .helpers import compile_wildcard_regex
+from entroppy.core import BoundaryType, Correction
+from entroppy.utils.helpers import compile_wildcard_regex
 
 
 @dataclass(frozen=True)
@@ -217,6 +217,7 @@ class DebugTypoMatcher:
 
 # Helper functions for checking debug status
 
+
 def is_debug_word(word: str, debug_words: set[str]) -> bool:
     """Check if word is being debugged (exact match only).
 
@@ -233,9 +234,7 @@ def is_debug_word(word: str, debug_words: set[str]) -> bool:
 
 
 def is_debug_typo(
-    typo: str,
-    boundary: BoundaryType,
-    debug_typo_matcher: DebugTypoMatcher | None
+    typo: str, boundary: BoundaryType, debug_typo_matcher: DebugTypoMatcher | None
 ) -> bool:
     """Check if typo matches any debug pattern.
 
@@ -273,6 +272,7 @@ def is_debug_correction(
 
 # Logging functions
 
+
 def log_debug_word(word: str, message: str, stage: str = ""):
     """Log a debug message for a word.
 
@@ -286,10 +286,7 @@ def log_debug_word(word: str, message: str, stage: str = ""):
 
 
 def log_debug_typo(
-    typo: str,
-    message: str,
-    matched_patterns: list[str] | None = None,
-    stage: str = ""
+    typo: str, message: str, matched_patterns: list[str] | None = None, stage: str = ""
 ):
     """Log a debug message for a typo.
 

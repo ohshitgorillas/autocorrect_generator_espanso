@@ -1,6 +1,15 @@
 """Boundary detection for typo corrections."""
 
-from entroppy.core.config import BoundaryType
+from enum import Enum
+
+
+class BoundaryType(Enum):
+    """Boundary types for Espanso matches."""
+
+    NONE = "none"  # No boundaries - triggers anywhere
+    LEFT = "left"  # Left boundary only - must be at word start
+    RIGHT = "right"  # Right boundary only - must be at word end
+    BOTH = "both"  # Both boundaries - standalone word only
 
 
 def parse_boundary_markers(pattern: str) -> tuple[str, BoundaryType | None]:
@@ -55,28 +64,28 @@ def _check_typo_in_wordset(typo: str, word_set: set[str], check_type: str) -> bo
     for word in word_set:
         if typo == word:
             continue
-        if check_type == 'substring' and typo in word:
+        if check_type == "substring" and typo in word:
             return True
-        if check_type == 'prefix' and word.startswith(typo):
+        if check_type == "prefix" and word.startswith(typo):
             return True
-        if check_type == 'suffix' and word.endswith(typo):
+        if check_type == "suffix" and word.endswith(typo):
             return True
     return False
 
 
 def is_substring_of_any(typo: str, word_set: set[str]) -> bool:
     """Check if typo is a substring of any word."""
-    return _check_typo_in_wordset(typo, word_set, 'substring')
+    return _check_typo_in_wordset(typo, word_set, "substring")
 
 
 def would_trigger_at_start(typo: str, validation_set: set[str]) -> bool:
     """Check if typo appears as prefix."""
-    return _check_typo_in_wordset(typo, validation_set, 'prefix')
+    return _check_typo_in_wordset(typo, validation_set, "prefix")
 
 
 def would_trigger_at_end(typo: str, validation_set: set[str]) -> bool:
     """Check if typo appears as suffix."""
-    return _check_typo_in_wordset(typo, validation_set, 'suffix')
+    return _check_typo_in_wordset(typo, validation_set, "suffix")
 
 
 def determine_boundaries(
@@ -92,7 +101,8 @@ def determine_boundaries(
         source_words: Set of source words
 
     Returns:
-        BoundaryType indicating what boundaries are needed, or None if correction should be skipped
+        BoundaryType indicating what boundaries are needed,
+        or None if correction should be skipped
     """
     # Check if typo appears as substring in other contexts
     is_substring_source = is_substring_of_any(typo, source_words)

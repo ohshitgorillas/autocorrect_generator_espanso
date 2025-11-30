@@ -4,10 +4,10 @@ import time
 
 from loguru import logger
 
-from ..core import Config
-from ..platforms import PlatformBackend, get_platform_backend
-from ..reports import ReportData, _format_time, generate_reports
-from .stages import (
+from entroppy.core import Config
+from entroppy.platforms import PlatformBackend, get_platform_backend
+from entroppy.reports import ReportData, _format_time, generate_reports
+from entroppy.processing.stages import (
     generalize_typo_patterns,
     load_dictionaries,
     remove_typo_conflicts,
@@ -65,9 +65,7 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
         report_data.skipped_collisions = collision_result.skipped_collisions
         report_data.skipped_short = collision_result.skipped_short
         report_data.excluded_corrections = collision_result.excluded_corrections
-        report_data.corrections_before_generalization = len(
-            collision_result.corrections
-        )
+        report_data.corrections_before_generalization = len(collision_result.corrections)
 
     # Stage 4: Generalize patterns
     pattern_result = generalize_typo_patterns(
@@ -95,12 +93,8 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     )
 
     if report_data:
-        report_data.stage_times["Removing conflicts"] = (
-            conflict_removal_result.elapsed_time
-        )
-        report_data.corrections_after_conflicts = len(
-            conflict_removal_result.corrections
-        )
+        report_data.stage_times["Removing conflicts"] = conflict_removal_result.elapsed_time
+        report_data.corrections_after_conflicts = len(conflict_removal_result.corrections)
         report_data.removed_conflicts = conflict_removal_result.removed_corrections
 
     # Stage 5.5: Platform-specific filtering and ranking
@@ -115,9 +109,7 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     )
 
     if verbose and filter_metadata.get("filtered_count", 0) > 0:
-        logger.info(
-            f"# Platform filtered: {filter_metadata['filtered_count']} corrections"
-        )
+        logger.info(f"# Platform filtered: {filter_metadata['filtered_count']} corrections")
 
     # Rank corrections
     ranked_corrections = platform.rank_corrections(
@@ -130,14 +122,10 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
 
     # Apply platform constraints (e.g., max corrections limit)
     constraints = platform.get_constraints()
-    if (
-        constraints.max_corrections
-        and len(ranked_corrections) > constraints.max_corrections
-    ):
+    if constraints.max_corrections and len(ranked_corrections) > constraints.max_corrections:
         if verbose:
             logger.info(
-                f"# Limiting to {constraints.max_corrections} corrections "
-                "(platform constraint)"
+                f"# Limiting to {constraints.max_corrections} corrections " "(platform constraint)"
             )
         final_corrections = ranked_corrections[: constraints.max_corrections]
     else:
@@ -158,9 +146,7 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     start_output = time.time()
 
     if verbose:
-        logger.info(
-            f"# Generating output for {len(final_corrections)} corrections"
-        )
+        logger.info(f"# Generating output for {len(final_corrections)} corrections")
 
     platform.generate_output(final_corrections, config.output, config)
 
@@ -176,9 +162,7 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
 
         # Generate standard reports
         platform_name = platform.get_name()
-        report_dir = generate_reports(
-            report_data, config.reports, platform_name, verbose
-        )
+        report_dir = generate_reports(report_data, config.reports, platform_name, verbose)
 
         # Generate platform-specific report
         platform.generate_platform_report(

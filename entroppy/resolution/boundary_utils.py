@@ -2,11 +2,11 @@
 
 from typing import TYPE_CHECKING
 
-from ..core import BoundaryType
-from ..utils import is_debug_correction, log_debug_correction
+from entroppy.core import BoundaryType
+from entroppy.utils import is_debug_correction, log_debug_correction
 
 if TYPE_CHECKING:
-    from ..utils import DebugTypoMatcher
+    from entroppy.utils import DebugTypoMatcher
 
 
 def choose_strictest_boundary(boundaries: list[BoundaryType]) -> BoundaryType:
@@ -80,4 +80,3 @@ def apply_user_word_boundary_override(
                 "Stage 3",
             )
     return boundary
-

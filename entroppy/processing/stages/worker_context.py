@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...utils import DebugTypoMatcher
+    from entroppy.utils import DebugTypoMatcher
 
 
 @dataclass(frozen=True)
@@ -85,6 +85,4 @@ def get_worker_context() -> WorkerContext:
     try:
         return _worker_context.value
     except AttributeError as e:
-        raise RuntimeError(
-            "Worker context not initialized. Call init_worker first."
-        ) from e
+        raise RuntimeError("Worker context not initialized. Call init_worker first.") from e

@@ -3,22 +3,14 @@
 import json
 import os
 from dataclasses import dataclass, field
-from enum import Enum
 from multiprocessing import cpu_count
 from argparse import ArgumentParser
 from typing import TYPE_CHECKING
 
+from entroppy.core.boundaries import BoundaryType
+
 if TYPE_CHECKING:
-    from ..utils import DebugTypoMatcher
-
-
-class BoundaryType(Enum):
-    """Boundary types for Espanso matches."""
-
-    NONE = "none"  # No boundaries - triggers anywhere
-    LEFT = "left"  # Left boundary only - must be at word start
-    RIGHT = "right"  # Right boundary only - must be at word end
-    BOTH = "both"  # Both boundaries - standalone word only
+    from entroppy.utils import DebugTypoMatcher
 
 
 # Type alias for corrections
@@ -52,7 +44,9 @@ class Config:
     # Debug tracing
     debug_words: set[str] = field(default_factory=set)  # Exact word matches only
     debug_typos: set[str] = field(default_factory=set)  # Raw patterns with wildcards/boundaries
-    debug_typo_matcher: "DebugTypoMatcher | None" = field(default=None, init=False)  # Created after parsing
+    debug_typo_matcher: "DebugTypoMatcher | None" = field(
+        default=None, init=False
+    )  # Created after parsing
 
 
 def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Config:
@@ -114,8 +108,5 @@ def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Conf
         debug_words=debug_words,
         debug_typos=debug_typos,
     )
-
-    # Create debug typo matcher after config object is created (post-init)
-    # This will be done in the main module after debug_utils is imported
 
     return config

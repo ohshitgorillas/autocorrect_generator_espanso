@@ -62,6 +62,10 @@ packages = ["entroppy"]
 [tool.setuptools.package-data]
 entroppy = ["py.typed"]
 
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312", "py313"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

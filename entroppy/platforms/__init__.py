@@ -30,7 +30,7 @@ def get_platform_backend(platform_name: str) -> PlatformBackend:
     if platform_name not in _PLATFORMS:
         available = ", ".join(_PLATFORMS.keys())
         raise ValueError(
-            f"Unknown platform '{platform_name}'. " f"Available platforms: {available}"
+            f"Unknown platform '{platform_name}'. Available platforms: {available}"
         )
 
     backend_class = _PLATFORMS[platform_name]

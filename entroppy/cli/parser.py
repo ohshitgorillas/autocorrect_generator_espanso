@@ -17,11 +17,11 @@ Examples:
   # QMK - generates single text file
   %(prog)s --platform qmk --top-n 1000 -o corrections/autocorrect.txt -v
   
-  # With the top 1000 most common English words and custom words
-  %(prog)s --top-n 1000 --include mywords.txt -o corrections
+  # With the top 5000 most common English words and custom words
+  %(prog)s --platform espanso --top-n 5000 --include settings/include.txt -o corrections/autocorrect.txt
 
   # With custom words only, do not use dictionary
-  %(prog)s --platform qmk --include mywords.txt -o corrections/autocorrect.txt --max-corrections 800
+  %(prog)s --platform qmk --include settings/include.txt -o corrections/autocorrect.txt --max-corrections 800
   
   # Using JSON config
   %(prog)s --config config.json
@@ -83,12 +83,8 @@ Example config.json:
     )
 
     # Word lists
-    parser.add_argument(
-        "--top-n", type=int, help="Pull top N most common English words"
-    )
-    parser.add_argument(
-        "--include", type=str, help="File with additional words to include"
-    )
+    parser.add_argument("--top-n", type=int, help="Pull top N most common English words")
+    parser.add_argument("--include", type=str, help="File with additional words to include")
     parser.add_argument("--exclude", type=str, help="File with exclusion patterns")
     parser.add_argument(
         "--adjacent-letters", type=str, help="File mapping keys to adjacent letters"
@@ -110,9 +106,7 @@ Example config.json:
     parser.add_argument(
         "--max-word-length", type=int, help="Maximum word length to process", default=10
     )
-    parser.add_argument(
-        "--min-word-length", type=int, help="Minimum source word length", default=3
-    )
+    parser.add_argument("--min-word-length", type=int, help="Minimum source word length", default=3)
     parser.add_argument(
         "--min-typo-length",
         type=int,
@@ -146,12 +140,16 @@ Example config.json:
     parser.add_argument(
         "--debug-words",
         type=str,
-        help="Comma-separated list of words to trace through pipeline (requires --debug and --verbose)",
+        help="Comma-separated list of words to trace through "
+        "pipeline (requires --debug and --verbose). "
+        "Exact matches only (case-insensitive).",
     )
     parser.add_argument(
         "--debug-typos",
         type=str,
-        help="Comma-separated list of typo patterns to trace (supports wildcards * and boundaries :, requires --debug and --verbose)",
+        help="Comma-separated list of typo patterns to trace "
+        "(supports wildcards * and boundaries :, requires --debug and --verbose). "
+        "Exact matches only (case-insensitive).",
     )
 
     return parser

@@ -5,17 +5,17 @@ import time
 from loguru import logger
 from wordfreq import zipf_frequency
 
-from ...core import BoundaryType, Config
-from ...data import (
+from entroppy.core import BoundaryType, Config
+from entroppy.data import (
     load_adjacent_letters_map,
     load_exclusions,
     load_source_words,
     load_validation_dictionary,
     load_word_list,
 )
-from ...matching import ExclusionMatcher
-from ...utils import log_debug_typo, log_debug_word
-from .data_models import DictionaryData
+from entroppy.matching import ExclusionMatcher
+from entroppy.utils import log_debug_typo, log_debug_word
+from entroppy.processing.stages.data_models import DictionaryData
 
 
 def load_dictionaries(config: Config, verbose: bool = False) -> DictionaryData:
@@ -43,9 +43,7 @@ def load_dictionaries(config: Config, verbose: bool = False) -> DictionaryData:
 
     if verbose and len(filtered_validation_set) != len(validation_set):
         removed = len(validation_set) - len(filtered_validation_set)
-        logger.info(
-            f"Filtered {removed} words from validation set using exclusion patterns"
-        )
+        logger.info(f"Filtered {removed} words from validation set using exclusion patterns")
 
     # Load adjacent letters mapping
     adjacent_letters_map = load_adjacent_letters_map(config.adjacent_letters, verbose)
@@ -69,9 +67,7 @@ def load_dictionaries(config: Config, verbose: bool = False) -> DictionaryData:
         for word in config.debug_words:
             # Check if word is in user words
             if word in user_words_set:
-                log_debug_word(
-                    word, "Found in user word list (include file)", "Stage 1"
-                )
+                log_debug_word(word, "Found in user word list (include file)", "Stage 1")
 
             # Check if word is in source words
             if word in source_words_set:
@@ -86,19 +82,19 @@ def load_dictionaries(config: Config, verbose: bool = False) -> DictionaryData:
             else:
                 # Word not in source words - explain why
                 if config.top_n is None:
-                    log_debug_word(
-                        word, "NOT in source words (top_n not specified)", "Stage 1"
-                    )
+                    log_debug_word(word, "NOT in source words (top_n not specified)", "Stage 1")
                 elif len(word) > config.max_word_length:
                     log_debug_word(
                         word,
-                        f"NOT in source words (length {len(word)} > max_word_length {config.max_word_length})",
+                        f"NOT in source words (length {len(word)} > max_word_length "
+                        f"{config.max_word_length})",
                         "Stage 1",
                     )
                 elif len(word) < config.min_word_length:
                     log_debug_word(
                         word,
-                        f"NOT in source words (length {len(word)} < min_word_length {config.min_word_length})",
+                        f"NOT in source words (length {len(word)} < min_word_length "
+                        f"{config.min_word_length})",
                         "Stage 1",
                     )
                 else:
@@ -138,12 +134,11 @@ def load_dictionaries(config: Config, verbose: bool = False) -> DictionaryData:
                 ]:
                     test_correction = (typo, "test", boundary)
                     if exclusion_matcher.should_exclude(test_correction):
-                        matching_rule = exclusion_matcher.get_matching_rule(
-                            test_correction
-                        )
+                        matching_rule = exclusion_matcher.get_matching_rule(test_correction)
                         log_debug_typo(
                             typo,
-                            f"Typo matches exclusion rule (boundary={boundary.value}): {matching_rule}",
+                            f"Typo matches exclusion rule (boundary={boundary.value}): "
+                            f"{matching_rule}",
                             [pattern_str],
                             "Stage 1",
                         )

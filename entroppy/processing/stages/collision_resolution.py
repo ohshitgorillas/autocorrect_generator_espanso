@@ -4,9 +4,9 @@ import time
 
 from loguru import logger
 
-from ...core import Config
-from ...resolution import resolve_collisions
-from .data_models import (
+from entroppy.core import Config
+from entroppy.resolution import resolve_collisions
+from entroppy.processing.stages.data_models import (
     DictionaryData,
     TypoGenerationResult,
     CollisionResolutionResult,

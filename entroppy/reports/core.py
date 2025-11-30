@@ -6,7 +6,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from ..core import BoundaryType, Correction
+from entroppy.core import BoundaryType, Correction
 
 
 @dataclass
@@ -21,18 +21,14 @@ class ReportData:
     skipped_collisions: list[tuple[str, list[str], float]] = field(default_factory=list)
 
     # Patterns
-    generalized_patterns: list[tuple[str, str, BoundaryType, int]] = field(
-        default_factory=list
-    )
+    generalized_patterns: list[tuple[str, str, BoundaryType, int]] = field(default_factory=list)
     pattern_replacements: dict[tuple[str, str, BoundaryType], list[Correction]] = field(
         default_factory=dict
     )
     rejected_patterns: list[tuple[str, str, str]] = field(default_factory=list)
 
     # Conflicts: (long_typo, long_word, blocking_typo, blocking_word, boundary)
-    removed_conflicts: list[tuple[str, str, str, str, BoundaryType]] = field(
-        default_factory=list
-    )
+    removed_conflicts: list[tuple[str, str, str, str, BoundaryType]] = field(default_factory=list)
 
     # Short typos
     skipped_short: list[tuple[str, str, int]] = field(default_factory=list)
@@ -105,15 +101,9 @@ def generate_summary_report(data: ReportData, report_dir: Path) -> None:
         f.write("PROCESSING STATISTICS\n")
         f.write("-" * 70 + "\n")
         f.write(f"Words processed:                    {data.words_processed:,}\n")
-        f.write(
-            f"Corrections generated:              {data.corrections_before_generalization:,}\n"
-        )
-        f.write(
-            f"After pattern generalization:       {data.corrections_after_generalization:,}\n"
-        )
-        f.write(
-            f"After conflict removal:             {data.corrections_after_conflicts:,}\n"
-        )
+        f.write(f"Corrections generated:              {data.corrections_before_generalization:,}\n")
+        f.write(f"After pattern generalization:       {data.corrections_after_generalization:,}\n")
+        f.write(f"After conflict removal:             {data.corrections_after_conflicts:,}\n")
         f.write(f"Final corrections:                  {data.total_corrections:,}\n\n")
 
         # Optimizations
@@ -123,23 +113,15 @@ def generate_summary_report(data: ReportData, report_dir: Path) -> None:
         replaced_count = sum(len(v) for v in data.pattern_replacements.values())
         f.write(f"Patterns generalized:               {patterns_count:,}\n")
         f.write(f"Specific corrections replaced:      {replaced_count:,}\n")
-        f.write(
-            f"Substring conflicts removed:        {len(data.removed_conflicts):,}\n\n"
-        )
+        f.write(f"Substring conflicts removed:        {len(data.removed_conflicts):,}\n\n")
 
         # Skipped items
         f.write("SKIPPED ITEMS\n")
         f.write("-" * 70 + "\n")
-        f.write(
-            f"Ambiguous collisions:               {len(data.skipped_collisions):,}\n"
-        )
+        f.write(f"Ambiguous collisions:               {len(data.skipped_collisions):,}\n")
         f.write(f"Too-short typos:                    {len(data.skipped_short):,}\n")
-        f.write(
-            f"Excluded by rules:                  {len(data.excluded_corrections):,}\n"
-        )
-        f.write(
-            f"Rejected patterns:                  {len(data.rejected_patterns):,}\n\n"
-        )
+        f.write(f"Excluded by rules:                  {len(data.excluded_corrections):,}\n")
+        f.write(f"Rejected patterns:                  {len(data.rejected_patterns):,}\n\n")
 
         # Timing
         if data.stage_times:
@@ -197,9 +179,7 @@ def generate_patterns_report(data: ReportData, report_dir: Path) -> None:
             f.write("GENERALIZED PATTERNS\n")
             f.write("-" * 70 + "\n\n")
             for typo_suffix, word_suffix, boundary, count in data.generalized_patterns:
-                f.write(
-                    f"✓ {typo_suffix} → {word_suffix} ({_format_boundary(boundary)})\n"
-                )
+                f.write(f"✓ {typo_suffix} → {word_suffix} ({_format_boundary(boundary)})\n")
                 f.write(f"  Replaced {count} specific corrections\n")
 
                 # Show what was replaced
@@ -253,9 +233,7 @@ def generate_conflicts_report(data: ReportData, report_dir: Path) -> None:
             f.write(f"SUBSTRING CONFLICTS - {_format_boundary(boundary).upper()}\n")
             f.write("=" * 70 + "\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-            f.write(
-                "These corrections were removed because a shorter typo would trigger\n"
-            )
+            f.write("These corrections were removed because a shorter typo would trigger\n")
             f.write("first, making them unreachable in Espanso.\n\n")
             f.write(f"Total removed: {len(conflicts)}\n")
             f.write("=" * 70 + "\n\n")
@@ -270,9 +248,7 @@ def generate_conflicts_report(data: ReportData, report_dir: Path) -> None:
             # Write grouped conflicts
             for word in sorted(by_word.keys()):
                 entries = by_word[word]
-                f.write(
-                    f"{word} ({len(entries)} blocked typo{'s' if len(entries) != 1 else ''})\n"
-                )
+                f.write(f"{word} ({len(entries)} blocked typo{'s' if len(entries) != 1 else ''})\n")
 
                 # Show up to 20 typos, then summarize
                 for long_typo, short_typo, short_word in entries[:20]:
@@ -345,12 +321,8 @@ def generate_statistics_csv(data: ReportData, report_dir: Path) -> None:
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("metric,value\n")
         f.write(f"words_processed,{data.words_processed}\n")
-        f.write(
-            f"corrections_before_generalization,{data.corrections_before_generalization}\n"
-        )
-        f.write(
-            f"corrections_after_generalization,{data.corrections_after_generalization}\n"
-        )
+        f.write(f"corrections_before_generalization,{data.corrections_before_generalization}\n")
+        f.write(f"corrections_after_generalization,{data.corrections_after_generalization}\n")
         f.write(f"corrections_after_conflicts,{data.corrections_after_conflicts}\n")
         f.write(f"total_corrections,{data.total_corrections}\n")
         f.write(f"patterns_generalized,{len(data.generalized_patterns)}\n")

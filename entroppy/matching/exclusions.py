@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from re import Pattern
 
-from ..core import BoundaryType, Correction, parse_boundary_markers
-from ..utils import compile_wildcard_regex
-from .pattern_matcher import PatternMatcher
+from entroppy.core import BoundaryType, Correction, parse_boundary_markers
+from entroppy.utils import compile_wildcard_regex
+from entroppy.matching.pattern_matcher import PatternMatcher
 
 
 class ExclusionMatcher:
@@ -48,9 +48,7 @@ class ExclusionMatcher:
         self.word_pattern_matcher = PatternMatcher(word_only_patterns)
 
         # Create a PatternMatcher for word patterns used in typo->word mappings
-        word_patterns_in_mappings = {
-            word_pat for _, word_pat, _ in self.wildcard_typo_map
-        }
+        word_patterns_in_mappings = {word_pat for _, word_pat, _ in self.wildcard_typo_map}
         word_patterns_in_mappings.update(self.exact_typo_map.values())
         self.word_matcher = PatternMatcher(word_patterns_in_mappings)
 

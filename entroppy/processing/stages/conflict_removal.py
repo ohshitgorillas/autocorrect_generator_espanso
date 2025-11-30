@@ -1,13 +1,20 @@
 """Stage 5: Conflict removal."""
 
 import time
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from tqdm import tqdm
 
-from ...core import BoundaryType, Correction
-from ...resolution import remove_substring_conflicts
-from .data_models import PatternGeneralizationResult, ConflictRemovalResult
+from entroppy.processing.stages.data_models import (
+    PatternGeneralizationResult,
+    ConflictRemovalResult,
+)
+from entroppy.core import BoundaryType, Correction
+from entroppy.resolution import remove_substring_conflicts
+
+if TYPE_CHECKING:
+    from ...utils import DebugTypoMatcher
 
 
 def _find_blocking_typo(
@@ -62,7 +69,7 @@ def remove_typo_conflicts(
     pattern_result: PatternGeneralizationResult,
     verbose: bool = False,
     collect_details: bool = False,
-    debug_words: set[str] = set(),
+    debug_words: set[str] | None = None,
     debug_typo_matcher: "DebugTypoMatcher | None" = None,
 ) -> ConflictRemovalResult:
     """Remove substring conflicts from corrections.
@@ -77,6 +84,9 @@ def remove_typo_conflicts(
     Returns:
         ConflictRemovalResult containing final corrections and conflict statistics
     """
+    if debug_words is None:
+        debug_words = set()
+
     start_time = time.time()
 
     pre_conflict_count = len(pattern_result.corrections)
@@ -98,9 +108,7 @@ def remove_typo_conflicts(
         removed = [c for c in pre_conflict_corrections.values() if c not in final_set]
 
         if removed and verbose:
-            logger.info(
-                f"Analyzing {len(removed)} removed conflicts for report..."
-            )
+            logger.info(f"Analyzing {len(removed)} removed conflicts for report...")
 
         corrections_iter = removed
         if verbose and len(removed) > 100:
@@ -114,14 +122,10 @@ def remove_typo_conflicts(
             blocking_typo, blocking_word = _find_blocking_typo(
                 typo, word, boundary, final_corrections
             )
-            removed_corrections.append(
-                (typo, word, blocking_typo, blocking_word, boundary)
-            )
+            removed_corrections.append((typo, word, blocking_typo, blocking_word, boundary))
 
     if verbose and conflicts_removed > 0:
-        logger.info(
-            f"# Removed {conflicts_removed} typos due to substring conflicts"
-        )
+        logger.info(f"# Removed {conflicts_removed} typos due to substring conflicts")
 
     elapsed_time = time.time() - start_time
 

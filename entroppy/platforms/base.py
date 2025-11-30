@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 
-from ..core import Config, Correction
+from entroppy.core import Config, Correction
 
 
 class MatchDirection(Enum):

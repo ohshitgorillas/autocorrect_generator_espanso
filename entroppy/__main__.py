@@ -2,10 +2,10 @@
 
 from loguru import logger
 
-from .cli import create_parser
-from .core import load_config
-from .processing import run_pipeline
-from .utils import DebugTypoMatcher, setup_logger
+from entroppy.cli import create_parser
+from entroppy.core import load_config
+from entroppy.processing import run_pipeline
+from entroppy.utils import DebugTypoMatcher, setup_logger
 
 
 def main():

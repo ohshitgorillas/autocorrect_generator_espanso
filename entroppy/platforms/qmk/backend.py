@@ -7,9 +7,9 @@ from collections import defaultdict
 from loguru import logger
 from wordfreq import word_frequency
 
-from ...core import BoundaryType, Config, Correction
-from ..base import MatchDirection, PlatformBackend, PlatformConstraints
-from .reports import generate_qmk_ranking_report
+from entroppy.core import BoundaryType, Config, Correction
+from entroppy.platforms.base import MatchDirection, PlatformBackend, PlatformConstraints
+from entroppy.platforms.qmk.reports import generate_qmk_ranking_report
 
 
 class QMKBackend(PlatformBackend):
@@ -50,9 +50,7 @@ class QMKBackend(PlatformBackend):
             output_format="text",
         )
 
-    def _filter_character_set(
-        self, corrections: list[Correction]
-    ) -> tuple[list[Correction], list]:
+    def _filter_character_set(self, corrections: list[Correction]) -> tuple[list[Correction], list]:
         """Filter out corrections with invalid characters and convert to lowercase."""
         filtered = []
         char_filtered = []
@@ -103,9 +101,7 @@ class QMKBackend(PlatformBackend):
                 deduped.append(kept)
 
                 for removed in sorted_by_restriction[1:]:
-                    conflicts.append(
-                        (removed[0], removed[1], kept[0], kept[1], removed[2])
-                    )
+                    conflicts.append((removed[0], removed[1], kept[0], kept[1], removed[2]))
 
         return deduped, conflicts
 
@@ -165,6 +161,7 @@ class QMKBackend(PlatformBackend):
         This checks across all boundary types since QMK's RTL matching
         doesn't respect boundaries during the matching phase.
         """
+
         def check_suffix_conflict(typo1, word1, typo2, word2):
             # Check if typo1 ends with typo2 AND produces same correction
             if typo1.endswith(typo2) and typo1 != typo2:
@@ -192,6 +189,7 @@ class QMKBackend(PlatformBackend):
 
         We keep the shorter typo and remove the longer one.
         """
+
         def check_substring_conflict(typo1, word1, typo2, word2):
             # If typo2 is anywhere in typo1, QMK rejects it
             return typo2 in typo1 and typo1 != typo2
@@ -306,10 +304,8 @@ class QMKBackend(PlatformBackend):
 
         Applies max_corrections limit if specified in config.
         """
-        user_corrections, pattern_corrections, direct_corrections = (
-            self._separate_by_type(
-                corrections, patterns, pattern_replacements, user_words
-            )
+        user_corrections, pattern_corrections, direct_corrections = self._separate_by_type(
+            corrections, patterns, pattern_replacements, user_words
         )
 
         pattern_scores = self._score_patterns(pattern_corrections, pattern_replacements)
@@ -332,9 +328,7 @@ class QMKBackend(PlatformBackend):
 
         return ranked
 
-    def _format_correction_line(
-        self, typo: str, word: str, boundary: BoundaryType
-    ) -> str:
+    def _format_correction_line(self, typo: str, word: str, boundary: BoundaryType) -> str:
         """Format a single correction line with boundary markers."""
         if boundary == BoundaryType.BOTH:
             formatted_typo = f":{typo}:"

@@ -14,11 +14,11 @@ from collections import defaultdict
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from ..core import BoundaryType, Correction
-from ..utils import is_debug_correction, log_debug_correction
+from entroppy.core import BoundaryType, Correction
+from entroppy.utils import is_debug_correction, log_debug_correction
 
 if TYPE_CHECKING:
-    from ..utils import DebugTypoMatcher
+    from entroppy.utils import DebugTypoMatcher
 
 
 class ConflictDetector(ABC):

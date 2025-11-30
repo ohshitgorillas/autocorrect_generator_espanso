@@ -6,8 +6,8 @@ from english_words import get_english_words_set
 from loguru import logger
 from wordfreq import top_n_list
 
-from ..core import Config
-from ..matching import PatternMatcher
+from entroppy.core import Config
+from entroppy.matching import PatternMatcher
 
 
 def load_validation_dictionary(

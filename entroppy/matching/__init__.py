@@ -1,10 +1,6 @@
 """Pattern and exclusion matching for EntropPy."""
 
-from .exclusions import ExclusionMatcher
-from .pattern_matcher import PatternMatcher
+from entroppy.matching.exclusions import ExclusionMatcher
+from entroppy.matching.pattern_matcher import PatternMatcher
 
-__all__ = [
-    "ExclusionMatcher",
-    "PatternMatcher",
-]
-
+__all__ = ["ExclusionMatcher", "PatternMatcher"]

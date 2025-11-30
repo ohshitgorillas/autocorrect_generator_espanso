@@ -1,6 +1,5 @@
 """Espanso platform backend."""
 
-from .backend import EspansoBackend
+from entroppy.platforms.espanso.backend import EspansoBackend
 
 __all__ = ["EspansoBackend"]
-

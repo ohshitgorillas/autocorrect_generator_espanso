@@ -5,9 +5,9 @@ from collections import defaultdict
 
 from loguru import logger
 
-from ...core import Config, Correction, generalize_patterns
-from ...resolution import remove_substring_conflicts, resolve_collisions
-from .data_models import (
+from entroppy.core import Config, Correction, generalize_patterns
+from entroppy.resolution import remove_substring_conflicts, resolve_collisions
+from entroppy.processing.stages.data_models import (
     DictionaryData,
     CollisionResolutionResult,
     PatternGeneralizationResult,
@@ -57,9 +57,7 @@ def _filter_cross_boundary_conflicts(
             final_corrections.extend(pattern_replacements[pattern])
         # Add to rejected patterns with reason
         typo, word, _ = pattern
-        rejected_patterns.append(
-            (typo, word, ["Cross-boundary conflict with direct correction"])
-        )
+        rejected_patterns.append((typo, word, ["Cross-boundary conflict with direct correction"]))
 
     # Verbose output for cross-boundary conflicts
     if verbose and conflicting_patterns:
@@ -167,9 +165,7 @@ def generalize_typo_patterns(
                 f"# Generalized {len(resolved_patterns)} patterns, "
                 f"removing {removed_count} specific corrections."
             )
-        logger.info(
-            f"# After pattern generalization: {len(final_corrections)} entries"
-        )
+        logger.info(f"# After pattern generalization: {len(final_corrections)} entries")
 
     elapsed_time = time.time() - start_time
 

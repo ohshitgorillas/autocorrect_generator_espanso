@@ -4,12 +4,12 @@ from typing import TYPE_CHECKING
 
 from wordfreq import word_frequency
 
-from ..core import BoundaryType, Correction, determine_boundaries, generate_all_typos
-from ..matching import PatternMatcher
-from ..utils import is_debug_word, is_debug_typo
+from entroppy.core import BoundaryType, Correction, determine_boundaries, generate_all_typos
+from entroppy.matching import PatternMatcher
+from entroppy.utils import is_debug_word, is_debug_typo
 
 if TYPE_CHECKING:
-    from ..utils import DebugTypoMatcher
+    from entroppy.utils import DebugTypoMatcher
 
 
 def _add_debug_message(
@@ -137,9 +137,7 @@ def process_word(
 
         # Use filtered validation set for boundary detection
         # This allows excluded patterns to not block valid typos
-        boundary_type = determine_boundaries(
-            typo, filtered_validation_set, source_words
-        )
+        boundary_type = determine_boundaries(typo, filtered_validation_set, source_words)
 
         if boundary_type is not None:
             # Now that we have the boundary, check if this typo matches any debug patterns
@@ -148,12 +146,14 @@ def process_word(
                 if matched_patterns:
                     patterns_str = ", ".join(matched_patterns)
                     debug_messages.append(
-                        f"[DEBUG TYPO: '{typo}' (matched: {patterns_str})] [Stage 2] Generated from word: {word} (boundary: {boundary_type.value})"
+                        f"[DEBUG TYPO: '{typo}' (matched: {patterns_str})] "
+                        f"[Stage 2] Generated from word: {word} (boundary: {boundary_type.value})"
                     )
 
             if is_debug:
                 debug_messages.append(
-                    f"[DEBUG WORD: '{word}'] [Stage 2] Created correction: {typo} → {word} (boundary: {boundary_type.value})"
+                    f"[DEBUG WORD: '{word}'] [Stage 2] Created correction: "
+                    f"{typo} → {word} (boundary: {boundary_type.value})"
                 )
 
             corrections.append((typo, word, boundary_type))
@@ -170,4 +170,3 @@ def process_word(
             )
 
     return corrections, debug_messages
-

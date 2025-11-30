@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Code readability improvements through helper function extraction**
+  - **Refactored `patterns.py`** for improved maintainability:
+    - Extracted `_extract_pattern_parts()` to eliminate duplication between prefix/suffix extraction
+    - Extracted `_validate_pattern_for_all_occurrences()` for pattern validation logic
+    - Extracted `_check_pattern_conflicts()` to consolidate conflict checking
+    - Extracted `_log_pattern_rejection()` and `_log_pattern_acceptance()` to centralize debug logging
+    - Main `generalize_patterns()` function reduced from ~185 to ~140 lines with clearer flow
+  - **Refactored `resolve_collisions()` in `collision.py`**:
+    - Extracted `_should_skip_short_typo()` for length validation
+    - Extracted `_apply_user_word_boundary_override()` for boundary override logic
+    - Extracted `_handle_exclusion()` for exclusion checking and logging
+    - Extracted `_process_single_word_correction()` and `_process_collision_case()` to separate concerns
+    - Main function reduced from ~183 to ~50 lines with eliminated duplication
+  - **Refactored `resolve_conflicts_for_group()` in `conflicts.py`**:
+    - Extracted `_check_if_typo_is_blocked()` for conflict detection logic
+    - Extracted `_log_blocked_correction()` and `_log_kept_correction()` for debug logging
+    - Extracted `_process_typo_for_conflicts()` and `_build_typo_index()` for index management
+    - Main function simplified with clearer separation of concerns
+  - **Refactored `remove_typo_conflicts()` in `conflict_removal.py`**:
+    - Extracted `_find_blocking_typo()` to isolate conflict analysis logic
+    - Removed complex nested conditionals from main function
+  - **Moved `BoundaryType` enum** from `config.py` to `boundaries.py`:
+    - Better logical organization - boundary types belong with boundary detection logic
+    - Updated all imports across codebase to reflect new location
+    - Maintains backward compatibility through `core/__init__.py` exports
+  - **Benefits**:
+    - Reduced code duplication (debug logging patterns consolidated)
+    - Improved readability with single-responsibility helper functions
+    - Easier maintenance - changes to validation/logging happen in one place
+    - Better testability - helper functions can be tested independently
+    - No functional changes - all behavior preserved
+
 ## [0.4.3] - 2025-12-01
 
 ### Changed

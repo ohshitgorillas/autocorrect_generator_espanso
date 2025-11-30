@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from ...core import BoundaryType, Correction, format_boundary_display, format_boundary_name
-from ...reports import write_report_header
+from entroppy.core import BoundaryType, Correction, format_boundary_display, format_boundary_name
+from entroppy.reports import write_report_header
 
 
 def generate_qmk_ranking_report(
@@ -55,9 +55,7 @@ def _write_overview_statistics(
     f.write(f"Total corrections selected:        {len(final_corrections):,}\n")
     f.write(f"Available after filtering:         {len(filtered_corrections):,}\n")
     selection_rate = (
-        (len(final_corrections) / len(filtered_corrections) * 100)
-        if filtered_corrections
-        else 0
+        (len(final_corrections) / len(filtered_corrections) * 100) if filtered_corrections else 0
     )
     f.write(f"Selection rate:                    {selection_rate:.1f}%\n\n")
 
@@ -67,15 +65,11 @@ def _write_filtering_details(f, filter_metadata: dict):
     f.write("FILTERING DETAILS\n")
     f.write("-" * 80 + "\n")
     filter_reasons = filter_metadata.get("filter_reasons", {})
-    f.write(
-        f"Character set violations:          {filter_reasons.get('char_set', 0):,}\n"
-    )
+    f.write(f"Character set violations:          {filter_reasons.get('char_set', 0):,}\n")
     f.write(
         f"Same-typo conflicts resolved:      {filter_reasons.get('same_typo_conflicts', 0):,}\n"
     )
-    f.write(
-        f"RTL suffix conflicts removed:      {filter_reasons.get('suffix_conflicts', 0):,}\n\n"
-    )
+    f.write(f"RTL suffix conflicts removed:      {filter_reasons.get('suffix_conflicts', 0):,}\n\n")
 
     _write_char_violations(f, filter_metadata)
     _write_same_typo_conflicts(f, filter_metadata)
@@ -190,9 +184,7 @@ def _write_patterns_section(
         f.write(f"... and {remaining} more patterns\n\n")
 
 
-def _write_direct_corrections_section(
-    f, direct_scores: list[tuple[float, str, str, BoundaryType]]
-):
+def _write_direct_corrections_section(f, direct_scores: list[tuple[float, str, str, BoundaryType]]):
     """Write direct corrections section."""
     f.write("DIRECT CORRECTIONS\n")
     f.write("-" * 80 + "\n")
@@ -235,9 +227,7 @@ def _write_cutoff_bubble(
     start_idx = max(0, cutoff_index - 10)
     for i in range(start_idx, cutoff_index):
         typo, word, boundary = final_corrections[i]
-        score = _get_score_for_correction(
-            typo, word, boundary, pattern_scores, direct_scores
-        )
+        score = _get_score_for_correction(typo, word, boundary, pattern_scores, direct_scores)
         correction_type = _get_correction_type(typo, word, patterns)
         f.write(f"{i + 1}. {typo} → {word} {format_boundary_display(boundary)}\n")
         f.write(f"   Type: {correction_type}, Score: {score:.6f}\n\n")
@@ -246,13 +236,9 @@ def _write_cutoff_bubble(
     f.write("\nFIRST 10 CORRECTIONS THAT GOT CUT:\n")
     f.write("-" * 80 + "\n")
     if len(ranked_corrections_before_limit) > cutoff_index:
-        for i in range(
-            cutoff_index, min(cutoff_index + 10, len(ranked_corrections_before_limit))
-        ):
+        for i in range(cutoff_index, min(cutoff_index + 10, len(ranked_corrections_before_limit))):
             typo, word, boundary = ranked_corrections_before_limit[i]
-            score = _get_score_for_correction(
-                typo, word, boundary, pattern_scores, direct_scores
-            )
+            score = _get_score_for_correction(typo, word, boundary, pattern_scores, direct_scores)
             correction_type = _get_correction_type(typo, word, patterns)
             f.write(f"{i + 1}. {typo} → {word} {format_boundary_display(boundary)}\n")
             f.write(f"   Type: {correction_type}, Score: {score:.6f}\n\n")

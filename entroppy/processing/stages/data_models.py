@@ -3,9 +3,8 @@
 from dataclasses import dataclass, field
 from collections import defaultdict
 
-from ...core import BoundaryType, Correction
-from ...matching import ExclusionMatcher
-
+from entroppy.core import BoundaryType, Correction
+from entroppy.matching import ExclusionMatcher
 
 @dataclass
 class StageResult:
@@ -54,9 +53,7 @@ class PatternGeneralizationResult(StageResult):
     corrections: list[Correction] = field(default_factory=list)
     patterns: list[Correction] = field(default_factory=list)
     removed_count: int = 0
-    pattern_replacements: dict[Correction, list[Correction]] = field(
-        default_factory=dict
-    )
+    pattern_replacements: dict[Correction, list[Correction]] = field(default_factory=dict)
     rejected_patterns: list[tuple[str, str, list[str]]] = field(default_factory=list)
 
 
@@ -65,9 +62,7 @@ class ConflictRemovalResult(StageResult):
     """Output from conflict removal stage."""
 
     corrections: list[Correction] = field(default_factory=list)
-    removed_corrections: list[tuple[str, str, str, str, BoundaryType]] = field(
-        default_factory=list
-    )
+    removed_corrections: list[tuple[str, str, str, str, BoundaryType]] = field(default_factory=list)
     conflicts_removed: int = 0
 
 

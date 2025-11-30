@@ -2,13 +2,12 @@
 
 from typing import TYPE_CHECKING
 
-from .boundaries import would_trigger_at_end
-from .config import BoundaryType
-from ..platforms.base import MatchDirection
-from ..utils import is_debug_correction, log_debug_correction
+from entroppy.core.boundaries import BoundaryType, would_trigger_at_end
+from entroppy.platforms.base import MatchDirection
+from entroppy.utils import log_debug_correction
 
 if TYPE_CHECKING:
-    from ..utils import DebugTypoMatcher
+    from entroppy.utils import DebugTypoMatcher
 
 
 def _validate_pattern_result(
@@ -69,10 +68,7 @@ def _would_corrupt_source_word(
         else:
             # SUFFIX pattern: check if there's a word boundary after
             char_after_idx = idx + len(typo_pattern)
-            if (
-                char_after_idx >= len(source_word)
-                or not source_word[char_after_idx].isalpha()
-            ):
+            if char_after_idx >= len(source_word) or not source_word[char_after_idx].isalpha():
                 return True
         # Look for next occurrence
         idx = source_word.find(typo_pattern, idx + 1)
@@ -168,8 +164,7 @@ def validate_pattern_for_all_occurrences(
         )
         if not is_valid:
             error_msg = (
-                f"Creates '{expected_result}' instead of "
-                f"'{full_word}' for typo '{full_typo}'"
+                f"Creates '{expected_result}' instead of " f"'{full_word}' for typo '{full_typo}'"
             )
             return False, error_msg
     return True, None
@@ -209,4 +204,3 @@ def check_pattern_conflicts(
         return False, "Would corrupt source words"
 
     return True, None
-

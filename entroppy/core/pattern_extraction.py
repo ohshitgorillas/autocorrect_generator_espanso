@@ -2,7 +2,8 @@
 
 from collections import defaultdict
 
-from .config import BoundaryType, Correction
+from entroppy.core.boundaries import BoundaryType
+from entroppy.core.config import Correction
 
 # Minimum length for the non-pattern part when extracting patterns
 # This prevents extracting nonsensical patterns that are too short
@@ -110,4 +111,3 @@ def find_prefix_patterns(
     (full_typo, full_word, original_boundary) tuples that match this pattern.
     """
     return _find_patterns(corrections, BoundaryType.LEFT, is_suffix=False)
-

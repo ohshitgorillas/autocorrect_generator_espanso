@@ -8,4 +8,3 @@ __all__ = [
     "write_report_header",
     "_format_time",
 ]
-

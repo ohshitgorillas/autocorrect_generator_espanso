@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from ...core import Correction
-from ...reports import write_report_header
+from entroppy.core import Correction
+from entroppy.reports import write_report_header
 
 
 def generate_espanso_output_report(
@@ -34,12 +34,8 @@ def _write_overview(f, final_corrections: list[Correction], ram_estimate: dict):
     f.write("OVERVIEW\n")
     f.write("-" * 80 + "\n")
     f.write(f"Total corrections:              {len(final_corrections):,}\n")
-    f.write(
-        f"Estimated RAM usage:            {ram_estimate.get('total_mb', 0):.2f} MB\n"
-    )
-    f.write(
-        f"Average bytes per entry:        {ram_estimate.get('per_entry_bytes', 0):.1f}\n\n"
-    )
+    f.write(f"Estimated RAM usage:            {ram_estimate.get('total_mb', 0):.2f} MB\n")
+    f.write(f"Average bytes per entry:        {ram_estimate.get('per_entry_bytes', 0):.1f}\n\n")
 
 
 def _write_file_breakdown(
@@ -73,9 +69,7 @@ def _write_largest_files(f, corrections_by_letter: dict[str, list[dict]]):
     f.write("-" * 80 + "\n")
 
     # Sort by correction count
-    sorted_letters = sorted(
-        corrections_by_letter.items(), key=lambda x: len(x[1]), reverse=True
-    )
+    sorted_letters = sorted(corrections_by_letter.items(), key=lambda x: len(x[1]), reverse=True)
 
     for i, (letter, matches) in enumerate(sorted_letters[:5], 1):
         f.write(f"{i}. Letter '{letter}': {len(matches):,} corrections\n")

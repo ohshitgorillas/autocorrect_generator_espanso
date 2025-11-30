@@ -7,7 +7,7 @@ exact string matches and wildcard patterns (using * syntax).
 
 from re import Pattern
 
-from ..utils import compile_wildcard_regex
+from entroppy.utils import compile_wildcard_regex
 
 
 class PatternMatcher:

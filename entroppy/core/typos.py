@@ -25,8 +25,8 @@ def generate_omissions(word: str) -> list[str]:
 def generate_duplications(word: str) -> list[str]:
     """Generate typos by duplicating each letter."""
     typos = []
-    for i in range(len(word)):
-        typo = word[:i] + word[i] + word[i:]
+    for i, char in enumerate(word):
+        typo = word[:i] + char + word[i:]
         typos.append(typo)
     return typos
 
@@ -60,15 +60,9 @@ def generate_replacements(word: str, adj_letters_map: dict[str, str]) -> list[st
     return typos
 
 
-def generate_all_typos(
-    word: str, adj_letters_map: dict[str, str] | None = None
-) -> list[str]:
+def generate_all_typos(word: str, adj_letters_map: dict[str, str] | None = None) -> list[str]:
     """Generate all types of typos for a word."""
-    typos = (
-        generate_transpositions(word)
-        + generate_omissions(word)
-        + generate_duplications(word)
-    )
+    typos = generate_transpositions(word) + generate_omissions(word) + generate_duplications(word)
 
     if adj_letters_map:
         typos.extend(generate_insertions(word, adj_letters_map))

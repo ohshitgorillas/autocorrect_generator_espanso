@@ -7,10 +7,10 @@ from multiprocessing import Pool
 from loguru import logger
 from tqdm import tqdm
 
-from ...core import Config, Correction
-from ...resolution import process_word
-from .data_models import DictionaryData, TypoGenerationResult
-from .worker_context import WorkerContext, init_worker, get_worker_context
+from entroppy.core import Config, Correction
+from entroppy.resolution import process_word
+from entroppy.processing.stages.data_models import DictionaryData, TypoGenerationResult
+from entroppy.processing.stages.worker_context import WorkerContext, init_worker, get_worker_context
 
 
 def process_word_worker(word: str) -> tuple[str, list[Correction], list[str]]:
@@ -55,9 +55,7 @@ def generate_typos(
     start_time = time.time()
 
     if verbose:
-        logger.info(
-            f"\nGenerating typos for {len(dict_data.source_words)} words...\n"
-        )
+        logger.info(f"\nGenerating typos for {len(dict_data.source_words)} words...\n")
 
     typo_map = defaultdict(list)
     all_debug_messages = []
@@ -99,9 +97,7 @@ def generate_typos(
         # Single-threaded mode
         words_iter = dict_data.source_words
         if verbose:
-            words_iter = tqdm(
-                dict_data.source_words, desc="Processing words", unit="word"
-            )
+            words_iter = tqdm(dict_data.source_words, desc="Processing words", unit="word")
 
         for word in words_iter:
             corrections, debug_messages = process_word(

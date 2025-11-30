@@ -4,19 +4,19 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from .config import Correction
-from .pattern_extraction import find_prefix_patterns, find_suffix_patterns
-from .pattern_validation import (
+from entroppy.core.config import Correction
+from entroppy.core.pattern_extraction import find_prefix_patterns, find_suffix_patterns
+from entroppy.core.pattern_validation import (
     _log_pattern_acceptance,
     _log_pattern_rejection,
     check_pattern_conflicts,
     validate_pattern_for_all_occurrences,
 )
-from ..platforms.base import MatchDirection
-from ..utils import is_debug_correction, log_debug_correction
+from entroppy.platforms.base import MatchDirection
+from entroppy.utils import is_debug_correction, log_debug_correction
 
 if TYPE_CHECKING:
-    from ..utils import DebugTypoMatcher
+    from entroppy.utils import DebugTypoMatcher
 
 
 def generalize_patterns(
@@ -63,9 +63,7 @@ def generalize_patterns(
         pattern_type = "suffix"
 
     if verbose:
-        logger.info(
-            f"Generalizing {len(found_patterns)} {pattern_type} patterns..."
-        )
+        logger.info(f"Generalizing {len(found_patterns)} {pattern_type} patterns...")
 
     for (typo_pattern, word_pattern, boundary), occurrences in found_patterns.items():
         # Skip patterns with only one occurrence (not worth generalizing)
@@ -74,8 +72,7 @@ def generalize_patterns(
 
         # Check if any of the occurrences involve debug items (for logging)
         has_debug_occurrence = any(
-            is_debug_correction(occ, debug_words, debug_typo_matcher)
-            for occ in occurrences
+            is_debug_correction(occ, debug_words, debug_typo_matcher) for occ in occurrences
         )
 
         # Reject patterns that are too short

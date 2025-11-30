@@ -47,6 +47,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     - `platforms/espanso/file_writing.py`: 1 instance updated
   - Removed unused `os` imports from `dictionary.py` and `config.py`
 
+- **Code style consistency improvements**:
+  - Standardized import organization across all files:
+    - Converted relative imports to absolute imports in `platforms/espanso/backend.py`
+    - Ensured consistent import grouping (stdlib, third-party, local) with blank lines between groups
+    - Fixed import grouping in `core/config.py`, `data/dictionary.py`, and `resolution/conflicts.py`
+  - Improved code consistency:
+    - Changed `_format_time` to public `format_time` in `processing/pipeline.py` for consistency
+    - All imports now follow Python PEP 8 style guide conventions
+
 - **Improved type hinting across the codebase**:
   - Added missing return type hints to helper functions (`log_debug_word`, `log_debug_typo`, `write_report_header`, `write_section_header`)
   - Made generic dict/list types more specific throughout:

@@ -1,6 +1,7 @@
 """Dictionary and word list loading."""
 
 import itertools
+
 from english_words import get_english_words_set
 from loguru import logger
 from wordfreq import top_n_list

@@ -7,13 +7,13 @@ from typing import Any
 import yaml
 from loguru import logger
 
-from ...core import Config, Correction
-from ..base import MatchDirection, PlatformBackend, PlatformConstraints
-from .file_writing import write_yaml_files
-from .organization import organize_by_letter
-from .ram_estimation import estimate_ram_usage
-from .reports import generate_espanso_output_report
-from .yaml_conversion import correction_to_yaml_dict
+from entroppy.core import Config, Correction
+from entroppy.platforms.base import MatchDirection, PlatformBackend, PlatformConstraints
+from entroppy.platforms.espanso.file_writing import write_yaml_files
+from entroppy.platforms.espanso.organization import organize_by_letter
+from entroppy.platforms.espanso.ram_estimation import estimate_ram_usage
+from entroppy.platforms.espanso.reports import generate_espanso_output_report
+from entroppy.platforms.espanso.yaml_conversion import correction_to_yaml_dict
 
 
 class EspansoBackend(PlatformBackend):

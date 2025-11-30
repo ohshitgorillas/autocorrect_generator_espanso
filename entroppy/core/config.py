@@ -1,10 +1,11 @@
 """Configuration management for EntropPy."""
 
 import json
+from argparse import ArgumentParser
 from dataclasses import dataclass, field
 from multiprocessing import cpu_count
-from argparse import ArgumentParser
 from typing import TYPE_CHECKING
+
 from loguru import logger
 
 from entroppy.core.boundaries import BoundaryType

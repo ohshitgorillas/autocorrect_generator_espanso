@@ -6,7 +6,7 @@ from loguru import logger
 
 from entroppy.core import Config
 from entroppy.platforms import PlatformBackend, get_platform_backend
-from entroppy.reports import ReportData, _format_time, generate_reports
+from entroppy.reports import ReportData, format_time, generate_reports
 from entroppy.processing.stages import (
     generalize_typo_patterns,
     load_dictionaries,
@@ -190,4 +190,4 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     # Print total time
     elapsed_time = time.time() - start_time
     if verbose:
-        logger.info(f"\n✓ Total processing time: {_format_time(elapsed_time)}")
+        logger.info(f"\n✓ Total processing time: {format_time(elapsed_time)}")

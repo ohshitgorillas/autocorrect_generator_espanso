@@ -10,8 +10,8 @@ When typing "wherre":
 - The "wherre" correction is redundant, remove it
 """
 
-from collections import defaultdict
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from entroppy.core import BoundaryType, Correction

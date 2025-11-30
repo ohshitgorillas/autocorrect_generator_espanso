@@ -6,6 +6,10 @@ from dataclasses import dataclass, field
 from enum import Enum
 from multiprocessing import cpu_count
 from argparse import ArgumentParser
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..utils import DebugTypoMatcher
 
 
 class BoundaryType(Enum):

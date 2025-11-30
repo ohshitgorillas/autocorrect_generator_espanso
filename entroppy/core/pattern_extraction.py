@@ -3,7 +3,7 @@
 from collections import defaultdict
 
 from entroppy.core.boundaries import BoundaryType
-from entroppy.core.config import Correction
+from entroppy.core.types import Correction
 
 # Minimum length for the non-pattern part when extracting patterns
 # This prevents extracting nonsensical patterns that are too short

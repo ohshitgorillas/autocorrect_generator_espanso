@@ -14,8 +14,8 @@ from entroppy.data import (
     load_word_list,
 )
 from entroppy.matching import ExclusionMatcher
-from entroppy.utils import log_debug_typo, log_debug_word
 from entroppy.processing.stages.data_models import DictionaryData
+from entroppy.utils.debug import log_debug_typo, log_debug_word
 
 
 def load_dictionaries(config: Config, verbose: bool = False) -> DictionaryData:

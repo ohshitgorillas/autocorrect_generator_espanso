@@ -6,10 +6,7 @@ from wordfreq import word_frequency
 
 from entroppy.core import BoundaryType, Correction, determine_boundaries, generate_all_typos
 from entroppy.matching import PatternMatcher
-from entroppy.utils import is_debug_word, is_debug_typo
-
-if TYPE_CHECKING:
-    from entroppy.utils import DebugTypoMatcher
+from entroppy.utils.debug import DebugTypoMatcher, is_debug_word, is_debug_typo
 
 
 def _add_debug_message(

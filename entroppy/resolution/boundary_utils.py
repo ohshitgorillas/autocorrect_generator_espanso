@@ -1,12 +1,7 @@
 """Boundary type utilities for collision resolution."""
 
-from typing import TYPE_CHECKING
-
 from entroppy.core import BoundaryType
-from entroppy.utils import log_if_debug_correction
-
-if TYPE_CHECKING:
-    from entroppy.utils import DebugTypoMatcher
+from entroppy.utils.debug import DebugTypoMatcher, log_if_debug_correction
 
 
 def _should_skip_short_typo(
@@ -44,7 +39,7 @@ def apply_user_word_boundary_override(
     boundary: BoundaryType,
     user_words: set[str],
     debug_words: set[str],
-    debug_typo_matcher: "DebugTypoMatcher | None",
+    debug_typo_matcher: DebugTypoMatcher | None,
     typo: str,
 ) -> BoundaryType:
     """Apply boundary override for 2-letter user words.

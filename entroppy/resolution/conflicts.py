@@ -12,13 +12,14 @@ When typing "wherre":
 
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import TYPE_CHECKING
 
 from entroppy.core import BoundaryType, Correction
-from entroppy.utils import is_debug_correction, log_debug_correction, log_if_debug_correction
-
-if TYPE_CHECKING:
-    from entroppy.utils import DebugTypoMatcher
+from entroppy.utils.debug import (
+    DebugTypoMatcher,
+    is_debug_correction,
+    log_debug_correction,
+    log_if_debug_correction,
+)
 
 
 class ConflictDetector(ABC):

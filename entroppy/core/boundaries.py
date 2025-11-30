@@ -2,7 +2,7 @@
 
 from enum import Enum
 
-from entroppy.utils import Constants
+from entroppy.utils.constants import Constants
 
 
 class BoundaryType(Enum):
@@ -75,8 +75,8 @@ def _check_typo_in_wordset(typo: str, word_set: set[str], check_type: str) -> bo
     """
     if not isinstance(typo, str):
         raise TypeError(f"typo must be a string, got {type(typo)}")
-    if not isinstance(word_set, set):
-        raise TypeError(f"word_set must be a set, got {type(word_set)}")
+    if not isinstance(word_set, (set, frozenset)):
+        raise TypeError(f"word_set must be a set or frozenset, got {type(word_set)}")
     if check_type not in ("substring", "prefix", "suffix"):
         raise ValueError(f"check_type must be 'substring', 'prefix', or 'suffix', got {check_type}")
     
@@ -128,10 +128,10 @@ def determine_boundaries(
     """
     if not isinstance(typo, str):
         raise TypeError(f"typo must be a string, got {type(typo)}")
-    if not isinstance(validation_set, set):
-        raise TypeError(f"validation_set must be a set, got {type(validation_set)}")
-    if not isinstance(source_words, set):
-        raise TypeError(f"source_words must be a set, got {type(source_words)}")
+    if not isinstance(validation_set, (set, frozenset)):
+        raise TypeError(f"validation_set must be a set or frozenset, got {type(validation_set)}")
+    if not isinstance(source_words, (set, frozenset)):
+        raise TypeError(f"source_words must be a set or frozenset, got {type(source_words)}")
     
     # Check if typo appears as substring in other contexts
     is_substring_source = is_substring_of_any(typo, source_words)

@@ -91,10 +91,10 @@ def generate_replacements(word: str, adj_letters_map: dict[str, str]) -> list[st
 
 def generate_all_typos(word: str, adj_letters_map: dict[str, str] | None = None) -> list[str]:
     """Generate all types of typos for a word."""
-    if not word:
-        raise ValueError("word cannot be empty")
     if not isinstance(word, str):
         raise TypeError(f"word must be a string, got {type(word)}")
+    if not word:
+        return []
     if adj_letters_map is not None and not isinstance(adj_letters_map, dict):
         raise TypeError(f"adj_letters_map must be a dict or None, got {type(adj_letters_map)}")
     

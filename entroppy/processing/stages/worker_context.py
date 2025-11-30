@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from entroppy.utils import DebugTypoMatcher
+    from entroppy.utils.debug import DebugTypoMatcher
 
 
 @dataclass(frozen=True)

@@ -7,16 +7,19 @@ from wordfreq import word_frequency
 
 from entroppy.core import BoundaryType, Correction
 from entroppy.matching import ExclusionMatcher
-from entroppy.utils import is_debug_correction, log_debug_correction, log_debug_typo, log_if_debug_correction
+from entroppy.utils.debug import (
+    DebugTypoMatcher,
+    is_debug_correction,
+    log_debug_correction,
+    log_debug_typo,
+    log_if_debug_correction,
+)
 from .conflicts import resolve_conflicts_for_group
 from .boundary_utils import (
     _should_skip_short_typo,
     apply_user_word_boundary_override,
     choose_strictest_boundary,
 )
-
-if TYPE_CHECKING:
-    from entroppy.utils import DebugTypoMatcher
 
 
 def _handle_exclusion(

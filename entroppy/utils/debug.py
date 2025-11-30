@@ -5,8 +5,11 @@ from re import Pattern
 
 from loguru import logger
 
-from entroppy.core import BoundaryType, Correction
 from entroppy.utils.helpers import compile_wildcard_regex
+
+# Import at module level - these are safe because they don't import from utils
+from entroppy.core.boundaries import BoundaryType
+from entroppy.core.config import Correction
 
 
 @dataclass(frozen=True)

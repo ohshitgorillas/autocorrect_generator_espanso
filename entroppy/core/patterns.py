@@ -1,7 +1,5 @@
 """Pattern generalization for typo corrections."""
 
-from typing import TYPE_CHECKING
-
 from loguru import logger
 
 from entroppy.core.config import Correction
@@ -13,10 +11,11 @@ from entroppy.core.pattern_validation import (
     validate_pattern_for_all_occurrences,
 )
 from entroppy.platforms.base import MatchDirection
-from entroppy.utils import is_debug_correction, log_if_debug_correction
-
-if TYPE_CHECKING:
-    from entroppy.utils import DebugTypoMatcher
+from entroppy.utils.debug import (
+    DebugTypoMatcher,
+    is_debug_correction,
+    log_if_debug_correction,
+)
 
 
 def generalize_patterns(

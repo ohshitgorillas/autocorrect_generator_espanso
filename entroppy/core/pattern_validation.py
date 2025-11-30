@@ -4,10 +4,7 @@ from typing import TYPE_CHECKING
 
 from entroppy.core.boundaries import BoundaryType, would_trigger_at_end
 from entroppy.platforms.base import MatchDirection
-from entroppy.utils import log_debug_correction
-
-if TYPE_CHECKING:
-    from entroppy.utils import DebugTypoMatcher
+from entroppy.utils.debug import DebugTypoMatcher, log_debug_correction
 
 
 def _validate_pattern_result(

@@ -98,6 +98,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - **Pipeline error handling**:
     - Added error handling for `get_platform_backend()` in `entroppy/processing/pipeline.py`
     - Handles `ValueError` for invalid platform names with clear error messages
+
+### Fixed
+
+- **Circular import resolution**:
+  - Fixed circular import between `entroppy/utils/debug.py` and `entroppy/core/` modules:
+    - Removed debug utility imports from `entroppy/utils/__init__.py` to break circular dependency
+    - Updated all modules to import debug utilities directly from `entroppy/utils/debug` instead of `entroppy/utils`
+    - Changed `entroppy/core/boundaries.py` to import `Constants` directly from `entroppy/utils/constants` instead of `entroppy/utils`
+    - All imports now use direct module paths, avoiding circular dependencies
+  - **Type checking improvements**:
+    - Updated `determine_boundaries()` and `_check_typo_in_wordset()` to accept both `set` and `frozenset` types
+    - Fixed `generate_all_typos()` to return empty list for empty strings instead of raising error (matches test expectations)
   - **Benefits**:
     - Improved reliability: All file operations now handle common error scenarios gracefully
     - Better error messages: All errors are logged with context before re-raising

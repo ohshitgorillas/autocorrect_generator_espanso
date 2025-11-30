@@ -11,7 +11,7 @@ from loguru import logger
 from entroppy.core.boundaries import BoundaryType
 
 if TYPE_CHECKING:
-    from entroppy.utils import DebugTypoMatcher
+    from entroppy.utils.debug import DebugTypoMatcher
 
 
 # Type alias for corrections

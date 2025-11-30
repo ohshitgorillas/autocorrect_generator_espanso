@@ -11,8 +11,8 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Espanso (default) - generates multiple YAML files in directory
-  %(prog)s --top-n 1000 -o corrections -v
+  # Espanso - generates multiple YAML files in specified directory
+  %(prog)s --platform espanso --top-n 1000 -o corrections -v
   
   # QMK - generates single text file
   %(prog)s --platform qmk --top-n 1000 -o corrections/autocorrect.txt -v

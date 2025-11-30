@@ -34,7 +34,6 @@ class QMKBackend(PlatformBackend):
         self._user_corrections = []
         self._pattern_scores = []
         self._direct_scores = []
-        self._all_scored = []
 
     def get_constraints(self) -> PlatformConstraints:
         """Return QMK constraints."""
@@ -87,7 +86,7 @@ class QMKBackend(PlatformBackend):
             self._user_corrections,
             self._pattern_scores,
             self._direct_scores,
-            self._all_scored,
+            _,
         ) = qmk_rank_corrections(
             corrections, patterns, pattern_replacements, user_words, max_corrections
         )

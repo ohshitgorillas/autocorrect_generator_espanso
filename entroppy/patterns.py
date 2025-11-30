@@ -11,6 +11,67 @@ from .debug_utils import is_debug_correction
 from .platforms.base import MatchDirection
 
 
+def _find_patterns(
+    corrections: list[Correction],
+    boundary_type: BoundaryType,
+    is_suffix: bool,
+) -> dict[tuple[str, str, BoundaryType], list[tuple[str, str, BoundaryType]]]:
+    """Find common patterns (prefix or suffix) in corrections.
+
+    Args:
+        corrections: List of corrections to analyze
+        boundary_type: Boundary type to filter by (LEFT for prefix, RIGHT for suffix)
+        is_suffix: True for suffix patterns, False for prefix patterns
+
+    Returns:
+        Dict mapping (typo_pattern, word_pattern, boundary) to list of
+        (full_typo, full_word, original_boundary) tuples that match this pattern.
+    """
+    patterns = defaultdict(list)
+    # Group corrections by word length to make comparison more efficient
+    corrections_by_len = defaultdict(list)
+    for typo, word, boundary in corrections:
+        corrections_by_len[len(word)].append((typo, word, boundary))
+
+    for length_group in corrections_by_len.values():
+        for typo, word, boundary in length_group:
+            # Only extract patterns from corrections with matching boundary type
+            if boundary == boundary_type:
+                # Require at least 2 characters of the non-pattern part
+                # This prevents extracting nonsensical patterns
+                min_other_length = 2
+                max_pattern_length = len(word) - min_other_length
+
+                for length in range(2, max_pattern_length + 1):
+                    if len(typo) < length:
+                        continue
+
+                    if is_suffix:
+                        # Extract suffix patterns
+                        typo_pattern = typo[-length:]
+                        word_pattern = word[-length:]
+                        other_part_typo = typo[:-length]
+                        other_part_word = word[:-length]
+                    else:
+                        # Extract prefix patterns
+                        typo_pattern = typo[:length]
+                        word_pattern = word[:length]
+                        other_part_typo = typo[length:]
+                        other_part_word = word[length:]
+
+                    # Skip if patterns are identical (useless pattern)
+                    if typo_pattern == word_pattern:
+                        continue
+                    # Ensure the other parts match before considering a pattern valid
+                    if other_part_typo != other_part_word:
+                        continue
+
+                    pattern_key = (typo_pattern, word_pattern, boundary)
+                    patterns[pattern_key].append((typo, word, boundary))
+
+    return patterns
+
+
 def find_suffix_patterns(
     corrections: list[Correction],
 ) -> dict[tuple[str, str, BoundaryType], list[tuple[str, str, BoundaryType]]]:
@@ -19,38 +80,7 @@ def find_suffix_patterns(
     Returns a dict mapping (typo_suffix, word_suffix, boundary) to list of
     (full_typo, full_word, original_boundary) tuples that match this pattern.
     """
-    patterns = defaultdict(list)
-    # Group corrections by word length to make suffix comparison more efficient
-    corrections_by_len = defaultdict(list)
-    for typo, word, boundary in corrections:
-        corrections_by_len[len(word)].append((typo, word, boundary))
-
-    for length_group in corrections_by_len.values():
-        for typo, word, boundary in length_group:
-            # Only extract suffix patterns from corrections
-            # that are already suffix patterns (RIGHT boundary)
-            if boundary == BoundaryType.RIGHT:
-                # Require at least 2 characters of prefix before the suffix
-                # This prevents extracting nonsensical patterns like "ayt → lay" from "layt → lay"
-                min_prefix_length = 2
-                max_suffix_length = len(word) - min_prefix_length
-
-                for length in range(2, max_suffix_length + 1):
-                    if len(typo) < length:
-                        continue
-                    typo_suffix = typo[-length:]
-                    word_suffix = word[-length:]
-                    # Skip if typo and word suffixes are identical (useless pattern)
-                    if typo_suffix == word_suffix:
-                        continue
-                    # Ensure prefixes match before considering a pattern valid
-                    if typo[:-length] != word[:-length]:
-                        continue
-
-                    pattern_key = (typo_suffix, word_suffix, boundary)
-                    patterns[pattern_key].append((typo, word, boundary))
-
-    return patterns
+    return _find_patterns(corrections, BoundaryType.RIGHT, is_suffix=True)
 
 
 def find_prefix_patterns(
@@ -61,38 +91,7 @@ def find_prefix_patterns(
     Returns a dict mapping (typo_prefix, word_prefix, boundary) to list of
     (full_typo, full_word, original_boundary) tuples that match this pattern.
     """
-    patterns = defaultdict(list)
-    # Group corrections by word length to make prefix comparison more efficient
-    corrections_by_len = defaultdict(list)
-    for typo, word, boundary in corrections:
-        corrections_by_len[len(word)].append((typo, word, boundary))
-
-    for length_group in corrections_by_len.values():
-        for typo, word, boundary in length_group:
-            # Only extract prefix patterns from corrections
-            # that are already prefix patterns (LEFT boundary)
-            if boundary == BoundaryType.LEFT:
-                # Require at least 2 characters of suffix after the prefix
-                # This prevents extracting nonsensical patterns
-                min_suffix_length = 2
-                max_prefix_length = len(word) - min_suffix_length
-
-                for length in range(2, max_prefix_length + 1):
-                    if len(typo) < length:
-                        continue
-                    typo_prefix = typo[:length]
-                    word_prefix = word[:length]
-                    # Skip if typo and word prefixes are identical (useless pattern)
-                    if typo_prefix == word_prefix:
-                        continue
-                    # Ensure suffixes match before considering a pattern valid
-                    if typo[length:] != word[length:]:
-                        continue
-
-                    pattern_key = (typo_prefix, word_prefix, boundary)
-                    patterns[pattern_key].append((typo, word, boundary))
-
-    return patterns
+    return _find_patterns(corrections, BoundaryType.LEFT, is_suffix=False)
 
 
 def _validate_pattern_result(

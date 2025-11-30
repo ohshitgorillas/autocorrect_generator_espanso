@@ -113,19 +113,19 @@ class QMKBackend(PlatformBackend):
 
         return deduped, conflicts
 
-    def _detect_suffix_conflicts(
-        self, corrections: list[Correction]
+    def _detect_conflicts_generic(
+        self, corrections: list[Correction], conflict_check_fn
     ) -> tuple[list[Correction], list]:
         """
-        Detect RTL suffix conflicts across ALL typos.
+        Generic conflict detection for QMK constraints.
 
-        QMK scans right-to-left. If typing "wriet":
-        - Finds suffix "riet" first
-        - Produces "w" + "rite" = "write"
-        - So `riet -> rite` makes `wriet -> write` redundant
+        Args:
+            corrections: List of corrections to analyze
+            conflict_check_fn: Function that takes (typo1, word1, typo2, word2)
+                             and returns True if there's a conflict
 
-        This checks across all boundary types since QMK's RTL matching
-        doesn't respect boundaries during the matching phase.
+        Returns:
+            Tuple of (kept_corrections, conflicts)
         """
         # Sort all corrections by typo length (shortest first)
         sorted_corrections = sorted(corrections, key=lambda c: len(c[0]))
@@ -144,21 +144,40 @@ class QMKBackend(PlatformBackend):
                 if typo2 in removed_typos:
                     continue
 
-                # Check if typo1 ends with typo2 AND produces same correction
-                if typo1.endswith(typo2) and typo1 != typo2:
-                    remaining = typo1[: -len(typo2)]
-                    expected = remaining + word2
-
-                    if expected == word1:
-                        is_blocked = True
-                        conflicts.append((typo1, word1, typo2, word2, bound1))
-                        removed_typos.add(typo1)
-                        break
+                if conflict_check_fn(typo1, word1, typo2, word2):
+                    is_blocked = True
+                    conflicts.append((typo1, word1, typo2, word2, bound1))
+                    removed_typos.add(typo1)
+                    break
 
             if not is_blocked:
                 kept.append((typo1, word1, bound1))
 
         return kept, conflicts
+
+    def _detect_suffix_conflicts(
+        self, corrections: list[Correction]
+    ) -> tuple[list[Correction], list]:
+        """
+        Detect RTL suffix conflicts across ALL typos.
+
+        QMK scans right-to-left. If typing "wriet":
+        - Finds suffix "riet" first
+        - Produces "w" + "rite" = "write"
+        - So `riet -> rite` makes `wriet -> write` redundant
+
+        This checks across all boundary types since QMK's RTL matching
+        doesn't respect boundaries during the matching phase.
+        """
+        def check_suffix_conflict(typo1, word1, typo2, word2):
+            # Check if typo1 ends with typo2 AND produces same correction
+            if typo1.endswith(typo2) and typo1 != typo2:
+                remaining = typo1[: -len(typo2)]
+                expected = remaining + word2
+                return expected == word1
+            return False
+
+        return self._detect_conflicts_generic(corrections, check_suffix_conflict)
 
     def _detect_substring_conflicts(
         self, corrections: list[Correction]
@@ -177,34 +196,11 @@ class QMKBackend(PlatformBackend):
 
         We keep the shorter typo and remove the longer one.
         """
-        # Sort all corrections by typo length (shortest first)
-        sorted_corrections = sorted(corrections, key=lambda c: len(c[0]))
+        def check_substring_conflict(typo1, word1, typo2, word2):
+            # If typo2 is anywhere in typo1, QMK rejects it
+            return typo2 in typo1 and typo1 != typo2
 
-        kept = []
-        conflicts = []
-        removed_typos = set()
-
-        for i, (typo1, word1, bound1) in enumerate(sorted_corrections):
-            if typo1 in removed_typos:
-                continue
-
-            is_blocked = False
-            # Check if typo1 contains any shorter typo as a substring
-            for typo2, word2, _ in sorted_corrections[:i]:
-                if typo2 in removed_typos:
-                    continue
-
-                # If typo2 is anywhere in typo1, QMK rejects it
-                if typo2 in typo1 and typo1 != typo2:
-                    is_blocked = True
-                    conflicts.append((typo1, word1, typo2, word2, bound1))
-                    removed_typos.add(typo1)
-                    break
-
-            if not is_blocked:
-                kept.append((typo1, word1, bound1))
-
-        return kept, conflicts
+        return self._detect_conflicts_generic(corrections, check_substring_conflict)
 
     def filter_corrections(
         self, corrections: list[Correction], config: Config

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from re import Pattern
 
+from .boundaries import parse_boundary_markers
 from .config import BoundaryType, Correction
 from .pattern_matching import PatternMatcher
 from .utils import compile_wildcard_regex
@@ -32,17 +33,8 @@ class ExclusionMatcher:
             if "->" in pattern:
                 typo_pat, word_pat = (p.strip() for p in pattern.split("->", 1))
 
-                # Check for boundary specifiers
-                required_boundary = None
-                if typo_pat.startswith(":") and typo_pat.endswith(":"):
-                    required_boundary = BoundaryType.BOTH
-                    typo_pat = typo_pat[1:-1]
-                elif typo_pat.startswith(":"):
-                    required_boundary = BoundaryType.LEFT
-                    typo_pat = typo_pat[1:]
-                elif typo_pat.endswith(":"):
-                    required_boundary = BoundaryType.RIGHT
-                    typo_pat = typo_pat[:-1]
+                # Parse boundary markers
+                typo_pat, required_boundary = parse_boundary_markers(typo_pat)
 
                 if "*" in typo_pat:
                     regex = compile_wildcard_regex(typo_pat)

@@ -5,7 +5,7 @@ import time
 from loguru import logger
 
 from .config import Config
-from .reports import ReportData, generate_reports
+from .reports import ReportData, generate_reports, _format_time
 from .stages import (
     load_dictionaries,
     generate_typos,
@@ -199,10 +199,4 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     # Print total time
     elapsed_time = time.time() - start_time
     if verbose:
-        minutes, seconds = divmod(elapsed_time, 60)
-        if minutes > 0:
-            logger.info(
-                f"\n✓ Total processing time: {int(minutes)}m {seconds:.1f}s"
-            )
-        else:
-            logger.info(f"\n✓ Total processing time: {seconds:.1f}s")
+        logger.info(f"\n✓ Total processing time: {_format_time(elapsed_time)}")

@@ -1,9 +1,9 @@
 """Espanso platform-specific report generation."""
 
-from datetime import datetime
 from pathlib import Path
 
 from ..config import Correction
+from ..reports import write_report_header
 
 
 def generate_espanso_output_report(
@@ -31,10 +31,7 @@ def generate_espanso_output_report(
 
 def _write_header(f):
     """Write report header."""
-    f.write("=" * 80 + "\n")
-    f.write("ESPANSO OUTPUT SUMMARY\n")
-    f.write("=" * 80 + "\n")
-    f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+    write_report_header(f, "ESPANSO OUTPUT SUMMARY")
 
 
 def _write_overview(f, final_corrections: list[Correction], ram_estimate: dict):

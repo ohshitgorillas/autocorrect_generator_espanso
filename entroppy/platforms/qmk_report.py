@@ -1,9 +1,9 @@
 """QMK platform-specific report generation."""
 
-from datetime import datetime
 from pathlib import Path
 
 from ..config import BoundaryType, Correction
+from ..reports import write_report_header
 
 
 def generate_qmk_ranking_report(
@@ -48,10 +48,7 @@ def generate_qmk_ranking_report(
 
 def _write_header(f):
     """Write report header."""
-    f.write("=" * 80 + "\n")
-    f.write("QMK AUTOCORRECT RANKING REPORT\n")
-    f.write("=" * 80 + "\n")
-    f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+    write_report_header(f, "QMK AUTOCORRECT RANKING REPORT")
 
 
 def _write_overview_statistics(

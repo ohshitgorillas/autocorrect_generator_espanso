@@ -32,7 +32,10 @@ However, different platforms have different constraints. Keyboard firmware like 
 * **Platform-Specific Optimization**: Tailored output for each platform's constraints
 * **Comprehensive Reports**: Detailed analysis of decisions and optimizations
 
----
+## Documentation
+
+For a complete explanation of EntropPy's algorithms and logic, from dictionary loading to final selection, see **[Algorithms](ALGORITHMS.md)**. This document provides detailed explanations with examples of how each stage of the pipeline works.
+
 
 ## Setup Instructions
 

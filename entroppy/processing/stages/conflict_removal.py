@@ -5,9 +5,57 @@ import time
 from loguru import logger
 from tqdm import tqdm
 
-from ...core import BoundaryType
+from ...core import BoundaryType, Correction
 from ...resolution import remove_substring_conflicts
 from .data_models import PatternGeneralizationResult, ConflictRemovalResult
+
+
+def _find_blocking_typo(
+    typo: str,
+    word: str,
+    boundary: BoundaryType,
+    final_corrections: list[Correction],
+) -> tuple[str, str]:
+    """Find the typo and word that block a given correction.
+
+    Args:
+        typo: The typo that was blocked
+        word: The word it corrects to
+        boundary: The boundary type
+        final_corrections: List of corrections that were kept
+
+    Returns:
+        Tuple of (blocking_typo, blocking_word)
+    """
+    blocking_typo = "unknown"
+    blocking_word = "unknown"
+
+    for other_typo, other_word, other_boundary in final_corrections:
+        if other_boundary != boundary or typo == other_typo:
+            continue
+
+        # For RIGHT boundaries (suffixes), check if typo ends with shorter typo
+        # For other boundaries, check if typo starts with shorter typo
+        if boundary == BoundaryType.RIGHT:
+            if typo.endswith(other_typo):
+                # Validate: check if this actually would have caused the blocking
+                remaining_prefix = typo[: -len(other_typo)]
+                expected_result = remaining_prefix + other_word
+                if expected_result == word:
+                    blocking_typo = other_typo
+                    blocking_word = other_word
+                    break
+        else:
+            if typo.startswith(other_typo):
+                # Validate: check if this actually would have caused the blocking
+                remaining_suffix = typo[len(other_typo) :]
+                expected_result = other_word + remaining_suffix
+                if expected_result == word:
+                    blocking_typo = other_typo
+                    blocking_word = other_word
+                    break
+
+    return blocking_typo, blocking_word
 
 
 def remove_typo_conflicts(
@@ -63,31 +111,9 @@ def remove_typo_conflicts(
             )
 
         for typo, word, boundary in corrections_iter:
-            # Find what blocked it and what it corrects to
-            blocking_typo = "unknown"
-            blocking_word = "unknown"
-            for other_typo, other_word, other_boundary in final_corrections:
-                if other_boundary == boundary and typo != other_typo:
-                    # For RIGHT boundaries (suffixes), check if typo ends with shorter typo
-                    # For other boundaries, check if typo starts with shorter typo
-                    if boundary == BoundaryType.RIGHT:
-                        if typo.endswith(other_typo):
-                            # Validate: check if this actually would have caused the blocking
-                            remaining_prefix = typo[: -len(other_typo)]
-                            expected_result = remaining_prefix + other_word
-                            if expected_result == word:
-                                blocking_typo = other_typo
-                                blocking_word = other_word
-                                break
-                    else:
-                        if typo.startswith(other_typo):
-                            # Validate: check if this actually would have caused the blocking
-                            remaining_suffix = typo[len(other_typo) :]
-                            expected_result = other_word + remaining_suffix
-                            if expected_result == word:
-                                blocking_typo = other_typo
-                                blocking_word = other_word
-                                break
+            blocking_typo, blocking_word = _find_blocking_typo(
+                typo, word, boundary, final_corrections
+            )
             removed_corrections.append(
                 (typo, word, blocking_typo, blocking_word, boundary)
             )

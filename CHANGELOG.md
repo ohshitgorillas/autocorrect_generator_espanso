@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2025-11-30
+
+### Changed
+
+- **Major code refactoring to eliminate redundancy**
+  - Consolidated duplicate boundary checking functions in [`entroppy/boundaries.py`](entroppy/boundaries.py)
+    - Unified three nearly identical functions (`is_substring_of_any`, `would_trigger_at_start`, `would_trigger_at_end`) into single parameterized `_check_typo_in_wordset()` function
+    - Added `parse_boundary_markers()` utility to parse `:pattern:` boundary syntax, eliminating duplicate parsing logic across modules
+  - Unified pattern finding in [`entroppy/patterns.py`](entroppy/patterns.py)
+    - Consolidated `find_prefix_patterns()` and `find_suffix_patterns()` into single `_find_patterns()` function with direction parameter
+    - Reduced ~40 lines of duplicate pattern extraction logic
+  - Streamlined QMK conflict detection in [`entroppy/platforms/qmk.py`](entroppy/platforms/qmk.py)
+    - Created generic `_detect_conflicts_generic()` method with pluggable conflict checker functions
+    - Eliminated ~70 lines of duplicate iteration logic between suffix and substring conflict detection
+  - Created shared report utilities in [`entroppy/reports.py`](entroppy/reports.py)
+    - New `write_report_header()` function for consistent report headers across platforms
+    - Consolidated time formatting - [`pipeline.py`](entroppy/pipeline.py) now reuses `_format_time()` instead of duplicating logic
+    - Updated [`qmk_report.py`](entroppy/platforms/qmk_report.py) and [`espanso_report.py`](entroppy/platforms/espanso_report.py) to use shared utilities
+  - Updated [`entroppy/exclusions.py`](entroppy/exclusions.py) to use shared `parse_boundary_markers()` function
+  - **Net impact**: ~200 lines of duplicate code eliminated
+  - Improved maintainability with single source of truth for each operation
+  - Better testability through smaller, focused utility functions
+
 ## [0.4.0] - 2025-11-30
 
 ### Added

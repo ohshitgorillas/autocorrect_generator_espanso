@@ -149,6 +149,214 @@ def get_detector_for_boundary(boundary: BoundaryType) -> ConflictDetector:
     return PrefixConflictDetector()
 
 
+def _log_blocked_correction(
+    long_correction: Correction,
+    typo: str,
+    candidate: str,
+    short_word: str,
+    long_word: str,
+    detector: ConflictDetector,
+    debug_words: set[str],
+    debug_typo_matcher: "DebugTypoMatcher | None",
+) -> None:
+    """Log that a correction was blocked by a shorter correction.
+
+    Args:
+        long_correction: The correction that was blocked
+        typo: The typo string for the long correction
+        candidate: The candidate typo that blocked it
+        short_word: The correct word for the candidate typo
+        long_word: The correct word for the long typo
+        detector: Conflict detector for calculating expected result
+        debug_words: Set of words to debug
+        debug_typo_matcher: Matcher for debug typos
+    """
+    if is_debug_correction(long_correction, debug_words, debug_typo_matcher):
+        expected_result = detector.calculate_result(typo, candidate, short_word)
+        log_debug_correction(
+            long_correction,
+            f"REMOVED - blocked by shorter correction '{candidate} → {short_word}' "
+            f"(typing '{typo}' triggers '{candidate}' producing '{expected_result}' = '{long_word}' ✓)",
+            debug_words,
+            debug_typo_matcher,
+            "Stage 5",
+        )
+
+
+def _check_if_typo_is_blocked(
+    typo: str,
+    candidate: str,
+    typo_to_correction: dict[str, Correction],
+    detector: ConflictDetector,
+    debug_words: set[str],
+    debug_typo_matcher: "DebugTypoMatcher | None",
+) -> bool:
+    """Check if a typo is blocked by a candidate typo.
+
+    Args:
+        typo: The typo to check
+        candidate: The candidate typo that might block it
+        typo_to_correction: Map from typo to full correction
+        detector: Conflict detector for this boundary type
+        debug_words: Set of words to debug
+        debug_typo_matcher: Matcher for debug typos
+
+    Returns:
+        True if the typo is blocked, False otherwise
+    """
+    # Quick substring check first
+    if not detector.contains_substring(typo, candidate):
+        return False
+
+    # Validate with full conflict detection
+    long_correction = typo_to_correction[typo]
+    short_correction = typo_to_correction[candidate]
+
+    long_word = long_correction[1]
+    short_word = short_correction[1]
+
+    if not detector.check_conflict(typo, candidate, long_word, short_word):
+        return False
+
+    # Debug logging for blocked corrections
+    _log_blocked_correction(
+        long_correction,
+        typo,
+        candidate,
+        short_word,
+        long_word,
+        detector,
+        debug_words,
+        debug_typo_matcher,
+    )
+
+    return True
+
+
+def _log_kept_correction(
+    correction: Correction,
+    boundary: BoundaryType,
+    debug_words: set[str],
+    debug_typo_matcher: "DebugTypoMatcher | None",
+) -> None:
+    """Log that a correction was kept (not blocked).
+
+    Args:
+        correction: The correction that was kept
+        boundary: The boundary type
+        debug_words: Set of words to debug
+        debug_typo_matcher: Matcher for debug typos
+    """
+    if is_debug_correction(correction, debug_words, debug_typo_matcher):
+        log_debug_correction(
+            correction,
+            f"Kept - no blocking substring conflicts found (boundary: {boundary.value})",
+            debug_words,
+            debug_typo_matcher,
+            "Stage 5",
+        )
+
+
+def _process_typo_for_conflicts(
+    typo: str,
+    index_key: str,
+    candidates_by_char: defaultdict[str, list[str]],
+    typo_to_correction: dict[str, Correction],
+    detector: ConflictDetector,
+    typos_to_remove: set[str],
+    boundary: BoundaryType,
+    debug_words: set[str],
+    debug_typo_matcher: "DebugTypoMatcher | None",
+) -> bool:
+    """Process a single typo to check for conflicts and update the index.
+
+    Args:
+        typo: The typo to process
+        index_key: The character key for indexing this typo
+        candidates_by_char: Index mapping characters to candidate typos
+        typo_to_correction: Map from typo to full correction
+        detector: Conflict detector for this boundary type
+        typos_to_remove: Set of typos that should be removed
+        boundary: The boundary type
+        debug_words: Set of words to debug
+        debug_typo_matcher: Matcher for debug typos
+
+    Returns:
+        True if the typo was blocked, False otherwise
+    """
+    # Check against candidates that share the same index character
+    if index_key in candidates_by_char:
+        for candidate in candidates_by_char[index_key]:
+            if _check_if_typo_is_blocked(
+                typo,
+                candidate,
+                typo_to_correction,
+                detector,
+                debug_words,
+                debug_typo_matcher,
+            ):
+                typos_to_remove.add(typo)
+                return True
+
+    # If not blocked, add to index for future comparisons
+    candidates_by_char[index_key].append(typo)
+    correction = typo_to_correction[typo]
+    _log_kept_correction(correction, boundary, debug_words, debug_typo_matcher)
+    return False
+
+
+def _build_typo_index(
+    corrections: list[Correction],
+    detector: ConflictDetector,
+    boundary: BoundaryType,
+    debug_words: set[str],
+    debug_typo_matcher: "DebugTypoMatcher | None",
+) -> set[str]:
+    """Build character-based index and identify blocked typos.
+
+    Args:
+        corrections: List of corrections with the same boundary type
+        detector: Conflict detector for this boundary type
+        boundary: The boundary type for this group
+        debug_words: Set of words to debug
+        debug_typo_matcher: Matcher for debug typos
+
+    Returns:
+        Set of typos to remove
+    """
+    # Build lookup map from typo to full correction
+    typo_to_correction = {c[0]: c for c in corrections}
+
+    # Sort typos by length for efficient checking (shorter first)
+    sorted_typos = sorted(typo_to_correction.keys(), key=len)
+
+    # Track which typos are blocked
+    typos_to_remove = set()
+
+    # Build character-based index for efficient lookup
+    # Maps character → list of typos with that character at the relevant position
+    candidates_by_char = defaultdict(list)
+
+    for typo in sorted_typos:
+        if not typo:
+            continue
+
+        index_key = detector.get_index_key(typo)
+        _process_typo_for_conflicts(
+            typo,
+            index_key,
+            candidates_by_char,
+            typo_to_correction,
+            detector,
+            typos_to_remove,
+            boundary,
+            debug_words,
+            debug_typo_matcher,
+        )
+
+    return typos_to_remove
+
+
 def resolve_conflicts_for_group(
     corrections: list[Correction],
     boundary: BoundaryType,
@@ -179,71 +387,10 @@ def resolve_conflicts_for_group(
     # Get the appropriate detector for this boundary type
     detector = get_detector_for_boundary(boundary)
 
-    # Build lookup map from typo to full correction
-    typo_to_correction = {c[0]: c for c in corrections}
-
-    # Sort typos by length for efficient checking (shorter first)
-    sorted_typos = sorted(typo_to_correction.keys(), key=len)
-
-    # Track which typos are blocked
-    typos_to_remove = set()
-
-    # Build character-based index for efficient lookup
-    # Maps character → list of typos with that character at the relevant position
-    candidates_by_char = defaultdict(list)
-
-    for typo in sorted_typos:
-        is_blocked = False
-
-        # Check against candidates that share the same index character
-        if typo:
-            index_key = detector.get_index_key(typo)
-            if index_key in candidates_by_char:
-                for candidate in candidates_by_char[index_key]:
-                    # Quick substring check first
-                    if detector.contains_substring(typo, candidate):
-                        # Validate with full conflict detection
-                        long_correction = typo_to_correction[typo]
-                        short_correction = typo_to_correction[candidate]
-
-                        long_word = long_correction[1]
-                        short_word = short_correction[1]
-
-                        if detector.check_conflict(
-                            typo, candidate, long_word, short_word
-                        ):
-                            typos_to_remove.add(typo)
-                            is_blocked = True
-
-                            # Debug logging for blocked corrections
-                            if is_debug_correction(long_correction, debug_words, debug_typo_matcher):
-                                # Calculate what would be produced
-                                expected_result = detector.calculate_result(typo, candidate, short_word)
-                                log_debug_correction(
-                                    long_correction,
-                                    f"REMOVED - blocked by shorter correction '{candidate} → {short_word}' "
-                                    f"(typing '{typo}' triggers '{candidate}' producing '{expected_result}' = '{long_word}' ✓)",
-                                    debug_words,
-                                    debug_typo_matcher,
-                                    "Stage 5"
-                                )
-                            break
-
-        # If not blocked, add to index for future comparisons
-        if not is_blocked and typo:
-            index_key = detector.get_index_key(typo)
-            candidates_by_char[index_key].append(typo)
-
-            # Debug logging for kept corrections
-            correction = typo_to_correction[typo]
-            if is_debug_correction(correction, debug_words, debug_typo_matcher):
-                log_debug_correction(
-                    correction,
-                    f"Kept - no blocking substring conflicts found (boundary: {boundary.value})",
-                    debug_words,
-                    debug_typo_matcher,
-                    "Stage 5"
-                )
+    # Build index and identify blocked typos
+    typos_to_remove = _build_typo_index(
+        corrections, detector, boundary, debug_words, debug_typo_matcher
+    )
 
     # Return corrections that weren't removed
     return [c for c in corrections if c[0] not in typos_to_remove]

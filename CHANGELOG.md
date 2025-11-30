@@ -22,6 +22,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     - Eliminated redundant `from datetime import datetime` inside `write_report_header()` function
   - **Impact**: Improved code maintainability with shared utilities in appropriate locations
 
+- **Major file structure refactoring for better separation of concerns**
+  - **Split `collision.py` (623 → 388 lines)** into focused modules:
+    - `entroppy/resolution/word_processing.py` (173 lines): Word processing and typo generation logic
+    - `entroppy/resolution/boundary_utils.py` (83 lines): Boundary selection and override utilities
+    - Main `collision.py` now focuses solely on collision resolution orchestration
+  - **Split `patterns.py` (463 → 160 lines)** into specialized modules:
+    - `entroppy/core/pattern_extraction.py` (113 lines): Pattern finding and extraction logic
+    - `entroppy/core/pattern_validation.py` (212 lines): Pattern validation and conflict checking
+    - Main `patterns.py` now focuses on pattern generalization orchestration
+  - **Refactored `conflicts.py`** for better modularity:
+    - Extracted `_process_typo_for_conflicts()` and `_build_typo_index()` helper functions
+    - Extracted `_log_blocked_correction()` for cleaner separation of logging concerns
+    - Main `resolve_conflicts_for_group()` function reduced from 72 to ~20 lines
+  - All `__init__.py` files updated to maintain backward-compatible public API
+  - **Benefits**:
+    - Improved code maintainability with single-responsibility modules
+    - Easier testing and debugging of individual components
+    - Better scalability for future feature additions
+    - No functional changes - all behavior preserved
+
 ## [0.4.2] - 2025-12-01
 
 ### Changed

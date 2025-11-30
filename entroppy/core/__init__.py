@@ -8,7 +8,8 @@ from entroppy.core.boundaries import (
     would_trigger_at_end,
     parse_boundary_markers,
 )
-from .config import Config, Correction, load_config
+from .config import Config, load_config
+from .types import Correction
 from .patterns import generalize_patterns
 from .typos import generate_all_typos
 

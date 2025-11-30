@@ -9,7 +9,7 @@ from entroppy.utils.helpers import compile_wildcard_regex
 
 # Import at module level - these are safe because they don't import from utils
 from entroppy.core.boundaries import BoundaryType
-from entroppy.core.config import Correction
+from entroppy.core.types import Correction
 
 
 @dataclass(frozen=True)

@@ -97,19 +97,23 @@ def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Conf
             with open(json_path, "r", encoding="utf-8") as f:
                 json_config = json.load(f)
         except FileNotFoundError:
-            logger.error(f"Config file not found: {json_path}")
+            logger.error(f"✗ Config file not found: {json_path}")
+            logger.error("  Please check the file path and try again")
             raise
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in config file {json_path}: {e}")
+            logger.error(f"✗ Invalid JSON in config file {json_path}: {e}")
+            logger.error("  Please validate your JSON syntax")
             raise ValueError(f"Invalid JSON configuration: {e}") from e
         except PermissionError:
-            logger.error(f"Permission denied reading config file: {json_path}")
+            logger.error(f"✗ Permission denied reading config file: {json_path}")
+            logger.error("  Please check file permissions and try again")
             raise
         except UnicodeDecodeError as e:
-            logger.error(f"Encoding error reading config file {json_path}: {e}")
+            logger.error(f"✗ Encoding error reading config file {json_path}: {e}")
+            logger.error("  Please ensure the file is UTF-8 encoded")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error reading config file {json_path}: {e}")
+            logger.error(f"✗ Unexpected error reading config file {json_path}: {e}")
             raise
 
     # Build config dict with CLI args taking precedence over JSON
@@ -140,7 +144,8 @@ def load_config(json_path: str | None, cli_args, parser: ArgumentParser) -> Conf
     try:
         return Config.model_validate(config_dict)
     except ValidationError as e:
-        logger.error(f"Configuration validation failed: {e}")
+        logger.error(f"✗ Configuration validation failed: {e}")
+        logger.error("  Please check your configuration values")
         raise ValueError(f"Invalid configuration: {e}") from e
 
 

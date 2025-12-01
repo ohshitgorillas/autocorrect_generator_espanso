@@ -1,12 +1,10 @@
 """Word processing and typo generation."""
 
-from typing import TYPE_CHECKING
-
-from wordfreq import word_frequency
-
 from entroppy.core import BoundaryType, Correction, determine_boundaries, generate_all_typos
+from entroppy.core.boundaries import BoundaryIndex
 from entroppy.matching import PatternMatcher
 from entroppy.utils.debug import DebugTypoMatcher, is_debug_word, is_debug_typo
+from entroppy.utils.helpers import cached_word_frequency
 
 
 def _add_debug_message(
@@ -43,6 +41,8 @@ def process_word(
     typo_freq_threshold: float,
     adj_letters_map: dict[str, str] | None,
     exclusions: set[str],
+    validation_index: BoundaryIndex,
+    source_index: BoundaryIndex,
     debug_words: frozenset[str] = frozenset(),
     debug_typo_matcher: "DebugTypoMatcher | None" = None,
 ) -> tuple[list[Correction], list[str]]:
@@ -118,7 +118,7 @@ def process_word(
         is_explicitly_excluded = exclusion_matcher.matches(typo)
 
         if not is_explicitly_excluded and typo_freq_threshold > 0.0:
-            typo_freq = word_frequency(typo, "en")
+            typo_freq = cached_word_frequency(typo, "en")
             if typo_freq >= typo_freq_threshold:
                 freq_msg = f"frequency {typo_freq:.2e} >= threshold {typo_freq_threshold:.2e}"
                 _add_debug_message(
@@ -134,7 +134,9 @@ def process_word(
 
         # Use filtered validation set for boundary detection
         # This allows excluded patterns to not block valid typos
-        boundary_type = determine_boundaries(typo, filtered_validation_set, source_words)
+        boundary_type = determine_boundaries(
+            typo, filtered_validation_set, source_words, validation_index, source_index
+        )
 
         if boundary_type is not None:
             # Now that we have the boundary, check if this typo matches any debug patterns

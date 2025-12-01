@@ -19,12 +19,8 @@ def generate_summary_report(data: ReportData, report_dir: Path) -> None:
         f.write("PROCESSING STATISTICS\n")
         f.write("-" * 70 + "\n")
         f.write(f"Words processed:                    {data.words_processed:,}\n")
-        f.write(
-            f"Corrections generated:              {data.corrections_before_generalization:,}\n"
-        )
-        f.write(
-            f"After pattern generalization:       {data.corrections_after_generalization:,}\n"
-        )
+        f.write(f"Corrections generated:              {data.corrections_before_generalization:,}\n")
+        f.write(f"After pattern generalization:       {data.corrections_after_generalization:,}\n")
         f.write(f"After conflict removal:             {data.corrections_after_conflicts:,}\n")
         f.write(f"Final corrections:                  {data.total_corrections:,}\n\n")
 

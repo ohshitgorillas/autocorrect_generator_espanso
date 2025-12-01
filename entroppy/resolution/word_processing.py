@@ -2,8 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from entroppy.core import BoundaryType, Correction, determine_boundaries, generate_all_typos
-from entroppy.core.boundaries import BoundaryIndex
+from entroppy.core import BoundaryType, generate_all_typos
 from entroppy.matching import PatternMatcher
 from entroppy.utils.debug import is_debug_word, is_debug_typo
 from entroppy.utils.helpers import cached_word_frequency
@@ -41,23 +40,18 @@ def _add_debug_message(
 def process_word(
     word: str,
     validation_set: set[str],
-    filtered_validation_set: set[str],
     source_words: set[str],
     typo_freq_threshold: float,
     adj_letters_map: dict[str, str] | None,
     exclusions: set[str],
-    validation_index: BoundaryIndex,
-    source_index: BoundaryIndex,
     debug_words: frozenset[str] = frozenset(),
     debug_typo_matcher: "DebugTypoMatcher | None" = None,
-) -> tuple[list[Correction], list[str]]:
-    """Process a single word and generate all valid corrections.
+) -> tuple[list[tuple[str, str]], list[str]]:
+    """Process a single word and generate all valid typos.
 
     Args:
         word: The word to generate typos for
         validation_set: Full validation dictionary (for checking if typo is a real word)
-        filtered_validation_set: Filtered validation set
-            (for boundary detection, excludes exclusion patterns)
         source_words: Set of source words
         typo_freq_threshold: Frequency threshold for typos
         adj_letters_map: Adjacent letters map for insertions/replacements
@@ -66,7 +60,8 @@ def process_word(
         debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
 
     Returns:
-        Tuple of (corrections list, debug messages list)
+        Tuple of (list of (typo, word) pairs, debug messages list)
+        Note: Boundaries are determined later in Stage 3 (collision resolution)
     """
     corrections = []
     debug_messages = []
@@ -137,40 +132,27 @@ def process_word(
                 )
                 continue
 
-        # Use filtered validation set for boundary detection
-        # This allows excluded patterns to not block valid typos
-        boundary_type = determine_boundaries(
-            typo, filtered_validation_set, source_words, validation_index, source_index
-        )
+        # Note: Boundaries are determined in Stage 3 (collision resolution) where
+        # they can be properly evaluated in context of all competing words and typos.
+        # For debug logging, we use NONE as a placeholder since boundary isn't determined yet.
+        placeholder_boundary = BoundaryType.NONE
 
-        if boundary_type is not None:
-            # Now that we have the boundary, check if this typo matches any debug patterns
-            if debug_typo_matcher:
-                matched_patterns = debug_typo_matcher.get_matching_patterns(typo, boundary_type)
-                if matched_patterns:
-                    patterns_str = ", ".join(matched_patterns)
-                    debug_messages.append(
-                        f"[DEBUG TYPO: '{typo}' (matched: {patterns_str})] "
-                        f"[Stage 2] Generated from word: {word} (boundary: {boundary_type.value})"
-                    )
-
-            if is_debug:
+        # Check if this typo matches any debug patterns
+        if debug_typo_matcher:
+            matched_patterns = debug_typo_matcher.get_matching_patterns(typo, placeholder_boundary)
+            if matched_patterns:
+                patterns_str = ", ".join(matched_patterns)
                 debug_messages.append(
-                    f"[DEBUG WORD: '{word}'] [Stage 2] Created correction: "
-                    f"{typo} → {word} (boundary: {boundary_type.value})"
+                    f"[DEBUG TYPO: '{typo}' (matched: {patterns_str})] "
+                    f"[Stage 2] Generated from word: {word}"
                 )
 
-            corrections.append((typo, word, boundary_type))
-        else:
-            # Boundary detection failed
-            _add_debug_message(
-                debug_messages,
-                is_debug,
-                typo_debug_check,
-                word,
-                typo,
-                f"Typo '{typo}' filtered - boundary detection failed",
-                "Filtered - boundary detection failed",
+        if is_debug:
+            debug_messages.append(
+                f"[DEBUG WORD: '{word}'] [Stage 2] Generated typo: {typo} → {word}"
             )
+
+        # Store only (typo, word) - boundary will be determined in Stage 3
+        corrections.append((typo, word))
 
     return corrections, debug_messages

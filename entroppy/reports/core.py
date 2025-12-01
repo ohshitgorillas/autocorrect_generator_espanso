@@ -39,7 +39,7 @@ def generate_reports(
     report_dir.mkdir(parents=True, exist_ok=True)
 
     if verbose:
-        logger.info(f"\nGenerating reports in {report_dir}/")
+        logger.info(f"  Generating reports in: {report_dir}/")
 
     # Generate all report files
     generate_summary_report(data, report_dir)
@@ -51,6 +51,6 @@ def generate_reports(
     generate_statistics_csv(data, report_dir)
 
     if verbose:
-        logger.info("✓ Reports generated successfully")
+        logger.info(f"  Generated 7 report files")
 
     return report_dir

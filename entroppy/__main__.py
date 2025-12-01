@@ -83,7 +83,7 @@ def main():
         logger.warning("")
         logger.warning("⚠️  Processing interrupted by user")
         raise
-    except Exception as e:
+    except Exception:
         if config.verbose:
             logger.error("")
             logger.error("=" * 60)

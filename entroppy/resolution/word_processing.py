@@ -1,10 +1,15 @@
 """Word processing and typo generation."""
 
+from typing import TYPE_CHECKING
+
 from entroppy.core import BoundaryType, Correction, determine_boundaries, generate_all_typos
 from entroppy.core.boundaries import BoundaryIndex
 from entroppy.matching import PatternMatcher
-from entroppy.utils.debug import DebugTypoMatcher, is_debug_word, is_debug_typo
+from entroppy.utils.debug import is_debug_word, is_debug_typo
 from entroppy.utils.helpers import cached_word_frequency
+
+if TYPE_CHECKING:
+    from entroppy.utils.debug import DebugTypoMatcher
 
 
 def _add_debug_message(

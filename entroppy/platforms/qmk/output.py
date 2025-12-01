@@ -1,7 +1,6 @@
 """QMK output generation logic."""
 
 import os
-import sys
 
 from loguru import logger
 

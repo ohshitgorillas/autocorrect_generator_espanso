@@ -55,6 +55,7 @@ def _collect_boundary_details(
         source_words,
         validation_index,
         source_index,
+        target_word=word,
         return_details=True,
     )
     return {

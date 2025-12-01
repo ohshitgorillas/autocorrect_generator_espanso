@@ -21,6 +21,34 @@ if TYPE_CHECKING:
     from entroppy.core.types import Correction
 
 
+def _check_typo_in_target_word(
+    typo: str,
+    target_word: str | None,
+) -> tuple[bool, bool, bool]:
+    """Check if typo appears as prefix, suffix, or substring in target word.
+
+    Args:
+        typo: The typo string to check
+        target_word: The target word to check against (None if not available)
+
+    Returns:
+        Tuple of (is_prefix, is_suffix, is_substring)
+    """
+    if target_word is None:
+        return False, False, False
+
+    # Check if typo is a prefix (excluding exact match)
+    is_prefix = target_word.startswith(typo) and typo != target_word
+
+    # Check if typo is a suffix (excluding exact match)
+    is_suffix = target_word.endswith(typo) and typo != target_word
+
+    # Check if typo is a substring (excluding exact match and prefix/suffix cases)
+    is_substring = typo in target_word and typo != target_word and not is_prefix and not is_suffix
+
+    return is_prefix, is_suffix, is_substring
+
+
 def _would_cause_false_trigger(
     typo: str,
     boundary: BoundaryType,
@@ -28,6 +56,7 @@ def _would_cause_false_trigger(
     source_words: set[str],
     validation_index: BoundaryIndex,
     source_index: BoundaryIndex,
+    target_word: str | None = None,
     return_details: bool = False,
 ) -> bool | tuple[bool, dict[str, bool]]:
     """Check if a boundary would cause false triggers (garbage corrections).
@@ -42,6 +71,7 @@ def _would_cause_false_trigger(
         source_words: Set of source words to check against
         validation_index: Boundary index for validation set
         source_index: Boundary index for source words
+        target_word: Optional target word to check against (highest priority check)
         return_details: If True, return tuple of (bool, details_dict) instead of just bool
 
     Returns:
@@ -49,6 +79,12 @@ def _would_cause_false_trigger(
         If return_details is True: Tuple of (would_cause_false_trigger, details_dict) where
             details_dict contains breakdown of checks performed
     """
+    # FIRST: Check target word (highest priority - most critical check)
+    # This prevents predictive corrections where typo is prefix/suffix/substring of target
+    would_trigger_start_target, would_trigger_end_target, is_substring_target = (
+        _check_typo_in_target_word(typo, target_word)
+    )
+
     # Check validation and source words
     would_trigger_start_val = would_trigger_at_start(typo, validation_index)
     would_trigger_end_val = would_trigger_at_end(typo, validation_index)
@@ -58,10 +94,14 @@ def _would_cause_false_trigger(
     would_trigger_end_src = would_trigger_at_end(typo, source_index)
     is_substring_src = is_substring_of_any(typo, source_index)
 
-    # Combine checks for validation and source words
-    would_trigger_start = would_trigger_start_val or would_trigger_start_src
-    would_trigger_end = would_trigger_end_val or would_trigger_end_src
-    is_substring = is_substring_val or is_substring_src
+    # Combine checks: target word check takes precedence
+    would_trigger_start = (
+        would_trigger_start_target or would_trigger_start_val or would_trigger_start_src
+    )
+    would_trigger_end = (
+        would_trigger_end_target or would_trigger_end_val or would_trigger_end_src
+    )
+    is_substring = is_substring_target or is_substring_val or is_substring_src
 
     # Determine if boundary would cause false triggers
     # Logic: A boundary causes false triggers if it would allow the typo to match
@@ -106,6 +146,9 @@ def _would_cause_false_trigger(
             "would_trigger_start": would_trigger_start,
             "would_trigger_end": would_trigger_end,
             "is_substring": is_substring,
+            "would_trigger_start_target": would_trigger_start_target,
+            "would_trigger_end_target": would_trigger_end_target,
+            "is_substring_target": is_substring_target,
             "would_trigger_start_val": would_trigger_start_val,
             "would_trigger_end_val": would_trigger_end_val,
             "is_substring_val": is_substring_val,
@@ -190,6 +233,7 @@ def choose_boundary_for_typo(
             source_words,
             validation_index,
             source_index,
+            target_word=word,
             return_details=True,
         )
         if not would_cause:

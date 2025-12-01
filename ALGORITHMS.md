@@ -133,17 +133,22 @@ For each typo, EntropPy selects the **least restrictive boundary** that doesn't 
    - **RIGHT** (matches at word end only)
    - **BOTH** (matches as standalone word only)
 
-2. **For each boundary**, check if it would cause false triggers:
-   - **NONE**: Would cause false trigger if typo appears as substring anywhere
-   - **LEFT**: Would cause false trigger if typo appears as prefix of any word
-   - **RIGHT**: Would cause false trigger if typo appears as suffix of any word
+2. **For each boundary**, check if it would cause false triggers (in priority order):
+   - **Target word check (highest priority)**: Check if typo appears as prefix/suffix/substring of the target word itself
+     - This prevents "predictive corrections" where the correction would trigger when typing the correct word
+     - Example: `alway -> always` with NONE/LEFT boundary would trigger when typing "always", producing "alwayss"
+   - **Validation words check**: Check if typo appears as prefix/suffix/substring in validation dictionary
+   - **Source words check**: Check if typo appears as prefix/suffix/substring in source words
+   - **NONE**: Would cause false trigger if typo appears as substring anywhere (target, validation, or source)
+   - **LEFT**: Would cause false trigger if typo appears as prefix of any word (target, validation, or source)
+   - **RIGHT**: Would cause false trigger if typo appears as suffix of any word (target, validation, or source)
    - **BOTH**: Never causes false triggers (always safe)
 
 3. **Select the first boundary** that doesn't cause false triggers
 
 4. **Fallback**: If all boundaries would cause false triggers, use **BOTH** (most restrictive, safest option)
 
-**Key Principle**: Select the least restrictive boundary that safely prevents the typo from incorrectly matching validation or source words in unintended contexts.
+**Key Principle**: Select the least restrictive boundary that safely prevents the typo from incorrectly matching the target word, validation words, or source words in unintended contexts. Target word check takes highest priority to prevent predictive corrections.
 
 ---
 
@@ -173,8 +178,9 @@ Not all patterns are valid. Each pattern must:
 2. **Meet minimum length** - Pattern must be at least `min_typo_length` characters
 3. **Work for all occurrences** - The pattern must correctly transform all matching typos (validates that applying the pattern to each full typo produces the expected full word)
 4. **Not conflict with validation words** - Pattern typo must not be a validation word, and must not trigger at the end of validation words
-5. **Not corrupt source words** - Pattern must not incorrectly transform any source word
-6. **Not conflict with existing corrections** - Pattern's (typo, word) pair shouldn't already exist as a direct correction (checked during cross-boundary deduplication)
+5. **Not corrupt target words (highest priority)** - Pattern must not incorrectly transform any target word from corrections that use the pattern (prevents predictive corrections)
+6. **Not corrupt source words** - Pattern must not incorrectly transform any source word
+7. **Not conflict with existing corrections** - Pattern's (typo, word) pair shouldn't already exist as a direct correction (checked during cross-boundary deduplication)
 
 ### Pattern Collision Resolution
 

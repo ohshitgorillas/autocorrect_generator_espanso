@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.5.3] - 2025-12-01
+
+### Fixed
+
+- **Critical security fix: Prevented predictive corrections**
+  - **Boundary selection now checks target words**: Added target word validation to boundary selection logic to prevent corrections that would trigger when typing the correct word
+    - Example: Previously, `alway -> always` with NONE/LEFT boundary could trigger when typing "always" correctly, producing "alwayss"
+    - Now checks if typo is a prefix/suffix/substring of the target word before checking validation/source words
+    - Target word check has highest priority (performed first) to prevent predictive corrections
+    - Modified `_would_cause_false_trigger()` in `entroppy/resolution/boundary_selection.py` to accept and validate against target word
+    - Updated all call sites to pass target word parameter
+  - **Pattern validation now checks target words**: Enhanced pattern validation to prevent patterns from corrupting target words of corrections
+    - Previously only checked if patterns would corrupt source words
+    - Now also checks if pattern would corrupt target words from corrections that use the pattern
+    - Target word check performed first (highest priority) before source word checks
+    - Modified `check_pattern_conflicts()` in `entroppy/core/pattern_validation.py` to accept and validate against target words
+    - Updated pattern generalization to extract and pass target words for validation
+  - **Impact**: Eliminates critical vulnerability where corrections could incorrectly trigger when typing correct words, making the autocorrect system unusable
+
 ### Changed
 
 - **Code cleanup and simplification**

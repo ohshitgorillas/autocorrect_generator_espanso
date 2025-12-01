@@ -274,8 +274,9 @@ def check_pattern_conflicts(
     match_direction: MatchDirection,
     validation_index: BoundaryIndex,
     source_word_index: "SourceWordIndex | None" = None,
+    target_words: set[str] | None = None,
 ) -> tuple[bool, str | None]:
-    """Check if a pattern conflicts with validation words or would corrupt source words.
+    """Check if a pattern conflicts with validation words or would corrupt source/target words.
 
     Args:
         typo_pattern: The typo pattern to check
@@ -284,6 +285,7 @@ def check_pattern_conflicts(
         match_direction: The match direction
         validation_index: Pre-built index for validation_set (must match validation_set)
         source_word_index: Optional pre-built index for source_words (for optimization)
+        target_words: Optional set of target words to check against (prevents predictive corrections)
 
     Returns:
         Tuple of (is_safe, error_message). error_message is None if safe.
@@ -295,6 +297,16 @@ def check_pattern_conflicts(
     # Check if pattern would trigger at end of validation words
     if would_trigger_at_end(typo_pattern, validation_index):
         return False, "Would trigger at end of validation words"
+
+    # FIRST: Check if pattern would corrupt target words (highest priority - prevents predictive corrections)
+    # This prevents corrections that would trigger when typing the target word correctly
+    if target_words:
+        would_corrupt_target = any(
+            _cached_would_corrupt(typo_pattern, target_word, match_direction)
+            for target_word in target_words
+        )
+        if would_corrupt_target:
+            return False, "Would corrupt target words"
 
     # Check if pattern would corrupt source words
     if source_word_index is not None:

@@ -123,7 +123,10 @@ def generalize_patterns(
             )
             continue
 
-        # Check for conflicts with validation words or source words
+        # Extract target words from occurrences (prevents predictive corrections)
+        target_words = {word for _, word, _ in occurrences}
+
+        # Check for conflicts with validation words or source/target words
         is_safe, conflict_error = check_pattern_conflicts(
             typo_pattern,
             validation_set,
@@ -131,6 +134,7 @@ def generalize_patterns(
             match_direction,
             validation_index,
             source_word_index,
+            target_words=target_words,
         )
         if not is_safe:
             rejected_patterns.append((typo_pattern, word_pattern, conflict_error))

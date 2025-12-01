@@ -1,10 +1,12 @@
 """Substring conflicts report generation."""
 
 from pathlib import Path
+from typing import TextIO
 
 from entroppy.core import BoundaryType, format_boundary_display
 from entroppy.reports.data import ReportData
 from entroppy.reports.helpers import write_report_header
+from entroppy.utils.helpers import write_file_safely
 
 
 def generate_conflicts_report(data: ReportData, report_dir: Path) -> None:
@@ -37,7 +39,7 @@ def generate_conflicts_report(data: ReportData, report_dir: Path) -> None:
         filename = boundary_file_map.get(boundary, f"conflicts_{boundary.value}.txt")
         filepath = report_dir / filename
 
-        with open(filepath, "w", encoding="utf-8") as f:
+        def write_content(f: TextIO, boundary=boundary, conflicts=conflicts) -> None:
             write_report_header(
                 f, f"SUBSTRING CONFLICTS - {format_boundary_display(boundary).upper()}"
             )
@@ -63,3 +65,5 @@ def generate_conflicts_report(data: ReportData, report_dir: Path) -> None:
                     f.write(f"  {long_typo} ← {short_typo} → {short_word}\n")
 
                 f.write("\n")
+
+        write_file_safely(filepath, write_content, f"writing conflicts report ({boundary.value})")

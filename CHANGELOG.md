@@ -19,8 +19,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     - `entroppy/core/boundaries.py`: Removed unused `validation_set` and `source_words` parameters from `determine_boundaries()` (only indexes are needed)
     - Updated all callers in `entroppy/resolution/boundary_selection.py`, `entroppy/core/pattern_validation.py`, and test files
     - Cleaner function signatures with only essential parameters
-
-- **Code deduplication and refactoring**
+  - **Unified file writing**: Replaced direct `with open()` patterns with `write_file_safely()` helper across all report modules
+    - `entroppy/reports/patterns.py`: Uses shared file writing utility
+    - `entroppy/reports/collisions.py`: Uses shared file writing utility
+    - `entroppy/reports/exclusions.py`: Uses shared file writing utility
+    - `entroppy/reports/short_typos.py`: Uses shared file writing utility
+    - `entroppy/reports/conflicts.py`: Uses shared file writing utility
+    - `entroppy/platforms/espanso/reports.py`: Uses shared file writing utility
+    - `entroppy/platforms/qmk/reports.py`: Uses shared file writing utility
+    - Eliminated ~50+ lines of duplicated file I/O error handling code
+  - **Optimized score lookups in QMK reports**: Extracted `_build_score_lookup_maps()` helper function
+    - Builds lookup dictionaries once instead of performing linear searches
+    - Reused in both `_write_complete_ranked_list()` and `_write_cutoff_bubble()`
+    - Improved performance for score lookups from O(n) to O(1)
+  - **Impact**: Improved maintainability with single source of truth for file I/O operations and reduced code duplication
   - **File I/O utilities**: Created centralized file I/O utilities in `entroppy/utils/helpers.py`:
     - `ensure_directory_exists()`: Unified directory creation with consistent error handling
     - `write_file_safely()`: Unified file writing with standardized error handling

@@ -1,16 +1,19 @@
 """Pattern generalization report generation."""
 
 from pathlib import Path
+from typing import TextIO
 
-from entroppy.reports.data import ReportData
 from entroppy.core import format_boundary_display
+from entroppy.reports.data import ReportData
 from entroppy.reports.helpers import write_report_header
+from entroppy.utils.helpers import write_file_safely
 
 
 def generate_patterns_report(data: ReportData, report_dir: Path) -> None:
     """Generate pattern generalization report."""
     filepath = report_dir / "patterns.txt"
-    with open(filepath, "w", encoding="utf-8") as f:
+
+    def write_content(f: TextIO) -> None:
         write_report_header(f, "PATTERN GENERALIZATION REPORT")
 
         patterns_count = len(data.generalized_patterns)
@@ -40,3 +43,5 @@ def generate_patterns_report(data: ReportData, report_dir: Path) -> None:
             for pattern_typo, pattern_word, reason in data.rejected_patterns:
                 f.write(f"✗ {pattern_typo} → {pattern_word}\n")
                 f.write(f"  Reason: {reason}\n\n")
+
+    write_file_safely(filepath, write_content, "writing patterns report")

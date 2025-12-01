@@ -1,9 +1,11 @@
 """Short typos report generation."""
 
 from pathlib import Path
+from typing import TextIO
 
 from entroppy.reports.data import ReportData
 from entroppy.reports.helpers import write_report_header
+from entroppy.utils.helpers import write_file_safely
 
 
 def generate_short_typos_report(data: ReportData, report_dir: Path) -> None:
@@ -12,7 +14,8 @@ def generate_short_typos_report(data: ReportData, report_dir: Path) -> None:
         return
 
     filepath = report_dir / "short_typos.txt"
-    with open(filepath, "w", encoding="utf-8") as f:
+
+    def write_content(f: TextIO) -> None:
         write_report_header(f, "SHORT TYPOS REPORT")
         f.write("These typos were skipped for being too short.\n")
         f.write("Consider adjusting --min-typo-length if needed.\n\n")
@@ -35,3 +38,5 @@ def generate_short_typos_report(data: ReportData, report_dir: Path) -> None:
             remaining = len(items) - 30
             if remaining > 0:
                 f.write(f"... and {remaining} more\n")
+
+    write_file_safely(filepath, write_content, "writing short typos report")

@@ -6,6 +6,7 @@ from typing import Any, TextIO
 from entroppy.core import BoundaryType, Correction, format_boundary_display, format_boundary_name
 from entroppy.reports import write_report_header
 from entroppy.reports.helpers import write_section_header
+from entroppy.utils.helpers import write_file_safely
 
 
 def generate_qmk_ranking_report(
@@ -23,7 +24,7 @@ def generate_qmk_ranking_report(
     """Generate comprehensive QMK ranking report."""
     report_path = report_dir / "qmk_ranking.txt"
 
-    with open(report_path, "w", encoding="utf-8") as f:
+    def write_content(f: TextIO) -> None:
         write_report_header(f, "QMK AUTOCORRECT RANKING REPORT")
         _write_overview_statistics(f, final_corrections, filtered_corrections)
         _write_summary_by_type(
@@ -65,6 +66,8 @@ def generate_qmk_ranking_report(
             pattern_scores,
             direct_scores,
         )
+
+    write_file_safely(report_path, write_content, "writing QMK ranking report")
 
     return {
         "file_path": str(report_path),
@@ -156,6 +159,24 @@ def _write_summary_by_type(
     f.write("\n")
 
 
+def _build_score_lookup_maps(
+    pattern_scores: list[tuple[float, str, str, BoundaryType]],
+    direct_scores: list[tuple[float, str, str, BoundaryType]],
+) -> tuple[dict[tuple[str, str, BoundaryType], float], dict[tuple[str, str, BoundaryType], float]]:
+    """Build lookup dictionaries for pattern and direct scores.
+
+    Returns:
+        Tuple of (pattern_score_map, direct_score_map)
+    """
+    pattern_score_map = {
+        (typo, word, boundary): score for score, typo, word, boundary in pattern_scores
+    }
+    direct_score_map = {
+        (typo, word, boundary): score for score, typo, word, boundary in direct_scores
+    }
+    return pattern_score_map, direct_score_map
+
+
 def _write_complete_ranked_list(
     f: TextIO,
     final_corrections: list[Correction],
@@ -169,12 +190,7 @@ def _write_complete_ranked_list(
     f.write(f"Total corrections in final list: {len(final_corrections):,}\n\n")
 
     # Create lookup dictionaries for scores
-    pattern_score_map = {
-        (typo, word, boundary): score for score, typo, word, boundary in pattern_scores
-    }
-    direct_score_map = {
-        (typo, word, boundary): score for score, typo, word, boundary in direct_scores
-    }
+    pattern_score_map, direct_score_map = _build_score_lookup_maps(pattern_scores, direct_scores)
     user_set = {(typo, word, boundary) for typo, word, boundary in user_corrections}
     pattern_set = {(p[0], p[1], p[2]) for p in patterns}
 
@@ -396,6 +412,9 @@ def _write_cutoff_bubble(
     f.write("This shows what made the cut and what didn't - the most critical\n")
     f.write("decisions in the ranking process.\n\n")
 
+    # Build score lookup maps once
+    pattern_score_map, direct_score_map = _build_score_lookup_maps(pattern_scores, direct_scores)
+
     cutoff_index = len(final_corrections)
 
     # Last 10 that made the cut
@@ -403,7 +422,7 @@ def _write_cutoff_bubble(
     start_idx = max(0, cutoff_index - 10)
     for i in range(start_idx, cutoff_index):
         typo, word, boundary = final_corrections[i]
-        score = _get_score_for_correction(typo, word, boundary, pattern_scores, direct_scores)
+        score = _get_score_for_correction(typo, word, boundary, pattern_score_map, direct_score_map)
         correction_type = _get_correction_type(typo, word, patterns)
         f.write(f"{i + 1}. {typo} → {word} {format_boundary_display(boundary)}\n")
         f.write(f"   Type: {correction_type}, Score: {score:.6f}\n\n")
@@ -415,7 +434,9 @@ def _write_cutoff_bubble(
         end_idx = min(cutoff_index + 10, len(ranked_corrections_before_limit))
         for i in range(cutoff_index, end_idx):
             typo, word, boundary = ranked_corrections_before_limit[i]
-            score = _get_score_for_correction(typo, word, boundary, pattern_scores, direct_scores)
+            score = _get_score_for_correction(
+                typo, word, boundary, pattern_score_map, direct_score_map
+            )
             correction_type = _get_correction_type(typo, word, patterns)
             f.write(f"{i + 1}. {typo} → {word} {format_boundary_display(boundary)}\n")
             f.write(f"   Type: {correction_type}, Score: {score:.6f}\n\n")
@@ -427,19 +448,30 @@ def _get_score_for_correction(
     typo: str,
     word: str,
     boundary: BoundaryType,
-    pattern_scores: list[tuple[float, str, str, BoundaryType]],
-    direct_scores: list[tuple[float, str, str, BoundaryType]],
+    pattern_score_map: dict[tuple[str, str, BoundaryType], float],
+    direct_score_map: dict[tuple[str, str, BoundaryType], float],
 ) -> float:
-    """Get the score for a specific correction."""
-    # Check pattern scores
-    for score, p_typo, p_word, p_boundary in pattern_scores:
-        if p_typo == typo and p_word == word and p_boundary == boundary:
-            return score
+    """Get the score for a specific correction using lookup maps.
+
+    Args:
+        typo: Typo string
+        word: Correction word
+        boundary: Boundary type
+        pattern_score_map: Pre-built lookup map for pattern scores
+        direct_score_map: Pre-built lookup map for direct scores
+
+    Returns:
+        Score value, or float('inf') for user corrections
+    """
+    correction_key = (typo, word, boundary)
+
+    # Check pattern scores first
+    if correction_key in pattern_score_map:
+        return pattern_score_map[correction_key]
 
     # Check direct scores
-    for score, d_typo, d_word, d_boundary in direct_scores:
-        if d_typo == typo and d_word == word and d_boundary == boundary:
-            return score
+    if correction_key in direct_score_map:
+        return direct_score_map[correction_key]
 
     # User corrections have infinite priority (use a large number for display)
     return float("inf")

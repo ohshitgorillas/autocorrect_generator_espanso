@@ -6,6 +6,7 @@ from typing import Any, TextIO
 from entroppy.core import Correction
 from entroppy.reports import write_report_header
 from entroppy.reports.helpers import write_section_header
+from entroppy.utils.helpers import write_file_safely
 
 
 def generate_espanso_output_report(
@@ -18,11 +19,13 @@ def generate_espanso_output_report(
     """Generate Espanso output summary report."""
     report_path = report_dir / "espanso_output.txt"
 
-    with open(report_path, "w", encoding="utf-8") as f:
+    def write_content(f: TextIO) -> None:
         write_report_header(f, "ESPANSO OUTPUT SUMMARY")
         _write_overview(f, final_corrections, ram_estimate)
         _write_file_breakdown(f, corrections_by_letter, max_entries_per_file)
         _write_largest_files(f, corrections_by_letter)
+
+    write_file_safely(report_path, write_content, "writing Espanso output report")
 
     return {
         "file_path": str(report_path),

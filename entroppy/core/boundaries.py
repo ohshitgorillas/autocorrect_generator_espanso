@@ -137,9 +137,7 @@ def _check_typo_in_wordset(
     return False
 
 
-def is_substring_of_any(
-    typo: str, index: BoundaryIndex
-) -> bool:
+def is_substring_of_any(typo: str, index: BoundaryIndex) -> bool:
     """Check if typo is a substring of any word.
 
     Args:
@@ -152,9 +150,7 @@ def is_substring_of_any(
     return _check_typo_in_wordset(typo, "substring", index)
 
 
-def would_trigger_at_start(
-    typo: str, index: BoundaryIndex
-) -> bool:
+def would_trigger_at_start(typo: str, index: BoundaryIndex) -> bool:
     """Check if typo appears as prefix.
 
     Args:
@@ -167,9 +163,7 @@ def would_trigger_at_start(
     return _check_typo_in_wordset(typo, "prefix", index)
 
 
-def would_trigger_at_end(
-    typo: str, index: BoundaryIndex
-) -> bool:
+def would_trigger_at_end(typo: str, index: BoundaryIndex) -> bool:
     """Check if typo appears as suffix.
 
     Args:

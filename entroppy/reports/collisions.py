@@ -1,9 +1,11 @@
 """Ambiguous collisions report generation."""
 
 from pathlib import Path
+from typing import TextIO
 
 from entroppy.reports.data import ReportData
 from entroppy.reports.helpers import write_report_header
+from entroppy.utils.helpers import write_file_safely
 
 
 def generate_collisions_report(data: ReportData, report_dir: Path) -> None:
@@ -12,7 +14,8 @@ def generate_collisions_report(data: ReportData, report_dir: Path) -> None:
         return
 
     filepath = report_dir / "collisions.txt"
-    with open(filepath, "w", encoding="utf-8") as f:
+
+    def write_content(f: TextIO) -> None:
         write_report_header(f, "AMBIGUOUS COLLISIONS REPORT")
         f.write("These typos map to multiple words with similar frequencies and were\n")
         f.write("skipped. To force a correction, add unwanted mappings to your\n")
@@ -27,3 +30,5 @@ def generate_collisions_report(data: ReportData, report_dir: Path) -> None:
             f.write(f"{typo} → {words}\n")
             f.write(f"  Ratio: {ratio:.2f}\n")
             f.write("\n")
+
+    write_file_safely(filepath, write_content, "writing collisions report")

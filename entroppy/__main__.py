@@ -32,11 +32,6 @@ def main():
     if not config.top_n and not config.include:
         parser.error("Must specify either --top-n or --include (or both)")
 
-    if not config.platform:
-        parser.error("Must specify a platform")
-    if config.platform == "qmk" and not config.max_corrections:
-        parser.error("Must specify --max-corrections for QMK")
-
     if (
         config.platform == "espanso"
         and config.max_entries_per_file > Constants.ESPANSO_MAX_ENTRIES_WARNING

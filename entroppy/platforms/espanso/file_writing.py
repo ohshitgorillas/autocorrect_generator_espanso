@@ -26,16 +26,17 @@ def write_single_yaml_file(args: tuple) -> tuple[str, int]:
                 width=float("inf"),
             )
     except PermissionError:
-        logger.error(f"Permission denied writing file: {filename}")
+        logger.error(f"✗ Permission denied writing file: {filename}")
+        logger.error("  Please check file permissions and try again")
         raise
     except OSError as e:
-        logger.error(f"OS error writing file {filename}: {e}")
+        logger.error(f"✗ OS error writing file {filename}: {e}")
         raise
     except yaml.YAMLError as e:
-        logger.error(f"YAML serialization error writing file {filename}: {e}")
+        logger.error(f"✗ YAML serialization error writing file {filename}: {e}")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error writing file {filename}: {e}")
+        logger.error(f"✗ Unexpected error writing file {filename}: {e}")
         raise
 
     return (os.path.basename(filename), len(chunk))
@@ -53,10 +54,11 @@ def write_yaml_files(
     try:
         os.makedirs(output_dir, exist_ok=True)
     except PermissionError:
-        logger.error(f"Permission denied creating output directory: {output_dir}")
+        logger.error(f"✗ Permission denied creating output directory: {output_dir}")
+        logger.error("  Please check directory permissions and try again")
         raise
     except OSError as e:
-        logger.error(f"OS error creating output directory {output_dir}: {e}")
+        logger.error(f"✗ OS error creating output directory {output_dir}: {e}")
         raise
 
     write_tasks = []
@@ -89,7 +91,7 @@ def write_yaml_files(
 
     if jobs > 1 and len(write_tasks) > 1:
         if verbose:
-            logger.info(f"Writing {len(write_tasks)} YAML files using {jobs} workers...")
+            logger.info(f"  Writing {len(write_tasks)} YAML files using {jobs} workers...")
 
         with Pool(processes=jobs) as pool:
             results = pool.map(write_single_yaml_file, write_tasks)
@@ -99,7 +101,7 @@ def write_yaml_files(
                 total_files += 1
     else:
         if verbose:
-            logger.info(f"Writing {len(write_tasks)} YAML files...")
+            logger.info(f"  Writing {len(write_tasks)} YAML files...")
 
         for filename, chunk in write_tasks:
             _, entry_count = write_single_yaml_file((filename, chunk))
@@ -107,4 +109,4 @@ def write_yaml_files(
             total_files += 1
 
     if verbose:
-        logger.info(f"\nTotal: {total_entries} corrections across {total_files} files")
+        logger.info(f"  Wrote {total_entries} corrections across {total_files} files")

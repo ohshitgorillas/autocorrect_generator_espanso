@@ -15,7 +15,7 @@ def organize_by_letter(
     by_letter = defaultdict(list)
 
     if verbose:
-        logger.info(f"Organizing {len(corrections)} corrections...")
+        logger.info(f"  Organizing {len(corrections)} corrections...")
 
     for correction in corrections:
         _, word, _ = correction

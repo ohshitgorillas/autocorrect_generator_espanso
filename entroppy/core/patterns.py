@@ -2,9 +2,11 @@
 
 from loguru import logger
 
+from entroppy.core.boundaries import BoundaryIndex
 from entroppy.core.types import Correction
 from entroppy.core.pattern_extraction import find_prefix_patterns, find_suffix_patterns
 from entroppy.core.pattern_validation import (
+    SourceWordIndex,
     _log_pattern_acceptance,
     _log_pattern_rejection,
     check_pattern_conflicts,
@@ -55,6 +57,12 @@ def generalize_patterns(
     corrections_to_remove = set()
     pattern_replacements = {}
     rejected_patterns = []
+
+    # Build boundary index for efficient validation checks
+    validation_index = BoundaryIndex(validation_set)
+
+    # Build source word index for efficient corruption checks
+    source_word_index = SourceWordIndex(source_words, match_direction)
 
     # Choose pattern finding strategy based on match direction
     if match_direction == MatchDirection.RIGHT_TO_LEFT:
@@ -113,7 +121,12 @@ def generalize_patterns(
 
         # Check for conflicts with validation words or source words
         is_safe, conflict_error = check_pattern_conflicts(
-            typo_pattern, validation_set, source_words, match_direction
+            typo_pattern,
+            validation_set,
+            source_words,
+            match_direction,
+            validation_index,
+            source_word_index,
         )
         if not is_safe:
             rejected_patterns.append((typo_pattern, word_pattern, conflict_error))

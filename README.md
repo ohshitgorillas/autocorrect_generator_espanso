@@ -5,7 +5,7 @@
 
 **Version 0.5.2 (Beta)** | [Changelog](CHANGELOG.md)
 
-A Python-based autocorrect dictionary generator for text expansion platforms. Algorithmically generates typos from English words and maps them to correct spellings, focusing on mechanical typing errors rather than spelling mistakes.
+A Python-based autocorrect dictionary generator for text expansion platforms. Algorithmically generates typos from English words and maps them to correct spellings, focusing on mechanical typing errors rather than spelling mistakes made from a lack of knowledge.
 
 It uses `english-words` and `wordfreq` to algorithmically "fuzz" lists of English words, generating typos mapped to their correct spellings.
 
@@ -14,7 +14,7 @@ It generates five types of typing errors:
 * **Omissions**: Missing characters (e.g., `because` → `becuse`).
 * **Duplications**: Doubled characters (e.g., `entropy` → `entroppy`). 
 * **Replacements**: Wrong characters (e.g., `apple` → `applw`).
-* **Insertions**: Additional characters (e.g., `food` → `foopd`).
+* **Insertions**: Additional characters (e.g., `thewre` → `there`).
 
 ## Inspiration
 This project originated as a tool for [QMK Firmware](https://qmk.fm/)'s Autocorrect feature. I was dissatisfied with existing autocorrect dictionaries, which were bloated with spelling mistakes caused by genuine lack of knowledge rather than mechanical typing errors (e.g., `definately` → `definitely`). I know how to spell, I just have fat fingers.

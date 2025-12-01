@@ -101,28 +101,6 @@ Not all generated typos are kept. Each typo is checked:
 4. **Is it explicitly excluded?** → Skip
 5. **Does it exceed frequency threshold?** → Skip (too common, might be a real word)
 
-### Boundary Detection
-
-For each valid typo, EntropPy determines what **boundaries** are needed to prevent false triggers.
-
-**Boundary Types:**
-- **NONE**: No boundaries - triggers anywhere
-- **LEFT**: Left boundary only - must be at word start
-- **RIGHT**: Right boundary only - must be at word end
-- **BOTH**: Both boundaries - standalone word only
-
-**How Boundaries Are Determined:**
-
-1. Check if typo appears as a substring in validation or source words
-2. If not a substring → **NONE** (safe anywhere)
-3. If a substring:
-   - Check if typo appears as prefix (word starts with typo)
-   - Check if typo appears as suffix (word ends with typo)
-   - Prefix only → **RIGHT** boundary
-   - Suffix only → **LEFT** boundary
-   - Both prefix and suffix → **BOTH** boundaries
-   - Neither (middle only) → **BOTH** boundaries
-
 Notice that some typos map to multiple words - this is a **collision** that needs resolution in the next stage.
 
 ---
@@ -148,17 +126,34 @@ When multiple words map to the same typo, collision resolution is needed.
 1. **Calculate word frequencies** using `wordfreq`
 2. **Compare frequencies** - if one word is much more common, use it
 3. **Check frequency ratio** - if ratio is too low, skip (ambiguous)
-4. **Apply boundary** - choose strictest boundary from all candidates
+4. **Apply boundary** - select least restrictive boundary that prevents false triggers
 5. **Validate** - check length, exclusions, etc.
 
 User words (from include file) always take priority over frequency-based selection.
 
 ### Boundary Selection
 
-When multiple boundaries exist for the same word, choose the **strictest**:
+For each typo, EntropPy selects the **least restrictive boundary** that doesn't cause false triggers (garbage corrections).
 
-Boundary priority (strictest to least strict):
-  BOTH > LEFT = RIGHT > NONE
+**Selection Algorithm:**
+
+1. **Check boundaries in fixed order** (least to most restrictive):
+   - **NONE** (matches anywhere)
+   - **LEFT** (matches at word start only)
+   - **RIGHT** (matches at word end only)
+   - **BOTH** (matches as standalone word only)
+
+2. **For each boundary**, check if it would cause false triggers:
+   - **NONE**: Would cause false trigger if typo appears as substring anywhere
+   - **LEFT**: Would cause false trigger if typo appears as prefix of any word
+   - **RIGHT**: Would cause false trigger if typo appears as suffix of any word
+   - **BOTH**: Never causes false triggers (always safe)
+
+3. **Select the first boundary** that doesn't cause false triggers
+
+4. **Fallback**: If all boundaries would cause false triggers, use **BOTH** (most restrictive, safest option)
+
+**Key Principle**: Select the least restrictive boundary that safely prevents the typo from incorrectly matching validation or source words in unintended contexts.
 
 ---
 

@@ -53,10 +53,11 @@ def generate_output(corrections: list[Correction], output_path: str | None, conf
         try:
             os.makedirs(os.path.dirname(output_file) or ".", exist_ok=True)
         except PermissionError:
-            logger.error(f"Permission denied creating output directory for: {output_file}")
+            logger.error(f"✗ Permission denied creating output directory: {output_file}")
+            logger.error("  Please check directory permissions and try again")
             raise
         except OSError as e:
-            logger.error(f"OS error creating output directory for {output_file}: {e}")
+            logger.error(f"✗ OS error creating output directory {output_file}: {e}")
             raise
 
         try:
@@ -64,21 +65,22 @@ def generate_output(corrections: list[Correction], output_path: str | None, conf
                 for line in lines:
                     f.write(line + "\n")
         except PermissionError:
-            logger.error(f"Permission denied writing file: {output_file}")
+            logger.error(f"✗ Permission denied writing file: {output_file}")
+            logger.error("  Please check file permissions and try again")
             raise
         except OSError as e:
-            logger.error(f"OS error writing file {output_file}: {e}")
+            logger.error(f"✗ OS error writing file {output_file}: {e}")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error writing file {output_file}: {e}")
+            logger.error(f"✗ Unexpected error writing file {output_file}: {e}")
             raise
 
         if config.verbose:
-            logger.info(f"\nWrote {len(lines)} corrections to {output_file}")
+            logger.info(f"  Wrote {len(lines)} corrections to: {output_file}")
     else:
         try:
             for line in lines:
-                print(line, file=sys.stdout)
+                logger.info(line)
         except (OSError, IOError) as e:
-            logger.error(f"Error writing to stdout: {e}")
+            logger.error(f"✗ Error writing to stdout: {e}")
             raise

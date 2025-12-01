@@ -32,7 +32,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     - Builds lookup dictionaries once instead of performing linear searches
     - Reused in both `_write_complete_ranked_list()` and `_write_cutoff_bubble()`
     - Improved performance for score lookups from O(n) to O(1)
-  - **Impact**: Improved maintainability with single source of truth for file I/O operations and reduced code duplication
   - **File I/O utilities**: Created centralized file I/O utilities in `entroppy/utils/helpers.py`:
     - `ensure_directory_exists()`: Unified directory creation with consistent error handling
     - `write_file_safely()`: Unified file writing with standardized error handling
@@ -44,7 +43,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - **Boundary details collection**: Extracted duplicated boundary details collection logic:
     - Added `_collect_boundary_details()` function in `entroppy/resolution/correction_processing.py`
     - Eliminated ~20 lines of duplicated code between `process_single_word_correction()` and `process_collision_case()`
-  - **Impact**: Improved maintainability with single source of truth for file I/O operations and reduced code duplication
+
 
 ## [0.5.2] - 2025-12-01
 

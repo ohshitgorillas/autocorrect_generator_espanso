@@ -111,16 +111,6 @@ Notice that some typos map to multiple words - this is a **collision** that need
 
 When multiple words map to the same typo, EntropPy must decide which correction to use (or skip it entirely).
 
-### Collision Types
-
-#### Single Word (No Collision)
-
-When only one word maps to a typo, that correction is kept.
-
-#### Multiple Words (Collision)
-
-When multiple words map to the same typo, collision resolution is needed.
-
 ### Resolution Algorithm
 
 1. **Calculate word frequencies** using `wordfreq`

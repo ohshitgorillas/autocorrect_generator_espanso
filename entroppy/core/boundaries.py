@@ -104,7 +104,6 @@ def parse_boundary_markers(pattern: str) -> tuple[str, BoundaryType | None]:
 
 def _check_typo_in_wordset(
     typo: str,
-    word_set: set[str] | frozenset[str],
     check_type: str,
     index: BoundaryIndex,
 ) -> bool:
@@ -112,9 +111,8 @@ def _check_typo_in_wordset(
 
     Args:
         typo: The typo string to check
-        word_set: Set of words to check against
         check_type: Type of check - 'substring', 'prefix', or 'suffix'
-        index: Pre-built index for faster lookups (must match word_set)
+        index: Pre-built index for faster lookups
 
     Returns:
         True if typo matches any word according to check_type
@@ -140,57 +138,52 @@ def _check_typo_in_wordset(
 
 
 def is_substring_of_any(
-    typo: str, word_set: set[str] | frozenset[str], index: BoundaryIndex
+    typo: str, index: BoundaryIndex
 ) -> bool:
     """Check if typo is a substring of any word.
 
     Args:
         typo: The typo string to check
-        word_set: Set of words to check against
-        index: Pre-built index for faster lookups (must match word_set)
+        index: Pre-built index for faster lookups
 
     Returns:
         True if typo is a substring of any word (excluding exact matches)
     """
-    return _check_typo_in_wordset(typo, word_set, "substring", index)
+    return _check_typo_in_wordset(typo, "substring", index)
 
 
 def would_trigger_at_start(
-    typo: str, validation_set: set[str] | frozenset[str], index: BoundaryIndex
+    typo: str, index: BoundaryIndex
 ) -> bool:
     """Check if typo appears as prefix.
 
     Args:
         typo: The typo string to check
-        validation_set: Set of validation words to check against
-        index: Pre-built index for faster lookups (must match validation_set)
+        index: Pre-built index for faster lookups
 
     Returns:
         True if typo appears as a prefix of any word (excluding exact matches)
     """
-    return _check_typo_in_wordset(typo, validation_set, "prefix", index)
+    return _check_typo_in_wordset(typo, "prefix", index)
 
 
 def would_trigger_at_end(
-    typo: str, validation_set: set[str] | frozenset[str], index: BoundaryIndex
+    typo: str, index: BoundaryIndex
 ) -> bool:
     """Check if typo appears as suffix.
 
     Args:
         typo: The typo string to check
-        validation_set: Set of validation words to check against
-        index: Pre-built index for faster lookups (must match validation_set)
+        index: Pre-built index for faster lookups
 
     Returns:
         True if typo appears as a suffix of any word (excluding exact matches)
     """
-    return _check_typo_in_wordset(typo, validation_set, "suffix", index)
+    return _check_typo_in_wordset(typo, "suffix", index)
 
 
 def determine_boundaries(
     typo: str,
-    validation_set: set[str] | frozenset[str],
-    source_words: set[str] | frozenset[str],
     validation_index: BoundaryIndex,
     source_index: BoundaryIndex,
 ) -> BoundaryType:
@@ -198,23 +191,21 @@ def determine_boundaries(
 
     Args:
         typo: The typo string
-        validation_set: Set of valid words
-        source_words: Set of source words
-        validation_index: Pre-built index for validation_set (must match validation_set)
-        source_index: Pre-built index for source_words (must match source_words)
+        validation_index: Pre-built index for validation set
+        source_index: Pre-built index for source words
 
     Returns:
         BoundaryType indicating what boundaries are needed
     """
     # Check if typo appears as substring in other contexts
-    is_substring_source = is_substring_of_any(typo, source_words, source_index)
-    is_substring_validation = is_substring_of_any(typo, validation_set, validation_index)
+    is_substring_source = is_substring_of_any(typo, source_index)
+    is_substring_validation = is_substring_of_any(typo, validation_index)
 
     if not is_substring_source and not is_substring_validation:
         return BoundaryType.NONE
 
-    appears_as_prefix = would_trigger_at_start(typo, validation_set, validation_index)
-    appears_as_suffix = would_trigger_at_end(typo, validation_set, validation_index)
+    appears_as_prefix = would_trigger_at_start(typo, validation_index)
+    appears_as_suffix = would_trigger_at_end(typo, validation_index)
 
     if not appears_as_prefix and not appears_as_suffix:
         return BoundaryType.BOTH

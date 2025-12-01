@@ -50,13 +50,13 @@ def _would_cause_false_trigger(
             details_dict contains breakdown of checks performed
     """
     # Check validation and source words
-    would_trigger_start_val = would_trigger_at_start(typo, validation_set, validation_index)
-    would_trigger_end_val = would_trigger_at_end(typo, validation_set, validation_index)
-    is_substring_val = is_substring_of_any(typo, validation_set, validation_index)
+    would_trigger_start_val = would_trigger_at_start(typo, validation_index)
+    would_trigger_end_val = would_trigger_at_end(typo, validation_index)
+    is_substring_val = is_substring_of_any(typo, validation_index)
 
-    would_trigger_start_src = would_trigger_at_start(typo, source_words, source_index)
-    would_trigger_end_src = would_trigger_at_end(typo, source_words, source_index)
-    is_substring_src = is_substring_of_any(typo, source_words, source_index)
+    would_trigger_start_src = would_trigger_at_start(typo, source_index)
+    would_trigger_end_src = would_trigger_at_end(typo, source_index)
+    is_substring_src = is_substring_of_any(typo, source_index)
 
     # Combine checks for validation and source words
     would_trigger_start = would_trigger_start_val or would_trigger_start_src

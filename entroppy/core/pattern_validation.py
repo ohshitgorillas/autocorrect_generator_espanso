@@ -293,7 +293,7 @@ def check_pattern_conflicts(
         return False, f"Conflicts with validation word '{typo_pattern}'"
 
     # Check if pattern would trigger at end of validation words
-    if would_trigger_at_end(typo_pattern, validation_set, validation_index):
+    if would_trigger_at_end(typo_pattern, validation_index):
         return False, "Would trigger at end of validation words"
 
     # Check if pattern would corrupt source words

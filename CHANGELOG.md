@@ -14,6 +14,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     - `entroppy/core/boundaries.py`: Removed ~20 lines of manual type validation from boundary detection functions
     - Type hints now serve as the contract; Pydantic handles validation at system boundaries
     - Simplified code without sacrificing correctness
+  - **Removed unused function parameters**: Eliminated redundant parameters that were passed but never used
+    - `entroppy/core/boundaries.py`: Removed unused `word_set` parameters from `_check_typo_in_wordset()`, `is_substring_of_any()`, `would_trigger_at_start()`, and `would_trigger_at_end()`
+    - `entroppy/core/boundaries.py`: Removed unused `validation_set` and `source_words` parameters from `determine_boundaries()` (only indexes are needed)
+    - Updated all callers in `entroppy/resolution/boundary_selection.py`, `entroppy/core/pattern_validation.py`, and test files
+    - Cleaner function signatures with only essential parameters
 
 - **Code deduplication and refactoring**
   - **File I/O utilities**: Created centralized file I/O utilities in `entroppy/utils/helpers.py`:

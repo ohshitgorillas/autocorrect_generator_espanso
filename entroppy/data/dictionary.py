@@ -22,13 +22,14 @@ def load_validation_dictionary(
     Handles exact words and wildcard (*) patterns for exclusions.
     """
     if verbose:
-        logger.info("Loading English words dictionary...")
+        logger.info("  Loading English words dictionary...")
 
     try:
         words = get_english_words_set(["web2", "gcide"], lower=True)
     except Exception as e:
-        logger.error(f"Failed to load English words dictionary: {e}")
-        logger.error("This may indicate a problem with the 'english-words' package")
+        logger.error(f"✗ Failed to load English words dictionary: {e}")
+        logger.error("  This may indicate a problem with the 'english-words' package")
+        logger.error("  Try reinstalling: pip install english-words")
         raise RuntimeError("Failed to load validation dictionary") from e
     original_word_count = len(words)
 
@@ -47,7 +48,7 @@ def load_validation_dictionary(
 
     if not word_exclusion_patterns:
         if verbose:
-            logger.info(f"Loaded {len(words)} words for validation (no exclusions applied).")
+            logger.info(f"  Loaded {len(words)} words for validation (no exclusions applied)")
         return words
 
     # Filter words using pattern matcher
@@ -56,12 +57,12 @@ def load_validation_dictionary(
     removed_count = len(words) - len(validation_set)
 
     if verbose:
-        logger.info(f"Loaded {len(validation_set)} words for validation")
+        logger.info(f"  Loaded {len(validation_set)} words for validation")
         if added_count > 0:
-            logger.info(f"Added {added_count} custom words from the include file.")
+            logger.info(f"  Added {added_count} custom words from include file")
         if removed_count > 0:
             logger.info(
-                f"Removed {removed_count} words based on the exclude file (including wildcards)."
+                f"  Removed {removed_count} words based on exclude file (including wildcards)"
             )
 
     return validation_set
@@ -87,16 +88,19 @@ def load_word_list(filepath: str | None, verbose: bool = False) -> list[str]:
                         continue
                     words.append(line)
     except FileNotFoundError:
-        logger.error(f"Word list file not found: {filepath}")
+        logger.error(f"✗ Word list file not found: {filepath}")
+        logger.error("  Please check the file path and try again")
         raise
     except PermissionError:
-        logger.error(f"Permission denied reading file: {filepath}")
+        logger.error(f"✗ Permission denied reading file: {filepath}")
+        logger.error("  Please check file permissions and try again")
         raise
     except UnicodeDecodeError as e:
-        logger.error(f"Encoding error reading {filepath}: {e}")
+        logger.error(f"✗ Encoding error reading {filepath}: {e}")
+        logger.error("  Please ensure the file is UTF-8 encoded")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error reading word list file {filepath}: {e}")
+        logger.error(f"✗ Unexpected error reading word list file {filepath}: {e}")
         raise
 
     if verbose and invalid_count > 0:
@@ -119,16 +123,19 @@ def load_exclusions(filepath: str | None, verbose: bool = False) -> set[str]:
                 if line and not line.startswith("#"):
                     exclusions.add(line)
     except FileNotFoundError:
-        logger.error(f"Exclusions file not found: {filepath}")
+        logger.error(f"✗ Exclusions file not found: {filepath}")
+        logger.error("  Please check the file path and try again")
         raise
     except PermissionError:
-        logger.error(f"Permission denied reading file: {filepath}")
+        logger.error(f"✗ Permission denied reading file: {filepath}")
+        logger.error("  Please check file permissions and try again")
         raise
     except UnicodeDecodeError as e:
-        logger.error(f"Encoding error reading {filepath}: {e}")
+        logger.error(f"✗ Encoding error reading {filepath}: {e}")
+        logger.error("  Please ensure the file is UTF-8 encoded")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error reading exclusions file {filepath}: {e}")
+        logger.error(f"✗ Unexpected error reading exclusions file {filepath}: {e}")
         raise
 
     if verbose:
@@ -158,16 +165,19 @@ def load_adjacent_letters_map(filepath: str | None, verbose: bool = False) -> di
                         logger.warning(f"Skipping malformed line in {filepath}: {line.strip()}")
                         continue
     except FileNotFoundError:
-        logger.error(f"Adjacent letters map file not found: {filepath}")
+        logger.error(f"✗ Adjacent letters map file not found: {filepath}")
+        logger.error("  Please check the file path and try again")
         raise
     except PermissionError:
-        logger.error(f"Permission denied reading file: {filepath}")
+        logger.error(f"✗ Permission denied reading file: {filepath}")
+        logger.error("  Please check file permissions and try again")
         raise
     except UnicodeDecodeError as e:
-        logger.error(f"Encoding error reading {filepath}: {e}")
+        logger.error(f"✗ Encoding error reading {filepath}: {e}")
+        logger.error("  Please ensure the file is UTF-8 encoded")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error reading adjacent letters map file {filepath}: {e}")
+        logger.error(f"✗ Unexpected error reading adjacent letters map file {filepath}: {e}")
         raise
 
     if verbose:
@@ -188,10 +198,9 @@ def load_source_words(config: Config, verbose: bool = False) -> list[str]:
     try:
         all_words = top_n_list("en", config.top_n * Constants.WORDFREQ_MULTIPLIER)
     except Exception as e:
-        logger.error(f"Failed to load words from wordfreq: {e}")
-        logger.error(
-            "This may indicate a problem with the 'wordfreq' package or network connectivity"
-        )
+        logger.error(f"✗ Failed to load words from wordfreq: {e}")
+        logger.error("  This may indicate a problem with the 'wordfreq' package")
+        logger.error("  or network connectivity issues")
         raise RuntimeError("Failed to load source words from wordfreq") from e
 
     # Filter words using a generator expression for efficiency

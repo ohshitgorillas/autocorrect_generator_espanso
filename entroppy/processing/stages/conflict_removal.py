@@ -135,7 +135,7 @@ def update_patterns_from_conflicts(
 
     Universal function to update patterns when conflicts are detected.
     Conflict tuples are: (blocked_typo, blocked_word, blocking_typo, blocking_word, boundary)
-    
+
     Note: Corrections with BOTH boundaries are skipped because they can't block other corrections.
 
     Args:
@@ -216,32 +216,46 @@ def remove_typo_conflicts(
     # Track which corrections are removed if needed
     removed_corrections = []
 
-    final_corrections = remove_substring_conflicts(
-        pattern_result.corrections, verbose, debug_words, debug_typo_matcher
+    # Build blocking map during conflict removal for performance optimization
+    # Always collect it since we need it for pattern updates
+    final_corrections, blocking_map = remove_substring_conflicts(
+        pattern_result.corrections,
+        verbose,
+        debug_words,
+        debug_typo_matcher,
+        collect_blocking_map=True,
     )
 
     conflicts_removed = pre_conflict_count - len(final_corrections)
 
-    # Find blocking corrections for removed conflicts (needed for pattern updates)
+    # Use blocking map instead of linear search (performance optimization)
+    # Always build removed_corrections list for pattern updates, but use blocking map for efficiency
     if conflicts_removed > 0:
         final_set = set(final_corrections)
         removed = [c for c in pattern_result.corrections if c not in final_set]
 
-        if removed and verbose and collect_details:
-            logger.info(f"Analyzing {len(removed)} removed conflicts for report...")
+        if verbose and collect_details:
+            logger.info(f"  Building conflict details for {len(removed)} removed conflicts...")
 
         corrections_iter = removed
         if verbose and collect_details and len(removed) > 100:
             corrections_iter = tqdm(
                 removed,
-                desc="Analyzing removed conflicts",
+                desc="Building conflict details",
                 unit="conflict",
             )
 
-        for typo, word, boundary in corrections_iter:
-            blocking_typo, blocking_word = _find_blocking_typo(
-                typo, word, boundary, final_corrections
-            )
+        # Use pre-computed blocking map instead of linear search
+        for blocked_correction in corrections_iter:
+            typo, word, boundary = blocked_correction
+            blocking_correction = blocking_map.get(blocked_correction)
+            if blocking_correction is not None:
+                blocking_typo, blocking_word, _ = blocking_correction
+            else:
+                # Fallback to linear search if not in map (shouldn't happen, but safe)
+                blocking_typo, blocking_word = _find_blocking_typo(
+                    typo, word, boundary, final_corrections
+                )
             removed_corrections.append((typo, word, blocking_typo, blocking_word, boundary))
 
     # Update patterns: when a shorter correction blocks a longer one, it's a pattern
@@ -256,7 +270,7 @@ def remove_typo_conflicts(
         pattern_result.pattern_replacements = updated_replacements
 
     if verbose and conflicts_removed > 0:
-        logger.info(f"# Removed {conflicts_removed} typos due to substring conflicts")
+        logger.info(f"  Removed {conflicts_removed} typos due to substring conflicts")
 
     elapsed_time = time.time() - start_time
 

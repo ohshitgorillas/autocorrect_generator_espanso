@@ -89,7 +89,7 @@ Replaces each character with adjacent keys (requires adjacent key map). For each
 
 #### 5. Insertions
 
-Inserts adjacent keys before or after each character (requires adjacent key map). For each character that has adjacent keys mapped, generates two typos per adjacent key (one before, one after).
+Inserts adjacent keys before or after each character (requires adjacent key map). For each character that has adjacent keys mapped, generates two typos per adjacent key: one inserted after the character, and one inserted before the character.
 
 ### Filtering Generated Typos
 
@@ -169,27 +169,30 @@ Patterns are extracted from the **end** of words (suffix patterns) for Espanso, 
 
 #### Suffix Patterns (Espanso - Left-to-Right Matching)
 
-Patterns are extracted from the end of words. The algorithm tries different suffix lengths, starting from the longest possible and working down. A pattern is found when multiple corrections share the same typo suffix and word suffix, and their remaining parts match.
+Patterns are extracted from the end of words. The algorithm groups corrections by their "other part" (the prefix that doesn't change) and then tries different suffix lengths from 2 to the maximum possible. A pattern is found when multiple corrections share the same typo suffix and word suffix, and their remaining prefix parts match exactly.
 
 #### Prefix Patterns (QMK - Right-to-Left Matching)
 
-Prefix patterns work similarly but extract from the beginning of words. They're less common because typos at word starts are rarer.
+Prefix patterns work similarly but extract from the beginning of words. The algorithm groups corrections by their "other part" (the suffix that doesn't change) and tries different prefix lengths.
 
 ### Pattern Validation
 
 Not all patterns are valid. Each pattern must:
 
-1. **Work for all occurrences** - The pattern must correctly transform all matching typos
+1. **Have at least 2 occurrences** - Patterns with only one occurrence are skipped (not worth generalizing)
 2. **Meet minimum length** - Pattern must be at least `min_typo_length` characters
-3. **Not conflict with existing corrections** - Pattern's (typo, word) pair shouldn't already exist
+3. **Work for all occurrences** - The pattern must correctly transform all matching typos (validates that applying the pattern to each full typo produces the expected full word)
+4. **Not conflict with validation words** - Pattern typo must not be a validation word, and must not trigger at the end of validation words
+5. **Not corrupt source words** - Pattern must not incorrectly transform any source word
+6. **Not conflict with existing corrections** - Pattern's (typo, word) pair shouldn't already exist as a direct correction (checked during cross-boundary deduplication)
 
 ### Pattern Collision Resolution
 
-Patterns can also have collisions (multiple words for same pattern typo). These are resolved the same way as regular collisions using frequency ratios.
+Patterns can also have collisions (multiple words for same pattern typo). These are resolved the same way as regular collisions using frequency ratios. After collision resolution, patterns also undergo substring conflict removal to eliminate redundant patterns (e.g., if pattern "ectiona" exists, pattern "lectiona" would be redundant).
 
 ### Cross-Boundary Deduplication
 
-If a pattern's (typo, word) pair already exists as a direct correction (even with different boundary), the pattern is rejected and the direct corrections are kept.
+If a pattern's (typo, word) pair already exists as a direct correction (even with different boundary), the pattern is rejected and the direct corrections that would have been replaced by the pattern are restored to the final corrections list.
 
 ---
 
@@ -213,7 +216,7 @@ When a text expansion tool sees a typo, it triggers on the **first match** (shor
 
 ### Pattern Updates from Conflicts
 
-When a shorter correction blocks a longer one, the shorter correction becomes a **pattern** (if it wasn't already), and the blocked correction is added to its replacements.
+When a shorter correction blocks a longer one during conflict removal (Stage 5), the shorter correction becomes a **pattern** (if it wasn't already), and the blocked correction is added to its replacements. This also happens during platform filtering (Stage 6) when QMK-specific conflicts are detected (suffix conflicts and substring conflicts). Corrections with BOTH boundaries are skipped from pattern updates since they can't block other corrections (they only match standalone words).
 
 ---
 
@@ -241,26 +244,35 @@ Each platform (Espanso, QMK) has different constraints and capabilities. This st
 
 #### QMK Filtering
 
-**1. Character Set Filtering** - Removes corrections containing characters other than a-z and apostrophe.
+QMK filtering applies four sequential steps:
 
-**2. Same Typo Text Conflicts** - When the same typo text appears with different boundaries, keeps the least restrictive (NONE) since QMK doesn't support boundaries.
+**1. Character Set Filtering** - Removes corrections containing characters other than a-z and apostrophe. Both typo and word are checked, and both are converted to lowercase.
 
-**3. Suffix Conflicts (RTL Matching)** - QMK scans right-to-left, so shorter suffix typos make longer ones redundant.
+**2. Same Typo Text Conflicts** - When the same typo text appears with different boundaries, keeps the least restrictive boundary (NONE > LEFT/RIGHT > BOTH) since QMK doesn't support boundaries. The removed corrections are tracked as conflicts.
 
-**4. Substring Conflicts (QMK Hard Constraint)** - QMK's compiler rejects any case where one typo is a substring of another, regardless of position.
+**3. Suffix Conflicts (RTL Matching)** - QMK scans right-to-left, so shorter suffix typos make longer ones redundant. If a longer typo ends with a shorter typo and produces the same correction result, the longer one is removed. This check applies across all boundary types since QMK's RTL matching doesn't respect boundaries during matching.
+
+**4. Substring Conflicts (QMK Hard Constraint)** - QMK's compiler rejects any case where one typo is a substring of another, regardless of position (prefix, suffix, or middle) or boundary type. The shorter typo is kept and the longer one is removed.
 
 #### Espanso Filtering
 
-Espanso has minimal filtering (mostly handled in earlier stages). It splits corrections into multiple YAML files if they exceed the `max_entries_per_file` limit.
+Espanso has minimal filtering - it accepts all corrections passed from earlier stages (passthrough). The only processing is organizing corrections by starting letter and splitting into multiple YAML files if they exceed the `max_entries_per_file` limit.
 
 ### Platform Ranking
 
-Corrections are ranked by usefulness:
+#### QMK Ranking
 
-1. **User words first** - Words from include file get highest priority
-2. **Patterns ranked by coverage** - Patterns that replace more corrections rank higher
-3. **Frequency-based** - More common words rank higher
-4. **Length-based** - Shorter typos rank higher (catch errors earlier)
+QMK uses a three-tier ranking system:
+
+1. **User words first** - All corrections for words from include file get infinite priority (always included)
+2. **Patterns ranked by coverage** - Patterns are scored by the sum of word frequencies of all corrections they replace. Higher total frequency ranks higher.
+3. **Direct corrections ranked by frequency** - Direct corrections are scored by their word frequency. More common words rank higher.
+
+Within each tier, corrections are sorted by score (descending). The final ranked list is: user corrections + sorted patterns + sorted direct corrections.
+
+#### Espanso Ranking
+
+Espanso uses no ranking - corrections are passed through in their original order (passthrough). They are sorted alphabetically by word, then by typo, for output organization only.
 
 
 ---

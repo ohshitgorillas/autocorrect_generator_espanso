@@ -6,12 +6,9 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from tqdm import tqdm
 
-from entroppy.core import Correction
+from entroppy.core import BoundaryType, Correction
 from entroppy.core.boundaries import BoundaryIndex
 from entroppy.matching import ExclusionMatcher
-from entroppy.utils.helpers import cached_word_frequency
-
-from entroppy.core import BoundaryType
 
 from .boundary_selection import log_boundary_selection_details
 from .correction_processing import process_collision_case, process_single_word_correction
@@ -27,12 +24,11 @@ if TYPE_CHECKING:
 
 
 def _process_typo_worker(item: tuple[str, list[str]]) -> tuple[
-    Correction | None,
-    bool,
-    tuple[str, str, str | None] | None,
-    tuple[str, list[str], float] | None,
-    tuple[str, str, int] | None,
-    dict | None,  # boundary_details
+    list[Correction],  # corrections (can be multiple per typo now)
+    list[tuple[str, str, str | None]],  # excluded_list
+    list[tuple[str, list[str], float, BoundaryType]],  # skipped_collisions (now includes boundary)
+    list[tuple[str, str, int]],  # skipped_short_list
+    list[dict],  # boundary_details_list
 ]:
     """Worker function to process a single typo collision.
 
@@ -40,12 +36,12 @@ def _process_typo_worker(item: tuple[str, list[str]]) -> tuple[
         item: Tuple of (typo, word_list)
 
     Returns:
-        Tuple of (correction, was_skipped_short, excluded_info, skipped_collision, skipped_short_info)
-        - correction: The resolved correction, or None if skipped/excluded/ambiguous
-        - was_skipped_short: True if skipped due to short typo length
-        - excluded_info: (typo, word, matching_rule) if excluded, None otherwise
-        - skipped_collision: (typo, unique_words, ratio) if ambiguous collision, None otherwise
-        - skipped_short_info: (typo, word, len(typo)) if skipped short, None otherwise
+        Tuple of (corrections, excluded_list, skipped_collisions, skipped_short_list, boundary_details_list)
+        - corrections: List of resolved corrections (can be multiple per typo, one per boundary)
+        - excluded_list: List of (typo, word, matching_rule) for excluded corrections
+        - skipped_collisions: List of (typo, words_in_group, ratio, boundary) for ambiguous collisions
+        - skipped_short_list: List of (typo, word, len(typo)) for skipped short typos
+        - boundary_details_list: List of boundary details dicts for later logging
     """
     typo, word_list = item
     context = get_collision_worker_context()
@@ -84,16 +80,16 @@ def _process_typo_worker(item: tuple[str, list[str]]) -> tuple[
         )
 
         if was_skipped_short:
-            return None, True, None, None, (typo, word, len(typo)), boundary_details
+            return [], [], [], [(typo, word, len(typo))], [boundary_details] if boundary_details else []
         elif excluded_info:
-            return None, False, excluded_info, None, None, boundary_details
+            return [], [excluded_info], [], [], [boundary_details] if boundary_details else []
         elif correction:
-            return correction, False, None, None, None, boundary_details
+            return [correction], [], [], [], [boundary_details] if boundary_details else []
         else:
-            return None, False, None, None, None, boundary_details
+            return [], [], [], [], [boundary_details] if boundary_details else []
     else:
         # Collision case: multiple words compete for same typo
-        correction, was_skipped_short, excluded_info, ratio, boundary_details = (
+        corrections, excluded_list, skipped_collisions, boundary_details_list = (
             process_collision_case(
                 typo,
                 unique_words,
@@ -111,19 +107,7 @@ def _process_typo_worker(item: tuple[str, list[str]]) -> tuple[
             )
         )
 
-        if was_skipped_short:
-            # Find the word that was selected before skipping
-            word_freqs = [(w, cached_word_frequency(w, "en")) for w in unique_words]
-            word_freqs.sort(key=lambda x: x[1], reverse=True)
-            selected_word = word_freqs[0][0]
-            return None, True, None, None, (typo, selected_word, len(typo)), boundary_details
-        elif excluded_info:
-            return None, False, excluded_info, None, None, boundary_details
-        elif correction:
-            return correction, False, None, None, None, boundary_details
-        else:
-            # Ambiguous collision - ratio too low
-            return None, False, None, (typo, unique_words, ratio), None, boundary_details
+        return corrections, excluded_list, skipped_collisions, [], boundary_details_list
 
 
 def resolve_collisions(
@@ -214,24 +198,26 @@ def resolve_collisions(
 
             all_boundary_details = []
             for (
-                correction,
-                was_skipped_short,
-                excluded_info,
-                skipped_collision,
-                skipped_short_info,
-                boundary_details,
+                corrections_list,
+                excluded_list,
+                skipped_collisions_list,
+                skipped_short_list,
+                boundary_details_list,
             ) in results:
-                if was_skipped_short and skipped_short_info:
-                    skipped_short.append(skipped_short_info)
-                elif excluded_info:
-                    excluded_corrections.append(excluded_info)
-                elif skipped_collision:
-                    skipped_collisions.append(skipped_collision)
-                elif correction:
-                    final_corrections.append(correction)
+                # Accumulate all corrections
+                final_corrections.extend(corrections_list)
+                
+                # Accumulate all excluded
+                excluded_corrections.extend(excluded_list)
+                
+                # Accumulate all skipped collisions
+                skipped_collisions.extend(skipped_collisions_list)
+                
+                # Accumulate all skipped short
+                skipped_short.extend(skipped_short_list)
 
-                if boundary_details:
-                    all_boundary_details.append(boundary_details)
+                # Accumulate all boundary details
+                all_boundary_details.extend(boundary_details_list)
 
             # Log boundary selection details AFTER processing completes
             if all_boundary_details and debug_typo_matcher:
@@ -291,7 +277,7 @@ def resolve_collisions(
                     final_corrections.append(correction)
             else:
                 # Collision case: multiple words compete for same typo
-                correction, was_skipped_short, excluded_info, ratio, _ = process_collision_case(
+                corrections_list, excluded_list, skipped_collisions_list, boundary_details_list = process_collision_case(
                     typo,
                     unique_words,
                     validation_set,
@@ -307,18 +293,20 @@ def resolve_collisions(
                     source_index,
                 )
 
-                if was_skipped_short:
-                    # Find the word that was selected before skipping
-                    word_freqs = [(w, cached_word_frequency(w, "en")) for w in unique_words]
-                    word_freqs.sort(key=lambda x: x[1], reverse=True)
-                    selected_word = word_freqs[0][0]
-                    skipped_short.append((typo, selected_word, len(typo)))
-                elif excluded_info:
-                    excluded_corrections.append(excluded_info)
-                elif correction:
-                    final_corrections.append(correction)
-                else:
-                    # Ambiguous collision - ratio too low
-                    skipped_collisions.append((typo, unique_words, ratio))
+                # Accumulate all results
+                final_corrections.extend(corrections_list)
+                excluded_corrections.extend(excluded_list)
+                skipped_collisions.extend(skipped_collisions_list)
+
+                # Log boundary selection details for accepted corrections
+                if boundary_details_list and debug_typo_matcher:
+                    for bd in boundary_details_list:
+                        log_boundary_selection_details(
+                            bd["typo"],
+                            bd["word"],
+                            BoundaryType(bd["boundary"]),
+                            bd["details"],
+                            debug_typo_matcher,
+                        )
 
     return final_corrections, skipped_collisions, skipped_short, excluded_corrections

@@ -57,8 +57,8 @@ def resolve_typo_collisions(
             )
         if skipped_collisions:
             logger.info(f"  Skipped {len(skipped_collisions)} ambiguous collisions:")
-            for typo, words, ratio in skipped_collisions[:5]:
-                logger.info(f"    {typo}: {words} (ratio: {ratio:.2f})")
+            for typo, words, ratio, boundary in skipped_collisions[:5]:
+                logger.info(f"    {typo}: {words} (ratio: {ratio:.2f}, boundary: {boundary.value})")
             if len(skipped_collisions) > 5:
                 logger.info(f"    ... and {len(skipped_collisions) - 5} more")
 

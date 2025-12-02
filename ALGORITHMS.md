@@ -113,11 +113,24 @@ When multiple words map to the same typo, EntropPy must decide which correction 
 
 ### Resolution Algorithm
 
-1. **Calculate word frequencies** using `wordfreq`
-2. **Compare frequencies** - if one word is much more common, use it
-3. **Check frequency ratio** - if ratio is too low, skip (ambiguous)
-4. **Apply boundary** - select least restrictive boundary that prevents false triggers
-5. **Validate** - check length, exclusions, etc.
+The key insight is that **boundaries fundamentally change whether corrections conflict**. For example, "nto" with BOTH boundary → "not" doesn't conflict with "nto" with NONE boundary → "onto" because they match in different contexts.
+
+**New Algorithm (Boundary-First Approach):**
+
+1. **Determine boundaries for all competing words** - For each word competing for the same typo, determine the least restrictive boundary that prevents false triggers
+2. **Group words by boundary type** - Separate competing words into groups based on their boundary type (NONE, LEFT, RIGHT, BOTH)
+3. **Resolve collisions within each boundary group** - For each boundary group:
+   - If only one word in the group → accept it (no collision for this boundary)
+   - If multiple words in the group → apply frequency-based resolution:
+     - Calculate word frequencies using `wordfreq`
+     - Compare frequencies - if one word is much more common (ratio > threshold), use it
+     - If ratio is too low, skip this boundary group (ambiguous for this boundary)
+4. **Validate** - Check length, exclusions, etc. for each accepted correction
+5. **Return multiple corrections** - One correction per valid boundary group
+
+**Result**: The same typo can produce multiple corrections with different boundaries, as long as they don't conflict within the same boundary group. For example, "nto" can map to:
+- "nto" (BOTH) → "not" (standalone word only)
+- "nto" (NONE) → "onto" (matches anywhere)
 
 User words (from include file) always take priority over frequency-based selection.
 

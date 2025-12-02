@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Collision resolution now determines boundaries before frequency comparison**: Fixed architectural issue where collision resolution happened before boundary determination, causing valid corrections with different boundaries to be incorrectly rejected as ambiguous
+  - **Previous behavior**: Checked frequency ratio between competing words first, then determined boundary for the winner
+    - Example: "nto" → ["not", "onto", "into"] would be rejected as ambiguous even though "nto" with BOTH boundary → "not" doesn't conflict with "nto" with NONE boundary → "onto"
+  - **New behavior**: Determines boundaries for all competing words first, groups by boundary type, then applies frequency resolution within each boundary group
+    - Allows multiple valid corrections for the same typo when they use different boundaries (e.g., "nto" with BOTH → "not" coexists with "nto" with NONE → "onto")
+    - Each boundary group is processed independently, preventing false conflicts
+  - **Files modified**: `entroppy/resolution/correction_processing.py`, `entroppy/resolution/collision.py`, `entroppy/processing/stages/data_models.py`, `entroppy/reports/data.py`, `entroppy/processing/stages/collision_resolution.py`, `entroppy/reports/collisions.py`
+  - **Impact**: More corrections accepted, especially for typos that can map to multiple words with different boundary requirements
+
+### Fixed
+
 - **Pattern validation now checks substring conflicts in both directions**: Fixed unsafe pattern acceptance where patterns could incorrectly match other corrections
   - **Previous behavior**: Only checked suffix conflicts for LEFT boundary patterns in RTL matching, missing unsafe patterns with NONE boundary
   - **New behavior**: Checks both suffix and prefix conflicts for all patterns regardless of boundary type, platform, or matching direction

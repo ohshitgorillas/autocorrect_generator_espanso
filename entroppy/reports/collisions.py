@@ -26,9 +26,9 @@ def generate_collisions_report(data: ReportData, report_dir: Path) -> None:
         # Sort by ratio (closest ambiguities first)
         sorted_collisions = sorted(data.skipped_collisions, key=lambda x: x[2])
 
-        for typo, words, ratio in sorted_collisions:
+        for typo, words, ratio, boundary in sorted_collisions:
             f.write(f"{typo} → {words}\n")
-            f.write(f"  Ratio: {ratio:.2f}\n")
+            f.write(f"  Ratio: {ratio:.2f}, Boundary: {boundary.value}\n")
             f.write("\n")
 
     write_file_safely(filepath, write_content, "writing collisions report")

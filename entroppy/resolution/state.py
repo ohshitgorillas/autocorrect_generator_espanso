@@ -1,7 +1,7 @@
 """Dictionary state management for the iterative solver."""
 
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 
 from entroppy.core import BoundaryType, Correction

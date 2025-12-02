@@ -2,7 +2,8 @@
 
 from typing import TYPE_CHECKING
 
-from entroppy.core import BoundaryType
+from loguru import logger
+
 from entroppy.core.patterns import generalize_patterns
 from entroppy.platforms.base import MatchDirection
 from entroppy.resolution.solver import Pass
@@ -51,7 +52,7 @@ class PatternGeneralizationPass(Pass):
         corrections_list = list(state.active_corrections)
 
         try:
-            patterns, corrections_to_remove, pattern_replacements, rejected_patterns = (
+            patterns, corrections_to_remove, _, _ = (
                 generalize_patterns(
                     corrections_list,
                     self.context.validation_set,
@@ -83,7 +84,10 @@ class PatternGeneralizationPass(Pass):
                     "Covered by pattern",
                 )
 
-        except Exception:
+        except (ValueError, KeyError, AttributeError) as e:
             # If pattern generalization fails, continue without patterns
             # This ensures the solver can continue even if pattern logic has issues
-            pass
+            # Catch specific exceptions that might occur during pattern processing
+            if state.debug_words or (state.debug_typo_matcher and state.debug_typo_matcher.matches):
+                # Only log if debugging is enabled to avoid noise
+                logger.debug(f"Pattern generalization failed: {e}")

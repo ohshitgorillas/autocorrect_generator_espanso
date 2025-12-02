@@ -104,13 +104,11 @@ class Pass(ABC):
         3. Check state.graveyard to avoid retrying failed corrections
         4. Use state.add_to_graveyard() to record rejections
         """
-        pass
 
     @property
     @abstractmethod
     def name(self) -> str:
         """Return the name of this pass for logging."""
-        pass
 
 
 class IterativeSolver:

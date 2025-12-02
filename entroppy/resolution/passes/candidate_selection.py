@@ -1,5 +1,6 @@
 """Candidate Selection Pass - promotes raw typos to active corrections."""
 
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from entroppy.core import BoundaryType
@@ -128,8 +129,6 @@ class CandidateSelectionPass(Pass):
             word_boundary_map[word] = boundary
 
         # Group words by boundary type
-        from collections import defaultdict
-
         by_boundary = defaultdict(list)
         for word, boundary in word_boundary_map.items():
             by_boundary[boundary].append(word)

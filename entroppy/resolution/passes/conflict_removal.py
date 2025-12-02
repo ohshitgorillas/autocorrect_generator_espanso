@@ -121,7 +121,7 @@ class ConflictRemovalPass(Pass):
                 word,
                 boundary_type,
                 self.name,
-                f"Blocked by substring conflict",
+                "Blocked by substring conflict",
             )
 
     def _check_if_blocked(

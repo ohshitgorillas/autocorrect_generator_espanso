@@ -83,7 +83,8 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
         report_data.stage_times["Generating typos"] = typo_result.elapsed_time
 
     if verbose:
-        total_typos = sum(len(words) for words in typo_result.typo_map.values())
+        typo_map_dict = dict(typo_result.typo_map)  # Convert to dict for pylint
+        total_typos = sum(len(words) for words in typo_map_dict.values())
         logger.info(
             f"✓ Generated {total_typos} typo mappings from {len(typo_result.typo_map)} unique typos"
         )
@@ -145,7 +146,7 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     all_corrections = solver_result.corrections + solver_result.patterns
 
     # Filter corrections (if platform provides additional filtering)
-    filtered_corrections, filter_metadata = platform.filter_corrections(all_corrections, config)
+    filtered_corrections, _ = platform.filter_corrections(all_corrections, config)
 
     # Rank corrections
     # Create dummy pattern_replacements for compatibility

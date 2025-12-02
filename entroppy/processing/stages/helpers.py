@@ -48,4 +48,5 @@ def call_resolve_collisions(
         exclusion_set if exclusion_set is not None else dict_data.exclusions,
         jobs if jobs is not None else config.jobs,
         verbose,
+        config.debug_typos,  # Pass raw patterns for workers
     )

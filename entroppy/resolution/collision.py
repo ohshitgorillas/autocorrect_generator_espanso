@@ -1,7 +1,6 @@
 """Collision resolution for typo corrections."""
 
 from multiprocessing import Pool
-from typing import TYPE_CHECKING
 
 from loguru import logger
 from tqdm import tqdm
@@ -9,6 +8,7 @@ from tqdm import tqdm
 from entroppy.core import BoundaryType, Correction
 from entroppy.core.boundaries import BoundaryIndex
 from entroppy.matching import ExclusionMatcher
+from entroppy.utils.debug import DebugTypoMatcher
 
 from .boundary_selection import log_boundary_selection_details
 from .correction_processing import process_collision_case, process_single_word_correction
@@ -18,9 +18,6 @@ from .worker_context import (
     get_worker_indexes,
     init_collision_worker,
 )
-
-if TYPE_CHECKING:
-    from entroppy.utils.debug import DebugTypoMatcher
 
 
 def _process_typo_worker(item: tuple[str, list[str]]) -> tuple[
@@ -52,6 +49,13 @@ def _process_typo_worker(item: tuple[str, list[str]]) -> tuple[
     # Recreate ExclusionMatcher in worker (not serializable due to compiled regex)
     exclusion_matcher = ExclusionMatcher(set(context.exclusion_set))
 
+    # Recreate DebugTypoMatcher in worker from patterns (not serializable due to compiled regex)
+    debug_typo_matcher = (
+        DebugTypoMatcher.from_patterns(set(context.debug_typo_patterns))
+        if context.debug_typo_patterns
+        else None
+    )
+
     # Convert frozensets back to sets for compatibility
     user_words = set(context.user_words)
     debug_words = set(context.debug_words)
@@ -71,7 +75,7 @@ def _process_typo_worker(item: tuple[str, list[str]]) -> tuple[
                 user_words,
                 exclusion_matcher,
                 debug_words,
-                None,  # debug_typo_matcher not passed to workers (not easily serializable)
+                debug_typo_matcher,
                 validation_index,
                 source_index,
             )
@@ -101,7 +105,7 @@ def _process_typo_worker(item: tuple[str, list[str]]) -> tuple[
         user_words,
         exclusion_matcher,
         debug_words,
-        None,  # debug_typo_matcher not passed to workers
+        debug_typo_matcher,
         validation_index,
         source_index,
     )
@@ -119,10 +123,11 @@ def resolve_collisions(
     user_words: set[str],
     exclusion_matcher: ExclusionMatcher,
     debug_words: set[str] | None = None,
-    debug_typo_matcher: "DebugTypoMatcher | None" = None,
+    debug_typo_matcher: DebugTypoMatcher | None = None,
     exclusion_set: set[str] | None = None,
     jobs: int = 1,
     verbose: bool = False,
+    debug_typo_patterns: set[str] | None = None,
 ) -> tuple[list[Correction], list, list, list]:
     """Resolve collisions where multiple words map to same typo.
 
@@ -140,12 +145,16 @@ def resolve_collisions(
         exclusion_set: Set of exclusion patterns (needed for parallel workers)
         jobs: Number of parallel workers to use (1 = sequential)
         verbose: Whether to show progress bar
+        debug_typo_patterns: Set of debug typo patterns (raw strings, for workers)
 
     Returns:
         Tuple of (final_corrections, skipped_collisions, skipped_short, excluded_corrections)
     """
     if debug_words is None:
         debug_words = set()
+
+    if debug_typo_patterns is None:
+        debug_typo_patterns = set()
 
     if exclusion_set is None:
         # Fallback: use empty set if not provided (workers will recreate matcher)
@@ -173,6 +182,7 @@ def resolve_collisions(
             user_words=frozenset(user_words),
             exclusion_set=frozenset(exclusion_set),
             debug_words=frozenset(debug_words),
+            debug_typo_patterns=frozenset(debug_typo_patterns),
         )
 
         if verbose:

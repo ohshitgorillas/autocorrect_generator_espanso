@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.6.0] - 2025-12-02
 
+### Added
+
+- **Iterative Solver Architecture**: Replaced linear stages 3-6 with a convergence-based solver that can backtrack and self-heal
+  - **DictionaryState**: Centralized state manager with graveyard to prevent infinite loops
+  - **IterativeSolver**: Orchestrator that runs passes until convergence
+  - **Pass System**: Modular architecture with four specialized passes:
+    - `CandidateSelectionPass`: Promotes raw typos to active corrections with graveyard-based backtracking
+    - `PatternGeneralizationPass`: Compresses specific corrections into general patterns
+    - `ConflictRemovalPass`: Enforces substring/overlap rules and triggers self-healing
+    - `PlatformConstraintsPass`: Enforces hard platform limits
+  - **Self-Healing**: When conflicts arise, the solver automatically retries with stricter boundaries
+  - **Debug Tracing**: Comprehensive trace log showing all decisions affecting debug targets
+  - New function `run_iterative_solver_pipeline()` in `entroppy/processing/pipeline.py`
+  - Detailed documentation in `docs/ALGORITHMS.md`
+
 ### Changed
 
 - **Code refactoring and modularization**: Split large files (>500 lines) into focused modules, extracted debug logging into separate modules, and refactored large functions into smaller helpers

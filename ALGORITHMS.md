@@ -132,7 +132,7 @@ The key insight is that **boundaries fundamentally change whether corrections co
 - "nto" (BOTH) → "not" (standalone word only)
 - "nto" (NONE) → "onto" (matches anywhere)
 
-User words (from include file) always take priority over frequency-based selection.
+**Note**: User words (from include file) are included in collision resolution like any other words. They receive special priority treatment during QMK ranking (Stage 6), not during collision resolution.
 
 ### Boundary Selection
 
@@ -140,13 +140,17 @@ For each typo, EntropPy selects the **least restrictive boundary** that doesn't 
 
 **Selection Algorithm:**
 
-1. **Check boundaries in fixed order** (least to most restrictive):
-   - **NONE** (matches anywhere)
-   - **LEFT** (matches at word start only)
-   - **RIGHT** (matches at word end only)
-   - **BOTH** (matches as standalone word only)
+1. **Determine boundary order based on target word relationship**:
+   - The order is dynamically adjusted to skip incompatible boundaries based on how the typo relates to the target word:
+     - **If typo is a suffix of target word** → Skip LEFT (try: NONE, RIGHT, BOTH)
+       - LEFT boundary means "match at word start", but typo appears at word end
+     - **If typo is a prefix of target word** → Skip RIGHT (try: NONE, LEFT, BOTH)
+       - RIGHT boundary means "match at word end", but typo appears at word start
+     - **If typo is a middle substring of target word** → Skip LEFT and RIGHT (try: NONE, BOTH)
+       - Neither LEFT nor RIGHT make sense for middle substrings
+     - **Otherwise** → Try all boundaries in default order: NONE, LEFT, RIGHT, BOTH
 
-2. **For each boundary**, check if it would cause false triggers (in priority order):
+2. **For each boundary in the determined order**, check if it would cause false triggers (in priority order):
    - **Target word check (highest priority)**: Check if typo appears as prefix/suffix/substring of the target word itself
      - This prevents "predictive corrections" where the correction would trigger when typing the correct word
      - Example: `alway -> always` with NONE/LEFT boundary would trigger when typing "always", producing "alwayss"
@@ -161,7 +165,7 @@ For each typo, EntropPy selects the **least restrictive boundary** that doesn't 
 
 4. **Fallback**: If all boundaries would cause false triggers, use **BOTH** (most restrictive, safest option)
 
-**Key Principle**: Select the least restrictive boundary that safely prevents the typo from incorrectly matching the target word, validation words, or source words in unintended contexts. Target word check takes highest priority to prevent predictive corrections.
+**Key Principle**: Select the least restrictive boundary that safely prevents the typo from incorrectly matching the target word, validation words, or source words in unintended contexts. The boundary order is optimized based on the typo's relationship to the target word to avoid testing incompatible boundaries. Target word check takes highest priority to prevent predictive corrections.
 
 ---
 
@@ -199,16 +203,15 @@ Prefix patterns work similarly but extract from the beginning of words:
 
 ### Pattern Validation
 
-Not all patterns are valid. Each pattern must:
+Not all patterns are valid. Each pattern must pass these checks in order:
 
 1. **Have at least 2 occurrences** - Patterns with only one occurrence are skipped (not worth generalizing)
 2. **Meet minimum length** - Pattern must be at least `min_typo_length` characters
 3. **Work for all occurrences** - The pattern must correctly transform all matching typos (validates that applying the pattern to each full typo produces the expected full word)
-4. **Not conflict with validation words** - Pattern typo must not be a validation word, and must not trigger at the end of validation words
-5. **Not corrupt target words (highest priority)** - Pattern must not incorrectly transform any target word from corrections that use the pattern (prevents predictive corrections)
+4. **Not conflict with validation words** - Pattern typo must not be a validation word, and must not trigger at the start or end of validation words
+5. **Not corrupt target words (highest priority for corruption checks)** - Pattern must not incorrectly transform any target word from corrections that use the pattern (prevents predictive corrections). This check is performed before checking source words.
 6. **Not corrupt source words** - Pattern must not incorrectly transform any source word
-7. **Not conflict with existing corrections** - Pattern's (typo, word) pair shouldn't already exist as a direct correction (checked during cross-boundary deduplication)
-8. **Not incorrectly match other corrections** - Pattern must not appear as a substring (prefix or suffix) of another correction's typo where applying the pattern would produce a different result. This check applies in both directions regardless of platform or matching direction:
+7. **Not incorrectly match other corrections** - Pattern must not appear as a substring (prefix or suffix) of another correction's typo where applying the pattern would produce a different result. This check applies in both directions regardless of platform or matching direction:
    - **Suffix conflicts**: If pattern appears as suffix of another correction's typo, applying the pattern must produce the same result as the direct correction
    - **Prefix conflicts**: If pattern appears as prefix of another correction's typo, applying the pattern must produce the same result as the direct correction
    - Example: Pattern `toin → tion` is rejected because it would incorrectly match `washingtoin → washington` as a suffix, producing `washingtion` instead of `washington`
@@ -219,7 +222,7 @@ Patterns can also have collisions (multiple words for same pattern typo). These 
 
 ### Cross-Boundary Deduplication
 
-If a pattern's (typo, word) pair already exists as a direct correction (even with different boundary), the pattern is rejected and the direct corrections that would have been replaced by the pattern are restored to the final corrections list.
+After pattern validation, if a pattern's (typo, word) pair already exists as a direct correction (even with different boundary), the pattern is rejected and the direct corrections that would have been replaced by the pattern are restored to the final corrections list. This is a separate step from pattern validation that ensures patterns don't duplicate existing direct corrections.
 
 ---
 
@@ -235,11 +238,16 @@ When a text expansion tool sees a typo, it triggers on the **first match** (shor
 
 ### Conflict Detection Algorithm
 
-1. **Group by boundary type** - Process each boundary separately
-2. **Sort by typo length** (shortest first)
-3. **For each typo**, check if it's a substring of any longer typo
-4. **If conflict found**, remove the longer typo
-5. **Keep the shorter typo** (it blocks the longer one)
+1. **Group by boundary type** - Process each boundary separately (conflicts only occur within the same boundary type)
+2. **Sort by typo length** (shortest first) - Process shorter typos first to identify which longer typos they block
+3. **For each shorter typo**, check if it appears as a substring of any longer typo in the relevant position:
+   - **For RIGHT boundary**: Check if shorter typo appears as suffix of longer typo
+   - **For LEFT/NONE/BOTH boundaries**: Check if shorter typo appears as prefix of longer typo
+4. **Validate the result** - If substring match found, verify that triggering the shorter correction would produce the correct result for the longer typo
+5. **If conflict found**, remove the longer typo (the shorter one blocks it)
+6. **Keep the shorter typo** (it blocks the longer one and produces the correct result)
+
+The algorithm uses character-based indexing for efficiency, checking only typos that share the same starting/ending character rather than comparing all pairs.
 
 ### Pattern Updates from Conflicts
 

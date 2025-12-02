@@ -13,13 +13,17 @@ When typing "wherre":
 from abc import ABC, abstractmethod
 from collections import defaultdict
 
+from typing import TYPE_CHECKING
+
 from entroppy.core import BoundaryType, Correction
 from entroppy.utils.debug import (
-    DebugTypoMatcher,
     is_debug_correction,
     log_debug_correction,
     log_if_debug_correction,
 )
+
+if TYPE_CHECKING:
+    from entroppy.utils.debug import DebugTypoMatcher
 
 
 class ConflictDetector(ABC):
@@ -177,7 +181,8 @@ def _log_blocked_correction(
         log_debug_correction(
             long_correction,
             f"REMOVED - blocked by shorter correction '{candidate} → {short_word}' "
-            f"(typing '{typo}' triggers '{candidate}' producing '{expected_result}' = '{long_word}' ✓)",
+            f"(typing '{typo}' triggers '{candidate}' producing '{expected_result}' "
+            f"= '{long_word}' ✓)",
             debug_words,
             debug_typo_matcher,
             "Stage 5",
@@ -329,7 +334,8 @@ def _build_typo_index(
         collect_blocking_map: Whether to build blocking map (for performance optimization)
 
     Returns:
-        Tuple of (set of typos to remove, blocking map from blocked correction to blocking correction)
+        Tuple of (set of typos to remove, blocking map from blocked correction
+            to blocking correction)
     """
     # Build lookup map from typo to full correction
     typo_to_correction = {c[0]: c for c in corrections}

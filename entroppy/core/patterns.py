@@ -92,9 +92,7 @@ def generalize_patterns(
         # Merge occurrences if pattern already exists, otherwise add new
         if pattern_key in found_patterns:
             # Deduplicate: same correction might appear in both prefix and suffix patterns
-            existing_typos = {
-                (typo, word, boundary) for typo, word, boundary in found_patterns[pattern_key]
-            }
+            existing_typos = set(found_patterns[pattern_key])
             for occ in occurrences:
                 if occ not in existing_typos:
                     found_patterns[pattern_key].append(occ)
@@ -103,8 +101,8 @@ def generalize_patterns(
 
     if verbose:
         logger.info(
-            f"Found {len(prefix_patterns)} prefix and {len(suffix_patterns)} suffix pattern candidates "
-            f"({len(found_patterns)} unique patterns)..."
+            f"Found {len(prefix_patterns)} prefix and {len(suffix_patterns)} "
+            f"suffix pattern candidates ({len(found_patterns)} unique patterns)..."
         )
         logger.info("Generalizing patterns...")
 
@@ -119,7 +117,8 @@ def generalize_patterns(
                     for debug_typo in debug_typo_matcher.exact_patterns
                 ):
                     logger.debug(
-                        f"[PATTERN GENERALIZATION] Skipping pattern '{typo_pattern}' → '{word_pattern}': "
+                        f"[PATTERN GENERALIZATION] Skipping pattern "
+                        f"'{typo_pattern}' → '{word_pattern}': "
                         f"only {len(occurrences)} occurrence (need 2+)"
                     )
             continue
@@ -149,7 +148,8 @@ def generalize_patterns(
             rejected_patterns.append((typo_pattern, word_pattern, reason))
             if is_debug_pattern:
                 logger.debug(
-                    f"[PATTERN GENERALIZATION] REJECTED: '{typo_pattern}' → '{word_pattern}': {reason}"
+                    f"[PATTERN GENERALIZATION] REJECTED: "
+                    f"'{typo_pattern}' → '{word_pattern}': {reason}"
                 )
             _log_pattern_rejection(
                 typo_pattern,
@@ -221,10 +221,8 @@ def generalize_patterns(
         is_safe, incorrect_match_error = check_pattern_would_incorrectly_match_other_corrections(
             typo_pattern,
             word_pattern,
-            boundary,
             corrections,  # All corrections to check against
             occurrences,  # Corrections this pattern replaces (exclude from check)
-            match_direction,
         )
         if not is_safe:
             rejected_patterns.append((typo_pattern, word_pattern, incorrect_match_error))

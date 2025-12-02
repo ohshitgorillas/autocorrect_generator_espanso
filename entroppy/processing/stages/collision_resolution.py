@@ -5,12 +5,12 @@ import time
 from loguru import logger
 
 from entroppy.core import Config
-from entroppy.resolution import resolve_collisions
 from entroppy.processing.stages.data_models import (
     DictionaryData,
     TypoGenerationResult,
     CollisionResolutionResult,
 )
+from entroppy.processing.stages.helpers import call_resolve_collisions
 
 
 def resolve_typo_collisions(
@@ -32,20 +32,13 @@ def resolve_typo_collisions(
     """
     start_time = time.time()
 
-    corrections, skipped_collisions, skipped_short, excluded_corrections = resolve_collisions(
+    corrections, skipped_collisions, skipped_short, excluded_corrections = call_resolve_collisions(
         typo_result.typo_map,
-        dict_data.filtered_validation_set,
-        dict_data.source_words_set,
-        config.freq_ratio,
-        config.min_typo_length,
-        config.min_word_length,
-        dict_data.user_words_set,
-        dict_data.exclusion_matcher,
-        config.debug_words,
-        config.debug_typo_matcher,
-        dict_data.exclusions,
-        config.jobs,
-        verbose,
+        dict_data,
+        config,
+        exclusion_set=dict_data.exclusions,
+        jobs=config.jobs,
+        verbose=verbose,
     )
 
     if verbose:

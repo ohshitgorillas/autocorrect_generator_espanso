@@ -2,6 +2,8 @@
 
 from collections import defaultdict
 
+from loguru import logger
+
 from entroppy.core import BoundaryType, Correction
 from entroppy.platforms.qmk.typo_index import TypoIndex
 
@@ -163,7 +165,7 @@ def detect_substring_conflicts(corrections: list[Correction]) -> tuple[list[Corr
 
 
 def filter_corrections(
-    corrections: list[Correction], allowed_chars: set[str]
+    corrections: list[Correction],
 ) -> tuple[list[Correction], dict]:
     """
     Apply QMK-specific filtering.
@@ -177,7 +179,6 @@ def filter_corrections(
 
     Args:
         corrections: List of corrections to filter
-        allowed_chars: Set of allowed characters (for validation)
 
     Returns:
         Tuple of (filtered_corrections, metadata)
@@ -192,13 +193,11 @@ def filter_corrections(
     final, substring_conflicts = detect_substring_conflicts(after_suffix)
 
     # Debug: Check for toin-related conflicts
-    from loguru import logger
-
     toin_patterns = [c for c in final if "toin" in c[0].lower()]
     if len(toin_patterns) > 1:
         logger.debug(
-            f"[QMK FILTERING] Found {len(toin_patterns)} toin-related patterns after substring conflict detection: "
-            f"{[c[0] for c in toin_patterns]}"
+            f"[QMK FILTERING] Found {len(toin_patterns)} toin-related patterns "
+            f"after substring conflict detection: {[c[0] for c in toin_patterns]}"
         )
 
     metadata = {

@@ -7,12 +7,13 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from entroppy.core import Config, Correction, generalize_patterns
-from entroppy.resolution import remove_substring_conflicts, resolve_collisions
+from entroppy.resolution import remove_substring_conflicts
 from entroppy.processing.stages.data_models import (
     DictionaryData,
     CollisionResolutionResult,
     PatternGeneralizationResult,
 )
+from entroppy.processing.stages.helpers import call_resolve_collisions
 
 if TYPE_CHECKING:
     from entroppy.platforms.base import MatchDirection
@@ -133,17 +134,11 @@ def generalize_typo_patterns(
         pattern_typo_map[typo].append(word)
 
     # Resolve collisions for patterns
-    resolved_patterns, _, _, _ = resolve_collisions(
+    resolved_patterns, _, _, _ = call_resolve_collisions(
         pattern_typo_map,
-        dict_data.filtered_validation_set,
-        dict_data.source_words_set,
-        config.freq_ratio,
-        config.min_typo_length,
-        config.min_word_length,
-        dict_data.user_words_set,
-        dict_data.exclusion_matcher,
-        config.debug_words,
-        config.debug_typo_matcher,
+        dict_data,
+        config,
+        verbose=verbose,
     )
 
     # Remove substring conflicts from patterns

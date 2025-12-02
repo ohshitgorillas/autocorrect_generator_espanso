@@ -1,12 +1,12 @@
 """Base classes and types for platform abstraction."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
-
-from entroppy.core import Config, Correction
 
 
 class MatchDirection(Enum):
@@ -47,8 +47,8 @@ class PlatformBackend(ABC):
 
     @abstractmethod
     def filter_corrections(
-        self, corrections: list[Correction], config: Config
-    ) -> tuple[list[Correction], dict[str, Any]]:
+        self, corrections: list["Correction"], config: "Config"
+    ) -> tuple[list["Correction"], dict[str, Any]]:
         """
         Apply platform-specific filtering.
 
@@ -64,12 +64,12 @@ class PlatformBackend(ABC):
     @abstractmethod
     def rank_corrections(
         self,
-        corrections: list[Correction],
-        patterns: list[Correction],
-        pattern_replacements: dict[Correction, list[Correction]],
+        corrections: list["Correction"],
+        patterns: list["Correction"],
+        pattern_replacements: dict["Correction", list["Correction"]],
         user_words: set[str],
-        config: Config | None = None,
-    ) -> list[Correction]:
+        config: "Config" | None = None,
+    ) -> list["Correction"]:
         """
         Rank corrections by platform-specific usefulness.
 
@@ -86,7 +86,7 @@ class PlatformBackend(ABC):
 
     @abstractmethod
     def generate_output(
-        self, corrections: list[Correction], output_path: str | None, config: Config
+        self, corrections: list["Correction"], output_path: str | None, config: "Config"
     ) -> None:
         """
         Generate platform-specific output format.
@@ -100,15 +100,15 @@ class PlatformBackend(ABC):
     @abstractmethod
     def generate_platform_report(
         self,
-        final_corrections: list[Correction],
-        ranked_corrections_before_limit: list[Correction],
-        filtered_corrections: list[Correction],
-        patterns: list[Correction],
-        pattern_replacements: dict[Correction, list[Correction]],
+        final_corrections: list["Correction"],
+        ranked_corrections_before_limit: list["Correction"],
+        filtered_corrections: list["Correction"],
+        patterns: list["Correction"],
+        pattern_replacements: dict["Correction", list["Correction"]],
         user_words: set[str],
         filter_metadata: dict[str, Any],
         report_dir: Path,
-        config: Config,
+        config: "Config",
     ) -> dict[str, Any]:
         """
         Generate platform-specific report.

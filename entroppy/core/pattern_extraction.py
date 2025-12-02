@@ -74,14 +74,14 @@ def _find_patterns(
         filtered_corrections = [
             (typo, word, boundary)
             for typo, word, boundary in corrections
-            if boundary == boundary_type or boundary == BoundaryType.NONE
+            if boundary in (boundary_type, BoundaryType.NONE)
         ]
     else:
         # Prefix patterns: include LEFT and NONE boundaries
         filtered_corrections = [
             (typo, word, boundary)
             for typo, word, boundary in corrections
-            if boundary == boundary_type or boundary == BoundaryType.NONE
+            if boundary in (boundary_type, BoundaryType.NONE)
         ]
 
     if not filtered_corrections:
@@ -128,7 +128,8 @@ def _find_patterns(
                 if len(typo) < length:
                     if is_debug:
                         logger.debug(
-                            f"  Length {length}: SKIPPED - typo length {len(typo)} < pattern length {length}"
+                            f"  Length {length}: SKIPPED - typo length {len(typo)} "
+                            f"< pattern length {length}"
                         )
                     continue
 
@@ -152,7 +153,8 @@ def _find_patterns(
                 if other_part_typo != other_part_word:
                     if is_debug:
                         logger.debug(
-                            f"    SKIPPED - other_part mismatch: '{other_part_typo}' != '{other_part_word}'"
+                            f"    SKIPPED - other_part mismatch: "
+                            f"'{other_part_typo}' != '{other_part_word}'"
                         )
                     continue
 
@@ -191,7 +193,8 @@ def _find_patterns(
                         for debug_typo in debug_typos
                     ):
                         logger.debug(
-                            f"[PATTERN EXTRACTION] ✓ PATTERN FOUND: '{typo_pattern}' → '{word_pattern}' "
+                            f"[PATTERN EXTRACTION] ✓ PATTERN FOUND: "
+                            f"'{typo_pattern}' → '{word_pattern}' "
                             f"(boundary={boundary.value}, {len(unique_matches)} occurrences)"
                         )
                         for typo, word, orig_boundary in unique_matches:
@@ -205,7 +208,8 @@ def _find_patterns(
         for (typo, word, boundary), candidates in debug_corrections.items():
             if candidates:
                 logger.debug(
-                    f"[PATTERN EXTRACTION] '{typo}' → '{word}': {len(candidates)} valid pattern candidates"
+                    f"[PATTERN EXTRACTION] '{typo}' → '{word}': "
+                    f"{len(candidates)} valid pattern candidates"
                 )
                 for length, tp, wp, op in candidates:
                     logger.debug(f"  - Length {length}: '{tp}'→'{wp}' (other_part='{op}')")

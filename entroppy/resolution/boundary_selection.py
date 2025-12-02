@@ -49,11 +49,41 @@ def _check_typo_in_target_word(
     return is_prefix, is_suffix, is_substring
 
 
+def _check_false_trigger_with_details(
+    typo: str,
+    boundary: BoundaryType,
+    validation_index: BoundaryIndex,
+    source_index: BoundaryIndex,
+    target_word: str | None = None,
+) -> tuple[bool, dict[str, bool]]:
+    """Check if boundary would cause false triggers and return details.
+
+    This helper function eliminates duplication between boundary_selection.py
+    and correction_processing.py by centralizing the call pattern.
+
+    Args:
+        typo: The typo string
+        boundary: The boundary type to check
+        validation_index: Boundary index for validation set
+        source_index: Boundary index for source words
+        target_word: Optional target word to check against
+
+    Returns:
+        Tuple of (would_cause_false_trigger, details_dict)
+    """
+    return _would_cause_false_trigger(
+        typo,
+        boundary,
+        validation_index,
+        source_index,
+        target_word=target_word,
+        return_details=True,
+    )
+
+
 def _would_cause_false_trigger(
     typo: str,
     boundary: BoundaryType,
-    validation_set: set[str],
-    source_words: set[str],
     validation_index: BoundaryIndex,
     source_index: BoundaryIndex,
     target_word: str | None = None,
@@ -67,8 +97,6 @@ def _would_cause_false_trigger(
     Args:
         typo: The typo string
         boundary: The boundary type to check
-        validation_set: Set of validation words to check against
-        source_words: Set of source words to check against
         validation_index: Boundary index for validation set
         source_index: Boundary index for source words
         target_word: Optional target word to check against (highest priority check)
@@ -161,8 +189,6 @@ def _would_cause_false_trigger(
 
 def choose_boundary_for_typo(
     typo: str,
-    validation_set: set[str],
-    source_words: set[str],
     validation_index: BoundaryIndex,
     source_index: BoundaryIndex,
     debug_words: set[str] | None = None,
@@ -181,8 +207,6 @@ def choose_boundary_for_typo(
 
     Args:
         typo: The typo string
-        validation_set: Set of validation words to check for false triggers
-        source_words: Set of source words to check for false triggers
         validation_index: Boundary index for validation set
         source_index: Boundary index for source words
         debug_words: Set of words to debug (exact matches)
@@ -224,15 +248,12 @@ def choose_boundary_for_typo(
 
     # Check each boundary from least to most restrictive
     for boundary in boundary_order:
-        would_cause, details = _would_cause_false_trigger(
+        would_cause, details = _check_false_trigger_with_details(
             typo,
             boundary,
-            validation_set,
-            source_words,
             validation_index,
             source_index,
             target_word=word,
-            return_details=True,
         )
         if not would_cause:
             if is_debug:
@@ -248,7 +269,7 @@ def choose_boundary_for_typo(
                     "Stage 3",
                 )
             return boundary
-        elif is_debug:
+        if is_debug:
             # Log why this boundary was rejected
             reason_parts = []
             if details["would_trigger_start"]:
@@ -264,7 +285,8 @@ def choose_boundary_for_typo(
             word_info = f" (word: {word})" if word else ""
             log_debug_typo(
                 typo,
-                f"Rejected boundary '{boundary.value}'{word_info} - would cause false triggers: {reason_str}",
+                f"Rejected boundary '{boundary.value}'{word_info} - "
+                f"would cause false triggers: {reason_str}",
                 (
                     debug_typo_matcher.get_matching_patterns(typo, boundary)
                     if debug_typo_matcher
@@ -279,7 +301,8 @@ def choose_boundary_for_typo(
         word_info = f" (word: {word})" if word else ""
         log_debug_typo(
             typo,
-            f"All boundaries would cause false triggers, using fallback '{BoundaryType.BOTH.value}'{word_info}",
+            f"All boundaries would cause false triggers, using fallback "
+            f"'{BoundaryType.BOTH.value}'{word_info}",
             (
                 debug_typo_matcher.get_matching_patterns(typo, BoundaryType.BOTH)
                 if debug_typo_matcher

@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
 from loguru import logger
 
 from entroppy.core import Config, Correction
@@ -14,6 +13,7 @@ from entroppy.platforms.espanso.organization import organize_by_letter
 from entroppy.platforms.espanso.ram_estimation import estimate_ram_usage
 from entroppy.platforms.espanso.reports import generate_espanso_output_report
 from entroppy.platforms.espanso.yaml_conversion import correction_to_yaml_dict
+from entroppy.platforms.espanso.yaml_helpers import write_yaml_to_stream
 
 
 class EspansoBackend(PlatformBackend):
@@ -96,24 +96,7 @@ class EspansoBackend(PlatformBackend):
         else:
             yaml_dicts = [correction_to_yaml_dict(c) for c in sorted_corrections]
             yaml_output = {"matches": yaml_dicts}
-            try:
-                yaml.safe_dump(
-                    yaml_output,
-                    sys.stdout,
-                    allow_unicode=True,
-                    default_flow_style=False,
-                    sort_keys=False,
-                    width=float("inf"),
-                )
-            except yaml.YAMLError as e:
-                logger.error(f"YAML serialization error: {e}")
-                raise
-            except (OSError, IOError) as e:
-                logger.error(f"Error writing to stdout: {e}")
-                raise
-            except Exception as e:
-                logger.error(f"Unexpected error during YAML output: {e}")
-                raise
+            write_yaml_to_stream(yaml_output, sys.stdout, "writing to stdout")
 
     def generate_platform_report(
         self,

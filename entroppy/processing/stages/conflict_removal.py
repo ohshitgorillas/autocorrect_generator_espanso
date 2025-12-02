@@ -80,7 +80,8 @@ def _update_patterns_from_blocked_corrections(
         patterns: Current list of patterns
         pattern_replacements: Current dictionary mapping patterns to their replacements
         final_corrections: Corrections that were kept (the blocking corrections)
-        removed_corrections: List of (blocked_typo, blocked_word, blocking_typo, blocking_word, boundary)
+        removed_corrections: List of (blocked_typo, blocked_word, blocking_typo,
+            blocking_word, boundary)
 
     Returns:
         Tuple of (updated_patterns, updated_pattern_replacements)
@@ -89,7 +90,7 @@ def _update_patterns_from_blocked_corrections(
     updated_replacements = dict(pattern_replacements)
 
     # Track which corrections are already patterns
-    pattern_set = {(typo, word, boundary) for typo, word, boundary in updated_patterns}
+    pattern_set = set(updated_patterns)
 
     # Build a map of blocking corrections to find their boundaries
     blocking_corrections_map = {}
@@ -151,7 +152,7 @@ def update_patterns_from_conflicts(
     updated_replacements = dict(pattern_replacements)
 
     # Track which corrections are already patterns
-    pattern_set = {(typo, word, boundary) for typo, word, boundary in updated_patterns}
+    pattern_set = set(updated_patterns)
 
     # Build a map of blocking corrections to find their boundaries
     blocking_corrections_map = {}

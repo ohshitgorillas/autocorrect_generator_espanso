@@ -6,7 +6,10 @@ from typing import TYPE_CHECKING
 from entroppy.core.boundaries import BoundaryIndex, BoundaryType, would_trigger_at_end
 from entroppy.core.types import Correction
 from entroppy.platforms.base import MatchDirection
-from entroppy.utils.debug import DebugTypoMatcher, log_debug_correction
+from entroppy.utils.debug import log_debug_correction
+
+if TYPE_CHECKING:
+    from entroppy.utils.debug import DebugTypoMatcher
 
 
 class SourceWordIndex:
@@ -122,7 +125,8 @@ def _validate_pattern_result(
         word_pattern: The word pattern to validate
         full_typo: The full typo string
         full_word: The full correct word
-        boundary: The boundary type (LEFT/RIGHT indicates prefix/suffix, NONE/BOTH need pattern position)
+        boundary: The boundary type (LEFT/RIGHT indicates prefix/suffix,
+            NONE/BOTH need pattern position)
 
     Returns:
         Tuple of (is_valid, expected_result)
@@ -250,7 +254,8 @@ def _log_pattern_acceptance(
             replaced_strs.append(f"... and {len(occurrences) - 3} more")
         log_debug_correction(
             pattern_correction,
-            f"Pattern ACCEPTED - replaces {len(occurrences)} corrections: {', '.join(replaced_strs)}",
+            f"Pattern ACCEPTED - replaces {len(occurrences)} corrections: "
+            f"{', '.join(replaced_strs)}",
             debug_words,
             debug_typo_matcher,
             "Stage 4",
@@ -304,7 +309,8 @@ def check_pattern_conflicts(
         match_direction: The match direction
         validation_index: Pre-built index for validation_set (must match validation_set)
         source_word_index: Optional pre-built index for source_words (for optimization)
-        target_words: Optional set of target words to check against (prevents predictive corrections)
+        target_words: Optional set of target words to check against
+            (prevents predictive corrections)
 
     Returns:
         Tuple of (is_safe, error_message). error_message is None if safe.
@@ -317,7 +323,8 @@ def check_pattern_conflicts(
     if would_trigger_at_end(typo_pattern, validation_index):
         return False, "Would trigger at end of validation words"
 
-    # FIRST: Check if pattern would corrupt target words (highest priority - prevents predictive corrections)
+    # FIRST: Check if pattern would corrupt target words
+    # (highest priority - prevents predictive corrections)
     # This prevents corrections that would trigger when typing the target word correctly
     if target_words:
         would_corrupt_target = any(
@@ -346,10 +353,8 @@ def check_pattern_conflicts(
 def check_pattern_would_incorrectly_match_other_corrections(
     typo_pattern: str,
     word_pattern: str,
-    boundary: BoundaryType,
     all_corrections: list[Correction],
     pattern_occurrences: list[Correction],
-    match_direction: MatchDirection,
 ) -> tuple[bool, str | None]:
     """Check if a pattern would incorrectly match other corrections.
 
@@ -363,18 +368,17 @@ def check_pattern_would_incorrectly_match_other_corrections(
     the pattern is unsafe and should be rejected.
 
     Example:
-        Pattern: `toin → tion` (suffix pattern, boundary LEFT or NONE)
+        Pattern: `toin → tion` (suffix pattern)
         Direct correction: `washingtoin → washington`
-        Problem: Pattern would match `washingtoin` as suffix and produce `washingtion` ≠ `washington`
+        Problem: Pattern would match `washingtoin` as suffix and produce
+            `washingtion` ≠ `washington`
         Result: Pattern should be rejected
 
     Args:
         typo_pattern: The typo pattern to check
         word_pattern: The word pattern to check
-        boundary: The boundary type of the pattern (checked regardless of value)
         all_corrections: All corrections that exist (to check against)
         pattern_occurrences: Corrections that this pattern would replace (exclude from check)
-        match_direction: The match direction (unused, kept for API compatibility)
 
     Returns:
         Tuple of (is_safe, error_message). error_message is None if safe.

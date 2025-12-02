@@ -5,13 +5,11 @@ from __future__ import annotations
 import json
 from argparse import ArgumentParser
 from multiprocessing import cpu_count
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from loguru import logger
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
-from entroppy.core.boundaries import BoundaryType
-from entroppy.core.types import Correction
 from entroppy.utils import expand_file_path
 from entroppy.utils.debug import DebugTypoMatcher
 
@@ -154,8 +152,9 @@ def _rebuild_config_model():
     """Rebuild Config model to resolve forward references."""
     try:
         Config.model_rebuild()
-    except Exception:
-        # Model rebuild failed, skip
+    except (TypeError, ValueError, AttributeError):
+        # Model rebuild failed (can happen if forward references aren't resolved yet),
+        # skip silently as this is an optional optimization
         pass
 
 

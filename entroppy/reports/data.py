@@ -15,7 +15,9 @@ class ReportData:
     start_time: float = 0.0
 
     # Collisions
-    skipped_collisions: list[tuple[str, list[str], float, BoundaryType]] = field(default_factory=list)
+    skipped_collisions: list[tuple[str, list[str], float, BoundaryType]] = field(
+        default_factory=list
+    )
 
     # Patterns
     generalized_patterns: list[tuple[str, str, BoundaryType, int]] = field(default_factory=list)

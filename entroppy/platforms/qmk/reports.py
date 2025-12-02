@@ -191,7 +191,7 @@ def _write_complete_ranked_list(
 
     # Create lookup dictionaries for scores
     pattern_score_map, direct_score_map = _build_score_lookup_maps(pattern_scores, direct_scores)
-    user_set = {(typo, word, boundary) for typo, word, boundary in user_corrections}
+    user_set = set(user_corrections)
     pattern_set = {(p[0], p[1], p[2]) for p in patterns}
 
     for rank, (typo, word, boundary) in enumerate(final_corrections, 1):

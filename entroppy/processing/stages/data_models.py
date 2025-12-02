@@ -41,7 +41,9 @@ class CollisionResolutionResult(StageResult):
     """Output from collision resolution stage."""
 
     corrections: list[Correction] = Field(default_factory=list)
-    skipped_collisions: list[tuple[str, list[str], float, BoundaryType]] = Field(default_factory=list)
+    skipped_collisions: list[tuple[str, list[str], float, BoundaryType]] = Field(
+        default_factory=list
+    )
     skipped_short: list[tuple[str, str, int]] = Field(default_factory=list)
     excluded_corrections: list[tuple[str, str, str | None]] = Field(default_factory=list)
 

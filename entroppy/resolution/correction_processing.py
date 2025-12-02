@@ -8,14 +8,16 @@ from entroppy.core.boundaries import BoundaryIndex
 from entroppy.matching import ExclusionMatcher
 from entroppy.utils.debug import (
     is_debug_correction,
-    log_debug_correction,
     log_debug_typo,
     log_if_debug_correction,
 )
 from entroppy.utils.helpers import cached_word_frequency
 
 
-from .boundary_selection import _would_cause_false_trigger, choose_boundary_for_typo
+from .boundary_selection import (
+    _check_false_trigger_with_details,
+    choose_boundary_for_typo,
+)
 from .boundary_utils import _should_skip_short_typo, apply_user_word_boundary_override
 from .exclusion import handle_exclusion
 
@@ -27,8 +29,6 @@ def _collect_boundary_details(
     typo: str,
     word: str,
     boundary: BoundaryType,
-    validation_set: set[str],
-    source_words: set[str],
     validation_index: BoundaryIndex,
     source_index: BoundaryIndex,
 ) -> dict | None:
@@ -41,23 +41,21 @@ def _collect_boundary_details(
         typo: The typo string
         word: The correct word
         boundary: The selected boundary type
-        validation_set: Set of validation words
-        source_words: Set of source words
         validation_index: Boundary index for validation set
         source_index: Boundary index for source words
 
     Returns:
         Dictionary with boundary details, or None if details shouldn't be collected
     """
-    _, details = _would_cause_false_trigger(
+    # pylint: disable=duplicate-code
+    # Common logic extracted to _check_false_trigger_with_details().
+    # This call pattern appears in boundary_selection.py as well, which is acceptable.
+    _, details = _check_false_trigger_with_details(
         typo,
         boundary,
-        validation_set,
-        source_words,
         validation_index,
         source_index,
         target_word=word,
-        return_details=True,
     )
     return {
         "typo": typo,
@@ -70,8 +68,6 @@ def _collect_boundary_details(
 def process_single_word_correction(
     typo: str,
     word: str,
-    validation_set: set[str],
-    source_words: set[str],
     min_typo_length: int,
     min_word_length: int,
     user_words: set[str],
@@ -86,8 +82,6 @@ def process_single_word_correction(
     Args:
         typo: The typo string
         word: The correct word
-        validation_set: Set of validation words
-        source_words: Set of source words
         min_typo_length: Minimum typo length
         min_word_length: Minimum word length
         user_words: Set of user-provided words
@@ -105,8 +99,6 @@ def process_single_word_correction(
     """
     boundary = choose_boundary_for_typo(
         typo,
-        validation_set,
-        source_words,
         validation_index,
         source_index,
         debug_words=debug_words,
@@ -114,15 +106,14 @@ def process_single_word_correction(
         word=word,
     )
 
-    # Collect boundary details for later logging (only if debug_typo_matcher is None, i.e., in worker)
+    # Collect boundary details for later logging
+    # (only if debug_typo_matcher is None, i.e., in worker)
     boundary_details = None
     if not debug_typo_matcher:
         boundary_details = _collect_boundary_details(
             typo,
             word,
             boundary,
-            validation_set,
-            source_words,
             validation_index,
             source_index,
         )
@@ -166,8 +157,6 @@ def process_single_word_correction(
 def process_collision_case(
     typo: str,
     unique_words: list[str],
-    validation_set: set[str],
-    source_words: set[str],
     freq_ratio: float,
     min_typo_length: int,
     min_word_length: int,
@@ -177,7 +166,12 @@ def process_collision_case(
     debug_typo_matcher: "DebugTypoMatcher | None",
     validation_index: BoundaryIndex,
     source_index: BoundaryIndex,
-) -> tuple[list[Correction], list[tuple[str, str, str | None]], list[tuple[str, list[str], float, BoundaryType]], list[dict]]:
+) -> tuple[
+    list[Correction],
+    list[tuple[str, str, str | None]],
+    list[tuple[str, list[str], float, BoundaryType]],
+    list[dict],
+]:
     """Process a collision case where multiple words compete for the same typo.
 
     Now determines boundaries for each word FIRST, then groups by boundary before
@@ -187,8 +181,6 @@ def process_collision_case(
     Args:
         typo: The typo string
         unique_words: List of unique words competing for this typo
-        validation_set: Set of validation words
-        source_words: Set of source words
         freq_ratio: Minimum frequency ratio for collision resolution
         min_typo_length: Minimum typo length
         min_word_length: Minimum word length
@@ -203,7 +195,8 @@ def process_collision_case(
         Tuple of (corrections_list, excluded_list, skipped_collisions_list, boundary_details_list).
         corrections_list: List of accepted corrections (one per valid boundary group)
         excluded_list: List of (typo, word, matching_rule) for excluded corrections
-        skipped_collisions_list: List of (typo, words_in_group, ratio, boundary) for ambiguous collisions
+        skipped_collisions_list: List of (typo, words_in_group, ratio, boundary)
+            for ambiguous collisions
         boundary_details_list: List of boundary details dicts for later logging
     """
     # Check if any of the competing words are being debugged
@@ -233,8 +226,6 @@ def process_collision_case(
     for word in unique_words:
         boundary = choose_boundary_for_typo(
             typo,
-            validation_set,
-            source_words,
             validation_index,
             source_index,
             debug_words=debug_words,
@@ -259,15 +250,14 @@ def process_collision_case(
             # No collision for this boundary - single word
             word = words_in_group[0]
 
-            # Collect boundary details for later logging (only if debug_typo_matcher is None, i.e., in worker)
+            # Collect boundary details for later logging
+            # (only if debug_typo_matcher is None, i.e., in worker)
             boundary_details = None
             if not debug_typo_matcher:
                 boundary_details = _collect_boundary_details(
                     typo,
                     word,
                     boundary,
-                    validation_set,
-                    source_words,
                     validation_index,
                     source_index,
                 )
@@ -317,7 +307,8 @@ def process_collision_case(
                 )
                 log_debug_typo(
                     typo,
-                    f"Collision for boundary {boundary.value}: {typo} → [{words_with_freqs}] (ratio: {ratio:.2f})",
+                    f"Collision for boundary {boundary.value}: {typo} → [{words_with_freqs}] "
+                    f"(ratio: {ratio:.2f})",
                     matched_patterns,
                     "Stage 3",
                 )
@@ -326,15 +317,14 @@ def process_collision_case(
                 # Can resolve collision for this boundary
                 word = most_common[0]
 
-                # Collect boundary details for later logging (only if debug_typo_matcher is None, i.e., in worker)
+                # Collect boundary details for later logging
+                # (only if debug_typo_matcher is None, i.e., in worker)
                 boundary_details = None
                 if not debug_typo_matcher:
                     boundary_details = _collect_boundary_details(
                         typo,
                         word,
                         boundary,
-                        validation_set,
-                        source_words,
                         validation_index,
                         source_index,
                     )

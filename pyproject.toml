@@ -77,4 +77,19 @@ addopts = [
     "--strict-markers",
 ]
 
+[tool.pylint.main]
+disable = [
+    "too-many-arguments",
+    "too-many-positional-arguments",
+    "too-many-locals",
+    "too-many-branches",
+    "too-many-statements",
+    "too-many-instance-attributes",
+    "too-many-public-methods",
+    "too-few-public-methods",
+    "too-many-return-statements",
+    "too-many-boolean-expressions",
+    "too-many-nested-blocks",
+]
+
 

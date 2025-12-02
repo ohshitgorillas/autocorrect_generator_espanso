@@ -36,10 +36,12 @@ def _process_typo_worker(item: tuple[str, list[str]]) -> tuple[
         item: Tuple of (typo, word_list)
 
     Returns:
-        Tuple of (corrections, excluded_list, skipped_collisions, skipped_short_list, boundary_details_list)
+        Tuple of (corrections, excluded_list, skipped_collisions,
+            skipped_short_list, boundary_details_list)
         - corrections: List of resolved corrections (can be multiple per typo, one per boundary)
         - excluded_list: List of (typo, word, matching_rule) for excluded corrections
-        - skipped_collisions: List of (typo, words_in_group, ratio, boundary) for ambiguous collisions
+        - skipped_collisions: List of (typo, words_in_group, ratio, boundary)
+            for ambiguous collisions
         - skipped_short_list: List of (typo, word, len(typo)) for skipped short typos
         - boundary_details_list: List of boundary details dicts for later logging
     """
@@ -51,8 +53,6 @@ def _process_typo_worker(item: tuple[str, list[str]]) -> tuple[
     exclusion_matcher = ExclusionMatcher(set(context.exclusion_set))
 
     # Convert frozensets back to sets for compatibility
-    validation_set = set(context.validation_set)
-    source_words = set(context.source_words)
     user_words = set(context.user_words)
     debug_words = set(context.debug_words)
 
@@ -66,8 +66,6 @@ def _process_typo_worker(item: tuple[str, list[str]]) -> tuple[
             process_single_word_correction(
                 typo,
                 word,
-                validation_set,
-                source_words,
                 context.min_typo_length,
                 context.min_word_length,
                 user_words,
@@ -80,34 +78,35 @@ def _process_typo_worker(item: tuple[str, list[str]]) -> tuple[
         )
 
         if was_skipped_short:
-            return [], [], [], [(typo, word, len(typo))], [boundary_details] if boundary_details else []
-        elif excluded_info:
-            return [], [excluded_info], [], [], [boundary_details] if boundary_details else []
-        elif correction:
-            return [correction], [], [], [], [boundary_details] if boundary_details else []
-        else:
-            return [], [], [], [], [boundary_details] if boundary_details else []
-    else:
-        # Collision case: multiple words compete for same typo
-        corrections, excluded_list, skipped_collisions, boundary_details_list = (
-            process_collision_case(
-                typo,
-                unique_words,
-                validation_set,
-                source_words,
-                context.freq_ratio,
-                context.min_typo_length,
-                context.min_word_length,
-                user_words,
-                exclusion_matcher,
-                debug_words,
-                None,  # debug_typo_matcher not passed to workers
-                validation_index,
-                source_index,
+            return (
+                [],
+                [],
+                [],
+                [(typo, word, len(typo))],
+                [boundary_details] if boundary_details else [],
             )
-        )
+        if excluded_info:
+            return [], [excluded_info], [], [], [boundary_details] if boundary_details else []
+        if correction:
+            return [correction], [], [], [], [boundary_details] if boundary_details else []
+        return [], [], [], [], [boundary_details] if boundary_details else []
 
-        return corrections, excluded_list, skipped_collisions, [], boundary_details_list
+    # Collision case: multiple words compete for same typo
+    corrections, excluded_list, skipped_collisions, boundary_details_list = process_collision_case(
+        typo,
+        unique_words,
+        context.freq_ratio,
+        context.min_typo_length,
+        context.min_word_length,
+        user_words,
+        exclusion_matcher,
+        debug_words,
+        None,  # debug_typo_matcher not passed to workers
+        validation_index,
+        source_index,
+    )
+
+    return corrections, excluded_list, skipped_collisions, [], boundary_details_list
 
 
 def resolve_collisions(
@@ -206,13 +205,13 @@ def resolve_collisions(
             ) in results:
                 # Accumulate all corrections
                 final_corrections.extend(corrections_list)
-                
+
                 # Accumulate all excluded
                 excluded_corrections.extend(excluded_list)
-                
+
                 # Accumulate all skipped collisions
                 skipped_collisions.extend(skipped_collisions_list)
-                
+
                 # Accumulate all skipped short
                 skipped_short.extend(skipped_short_list)
 
@@ -257,8 +256,6 @@ def resolve_collisions(
                 correction, was_skipped_short, excluded_info, _ = process_single_word_correction(
                     typo,
                     word,
-                    validation_set,
-                    source_words,
                     min_typo_length,
                     min_word_length,
                     user_words,
@@ -277,20 +274,20 @@ def resolve_collisions(
                     final_corrections.append(correction)
             else:
                 # Collision case: multiple words compete for same typo
-                corrections_list, excluded_list, skipped_collisions_list, boundary_details_list = process_collision_case(
-                    typo,
-                    unique_words,
-                    validation_set,
-                    source_words,
-                    freq_ratio,
-                    min_typo_length,
-                    min_word_length,
-                    user_words,
-                    exclusion_matcher,
-                    debug_words,
-                    debug_typo_matcher,
-                    validation_index,
-                    source_index,
+                corrections_list, excluded_list, skipped_collisions_list, boundary_details_list = (
+                    process_collision_case(
+                        typo,
+                        unique_words,
+                        freq_ratio,
+                        min_typo_length,
+                        min_word_length,
+                        user_words,
+                        exclusion_matcher,
+                        debug_words,
+                        debug_typo_matcher,
+                        validation_index,
+                        source_index,
+                    )
                 )
 
                 # Accumulate all results

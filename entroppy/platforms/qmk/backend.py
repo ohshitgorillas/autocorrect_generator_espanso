@@ -66,7 +66,7 @@ class QMKBackend(PlatformBackend):
         - Suffix conflict detection (RTL matching optimization)
         - Substring conflict detection (QMK's hard constraint)
         """
-        return qmk_filter_corrections(corrections, self.ALLOWED_CHARS)
+        return qmk_filter_corrections(corrections)
 
     def rank_corrections(
         self,

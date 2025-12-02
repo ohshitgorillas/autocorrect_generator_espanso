@@ -51,6 +51,6 @@ def generate_reports(
     generate_statistics_csv(data, report_dir)
 
     if verbose:
-        logger.info(f"  Generated 7 report files")
+        logger.info("  Generated 7 report files")
 
     return report_dir

@@ -1,6 +1,5 @@
 """Stage 2: Typo generation with multiprocessing support."""
 
-import threading
 import time
 from collections import defaultdict
 from multiprocessing import Pool
@@ -8,7 +7,7 @@ from multiprocessing import Pool
 from loguru import logger
 from tqdm import tqdm
 
-from entroppy.core import Config, Correction
+from entroppy.core import Config
 from entroppy.resolution import process_word
 from entroppy.processing.stages.data_models import DictionaryData, TypoGenerationResult
 from entroppy.processing.stages.worker_context import WorkerContext, init_worker, get_worker_context

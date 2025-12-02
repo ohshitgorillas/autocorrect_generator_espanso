@@ -3,11 +3,11 @@
 import os
 from multiprocessing import Pool
 
-import yaml
 from loguru import logger
 
 from entroppy.utils import expand_file_path
 from entroppy.utils.helpers import ensure_directory_exists, write_file_safely
+from entroppy.platforms.espanso.yaml_helpers import write_yaml_to_stream
 
 
 def write_single_yaml_file(args: tuple) -> tuple[str, int]:
@@ -17,18 +17,7 @@ def write_single_yaml_file(args: tuple) -> tuple[str, int]:
     yaml_output = {"matches": chunk}
 
     def write_yaml_content(f):
-        try:
-            yaml.safe_dump(
-                yaml_output,
-                f,
-                allow_unicode=True,
-                default_flow_style=False,
-                sort_keys=False,
-                width=float("inf"),
-            )
-        except yaml.YAMLError as e:
-            logger.error(f"✗ YAML serialization error writing file {filename}: {e}")
-            raise
+        write_yaml_to_stream(yaml_output, f, f"writing file {filename}")
 
     write_file_safely(filename, write_yaml_content, "writing YAML file")
 

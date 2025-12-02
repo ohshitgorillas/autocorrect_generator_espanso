@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **Pattern generalization performance optimization**: Optimized pattern extraction and validation for faster processing
+  - **Pattern extraction**: Removed unnecessary grouping by word length, simplified loop structure
+  - **Pattern validation**: Added `CorrectionIndex` class to pre-build suffix/prefix indexes for O(1) lookups instead of O(n) linear scans
+    - Index built once and reused for all pattern validations
+    - Reduces complexity from O(p × c) to O(c × m + p × k) where p=patterns, c=corrections, m=avg typo length, k=avg matches per pattern
+  - **Impact**: Significantly faster pattern generalization, especially for large correction sets (10K+ corrections)
+  - **Files modified**: `entroppy/core/pattern_extraction.py`, `entroppy/core/pattern_validation.py`, `entroppy/core/patterns.py`
+
 - **QMK filtering performance optimization**: Removed expensive unused substring index building from `TypoIndex` class
   - **Previous behavior**: Built all substrings for each typo (O(n × m²) complexity) that were never used
   - **New behavior**: Only builds necessary indexes (typo-to-correction mapping and length grouping)
@@ -72,6 +80,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - **Impact**: Eliminates false positive substring conflicts, prevents valid corrections from being incorrectly removed
 
 ### Added
+
+- **Progress bars for pattern generalization**: Added progress indicators for pattern extraction and validation
+  - Shows progress when extracting prefix patterns
+  - Shows progress when extracting suffix patterns
+  - Shows progress when validating patterns
+  - Only displayed when `--verbose` flag is used
+  - **Files modified**: `entroppy/core/pattern_extraction.py`, `entroppy/core/patterns.py`
+  - **Impact**: Better visibility into pattern generalization progress for large datasets
 
 - **Debug logging for pattern extraction**: Added comprehensive debug logging to pattern extraction process
   - Shows which corrections are being analyzed

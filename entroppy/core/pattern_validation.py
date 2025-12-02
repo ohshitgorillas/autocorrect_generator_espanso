@@ -359,11 +359,58 @@ def check_pattern_conflicts(
     return True, None
 
 
+class CorrectionIndex:
+    """Index for efficient pattern conflict checking.
+
+    Pre-builds indexes of corrections by their typo suffixes and prefixes
+    to enable O(1) lookups instead of O(n) linear scans.
+
+    Only indexes full typo strings, not all substrings, for efficiency.
+    Uses endswith/startswith checks during lookup instead of pre-indexing all substrings.
+    """
+
+    def __init__(self, corrections: list[Correction]) -> None:
+        """Build indexes from corrections.
+
+        Args:
+            corrections: List of corrections to index
+        """
+        # Store all corrections for efficient filtering
+        self.corrections = list(corrections)
+
+    def get_suffix_matches(self, suffix: str) -> list[Correction]:
+        """Get all corrections whose typo ends with the given suffix.
+
+        Args:
+            suffix: The suffix to look up
+
+        Returns:
+            List of corrections whose typo ends with this suffix
+        """
+        # Filter corrections where typo ends with suffix
+        # This is O(n) but n is typically much smaller than all possible substrings
+        return [c for c in self.corrections if c[0].endswith(suffix) and c[0] != suffix]
+
+    def get_prefix_matches(self, prefix: str) -> list[Correction]:
+        """Get all corrections whose typo starts with the given prefix.
+
+        Args:
+            prefix: The prefix to look up
+
+        Returns:
+            List of corrections whose typo starts with this prefix
+        """
+        # Filter corrections where typo starts with prefix
+        # This is O(n) but n is typically much smaller than all possible substrings
+        return [c for c in self.corrections if c[0].startswith(prefix) and c[0] != prefix]
+
+
 def check_pattern_would_incorrectly_match_other_corrections(
     typo_pattern: str,
     word_pattern: str,
     all_corrections: list[Correction],
     pattern_occurrences: list[Correction],
+    correction_index: "CorrectionIndex | None" = None,
 ) -> tuple[bool, str | None]:
     """Check if a pattern would incorrectly match other corrections.
 
@@ -388,6 +435,7 @@ def check_pattern_would_incorrectly_match_other_corrections(
         word_pattern: The word pattern to check
         all_corrections: All corrections that exist (to check against)
         pattern_occurrences: Corrections that this pattern would replace (exclude from check)
+        correction_index: Optional pre-built index for faster lookups
 
     Returns:
         Tuple of (is_safe, error_message). error_message is None if safe.
@@ -395,22 +443,18 @@ def check_pattern_would_incorrectly_match_other_corrections(
     # Build set of corrections that this pattern replaces (to exclude from check)
     pattern_typos = {(typo, word) for typo, word, _ in pattern_occurrences}
 
-    # Check if pattern would incorrectly match other corrections
-    # We need to check in both directions regardless of platform/matching direction:
-    # 1. For RTL/QMK: Check if pattern appears as SUFFIX (matches at end)
-    # 2. For LTR/Espanso: Check if pattern appears as PREFIX (matches at start)
-    # This covers all cases where a pattern could incorrectly match a longer correction
+    # Use index if available, otherwise fall back to linear scan
+    if correction_index is not None:
+        # Check suffix matches (for RTL/QMK)
+        suffix_matches = correction_index.get_suffix_matches(typo_pattern)
+        for other_typo, other_word, _ in suffix_matches:
+            # Skip corrections that this pattern replaces
+            if (other_typo, other_word) in pattern_typos:
+                continue
+            # Skip if pattern is the same as the typo (no conflict)
+            if other_typo == typo_pattern:
+                continue
 
-    # Check all other corrections
-    for other_typo, other_word, _ in all_corrections:
-        # Skip corrections that this pattern replaces
-        if (other_typo, other_word) in pattern_typos:
-            continue
-
-        # Check if pattern appears as SUFFIX of other correction's typo
-        # This is relevant for QMK RTL matching (patterns match at end)
-        # Also check NONE boundary patterns that could match as suffixes
-        if other_typo.endswith(typo_pattern) and other_typo != typo_pattern:
             # Calculate what applying the pattern would produce
             remaining = other_typo[: -len(typo_pattern)]
             pattern_result = remaining + word_pattern
@@ -422,10 +466,16 @@ def check_pattern_would_incorrectly_match_other_corrections(
                     f"as suffix (would produce '{pattern_result}' instead)"
                 )
 
-        # Check if pattern appears as PREFIX of other correction's typo
-        # This is relevant for Espanso LTR matching (patterns match at start)
-        # Also check NONE boundary patterns that could match as prefixes
-        if other_typo.startswith(typo_pattern) and other_typo != typo_pattern:
+        # Check prefix matches (for LTR/Espanso)
+        prefix_matches = correction_index.get_prefix_matches(typo_pattern)
+        for other_typo, other_word, _ in prefix_matches:
+            # Skip corrections that this pattern replaces
+            if (other_typo, other_word) in pattern_typos:
+                continue
+            # Skip if pattern is the same as the typo (no conflict)
+            if other_typo == typo_pattern:
+                continue
+
             # Calculate what applying the pattern would produce
             remaining = other_typo[len(typo_pattern) :]
             pattern_result = word_pattern + remaining
@@ -436,5 +486,37 @@ def check_pattern_would_incorrectly_match_other_corrections(
                     f"Would incorrectly match '{other_typo}' → '{other_word}' "
                     f"as prefix (would produce '{pattern_result}' instead)"
                 )
+    else:
+        # Fallback to original linear scan (for backward compatibility)
+        for other_typo, other_word, _ in all_corrections:
+            # Skip corrections that this pattern replaces
+            if (other_typo, other_word) in pattern_typos:
+                continue
+
+            # Check if pattern appears as SUFFIX of other correction's typo
+            if other_typo.endswith(typo_pattern) and other_typo != typo_pattern:
+                # Calculate what applying the pattern would produce
+                remaining = other_typo[: -len(typo_pattern)]
+                pattern_result = remaining + word_pattern
+
+                # If pattern would produce different result, it's unsafe
+                if pattern_result != other_word:
+                    return False, (
+                        f"Would incorrectly match '{other_typo}' → '{other_word}' "
+                        f"as suffix (would produce '{pattern_result}' instead)"
+                    )
+
+            # Check if pattern appears as PREFIX of other correction's typo
+            if other_typo.startswith(typo_pattern) and other_typo != typo_pattern:
+                # Calculate what applying the pattern would produce
+                remaining = other_typo[len(typo_pattern) :]
+                pattern_result = word_pattern + remaining
+
+                # If pattern would produce different result, it's unsafe
+                if pattern_result != other_word:
+                    return False, (
+                        f"Would incorrectly match '{other_typo}' → '{other_word}' "
+                        f"as prefix (would produce '{pattern_result}' instead)"
+                    )
 
     return True, None

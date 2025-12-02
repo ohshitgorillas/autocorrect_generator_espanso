@@ -3,6 +3,7 @@
 from collections import defaultdict
 
 from loguru import logger
+from tqdm import tqdm
 
 from entroppy.core.boundaries import BoundaryType
 from entroppy.core.types import Correction
@@ -47,17 +48,19 @@ def _find_patterns(
     boundary_type: BoundaryType,
     is_suffix: bool,
     debug_typos: set[str] | None = None,
+    verbose: bool = False,
 ) -> dict[tuple[str, str, BoundaryType], list[tuple[str, str, BoundaryType]]]:
     """Find common patterns (prefix or suffix) in corrections.
 
-    Optimized implementation that groups corrections by their "other part"
-    (the part that doesn't change) to eliminate redundant pattern length checks.
+    Optimized implementation that extracts all possible patterns from each correction
+    in a single pass, then groups by pattern to find common ones.
 
     Args:
         corrections: List of corrections to analyze
         boundary_type: Boundary type to filter by (LEFT for prefix, RIGHT for suffix)
         is_suffix: True for suffix patterns, False for prefix patterns
         debug_typos: Optional set of typo strings to debug (for logging)
+        verbose: Whether to show progress bar
 
     Returns:
         Dict mapping (typo_pattern, word_pattern, boundary) to list of
@@ -93,11 +96,6 @@ def _find_patterns(
             f"with boundary {boundary_type.value} (suffix={is_suffix})"
         )
 
-    # Group corrections by word length for efficient processing
-    corrections_by_len = defaultdict(list)
-    for typo, word, boundary in filtered_corrections:
-        corrections_by_len[len(word)].append((typo, word, boundary))
-
     # Group directly by (typo_pattern, word_pattern, boundary) across ALL corrections
     # This finds patterns even when corrections have different "other parts"
     # Example: "action" and "lection" both share pattern "tion" → "tion" despite different prefixes
@@ -112,64 +110,70 @@ def _find_patterns(
             if any(debug_typo.lower() in typo.lower() for debug_typo in debug_typos):
                 debug_corrections[(typo, word, boundary)] = []
 
-    for length_group in corrections_by_len.values():
-        for typo, word, boundary in length_group:
-            max_pattern_length = len(word) - _MIN_OTHER_PART_LENGTH
-            is_debug = (typo, word, boundary) in debug_corrections
+    # Optimized: Extract all valid patterns from each correction in a single pass
+    corrections_iter = filtered_corrections
+    if verbose:
+        pattern_type = "suffix" if is_suffix else "prefix"
+        corrections_iter = tqdm(
+            filtered_corrections,
+            desc=f"    Extracting {pattern_type} patterns",
+            unit="correction",
+            leave=False,
+        )
+
+    for typo, word, boundary in corrections_iter:
+        is_debug = (typo, word, boundary) in debug_corrections
+        max_pattern_length = min(len(typo), len(word)) - _MIN_OTHER_PART_LENGTH
+
+        if max_pattern_length < 2:
+            continue
+
+        if is_debug:
+            logger.debug(
+                f"[PATTERN EXTRACTION] Analyzing correction: '{typo}' → '{word}' "
+                f"(boundary={boundary.value}, max_pattern_length={max_pattern_length})"
+            )
+
+        # Extract all valid patterns at once by iterating through possible pattern lengths
+        # Start from longest patterns (more specific) and work backwards
+        for length in range(max_pattern_length, 1, -1):  # Start from longest, go down to 2
+            typo_pattern, word_pattern, other_part_typo, other_part_word = _extract_pattern_parts(
+                typo, word, length, is_suffix
+            )
 
             if is_debug:
                 logger.debug(
-                    f"[PATTERN EXTRACTION] Analyzing correction: '{typo}' → '{word}' "
-                    f"(boundary={boundary.value}, max_pattern_length={max_pattern_length})"
+                    f"  Length {length}: pattern='{typo_pattern}'→'{word_pattern}', "
+                    f"other_part='{other_part_typo}'→'{other_part_word}'"
                 )
 
-            # Check all valid pattern lengths
-            for length in range(2, max_pattern_length + 1):
-                if len(typo) < length:
-                    if is_debug:
-                        logger.debug(
-                            f"  Length {length}: SKIPPED - typo length {len(typo)} "
-                            f"< pattern length {length}"
-                        )
-                    continue
+            # Skip if patterns are identical (useless pattern)
+            if typo_pattern == word_pattern:
+                if is_debug:
+                    logger.debug("    SKIPPED - pattern identical (no change)")
+                continue
 
-                typo_pattern, word_pattern, other_part_typo, other_part_word = (
-                    _extract_pattern_parts(typo, word, length, is_suffix)
+            # Ensure the other parts match before considering a pattern valid
+            if other_part_typo != other_part_word:
+                if is_debug:
+                    logger.debug(
+                        f"    SKIPPED - other_part mismatch: "
+                        f"'{other_part_typo}' != '{other_part_word}'"
+                    )
+                continue
+
+            # Group directly by pattern, regardless of other_part
+            pattern_key = (typo_pattern, word_pattern, boundary)
+            pattern_candidates[pattern_key].append((typo, word, boundary))
+
+            if is_debug:
+                debug_corrections[(typo, word, boundary)].append(
+                    (length, typo_pattern, word_pattern, other_part_typo)
                 )
-
-                if is_debug:
-                    logger.debug(
-                        f"  Length {length}: pattern='{typo_pattern}'→'{word_pattern}', "
-                        f"other_part='{other_part_typo}'→'{other_part_word}'"
-                    )
-
-                # Skip if patterns are identical (useless pattern)
-                if typo_pattern == word_pattern:
-                    if is_debug:
-                        logger.debug("    SKIPPED - pattern identical (no change)")
-                    continue
-
-                # Ensure the other parts match before considering a pattern valid
-                if other_part_typo != other_part_word:
-                    if is_debug:
-                        logger.debug(
-                            f"    SKIPPED - other_part mismatch: "
-                            f"'{other_part_typo}' != '{other_part_word}'"
-                        )
-                    continue
-
-                # Group directly by pattern, regardless of other_part
-                pattern_key = (typo_pattern, word_pattern, boundary)
-                pattern_candidates[pattern_key].append((typo, word, boundary))
-
-                if is_debug:
-                    debug_corrections[(typo, word, boundary)].append(
-                        (length, typo_pattern, word_pattern, other_part_typo)
-                    )
-                    logger.debug(
-                        f"    ✓ VALID CANDIDATE - pattern '{typo_pattern}'→'{word_pattern}' "
-                        f"(other_part='{other_part_typo}')"
-                    )
+                logger.debug(
+                    f"    ✓ VALID CANDIDATE - pattern '{typo_pattern}'→'{word_pattern}' "
+                    f"(other_part='{other_part_typo}')"
+                )
 
     if debug_enabled:
         logger.debug(
@@ -220,6 +224,7 @@ def _find_patterns(
 def find_suffix_patterns(
     corrections: list[Correction],
     debug_typos: set[str] | None = None,
+    verbose: bool = False,
 ) -> dict[tuple[str, str, BoundaryType], list[tuple[str, str, BoundaryType]]]:
     """Find common suffix patterns (for RIGHT boundaries).
 
@@ -229,13 +234,17 @@ def find_suffix_patterns(
     Args:
         corrections: List of corrections to analyze
         debug_typos: Optional set of typo strings to debug (for logging)
+        verbose: Whether to show progress bar
     """
-    return _find_patterns(corrections, BoundaryType.RIGHT, is_suffix=True, debug_typos=debug_typos)
+    return _find_patterns(
+        corrections, BoundaryType.RIGHT, is_suffix=True, debug_typos=debug_typos, verbose=verbose
+    )
 
 
 def find_prefix_patterns(
     corrections: list[Correction],
     debug_typos: set[str] | None = None,
+    verbose: bool = False,
 ) -> dict[tuple[str, str, BoundaryType], list[tuple[str, str, BoundaryType]]]:
     """Find common prefix patterns (for LEFT boundaries).
 
@@ -245,5 +254,8 @@ def find_prefix_patterns(
     Args:
         corrections: List of corrections to analyze
         debug_typos: Optional set of typo strings to debug (for logging)
+        verbose: Whether to show progress bar
     """
-    return _find_patterns(corrections, BoundaryType.LEFT, is_suffix=False, debug_typos=debug_typos)
+    return _find_patterns(
+        corrections, BoundaryType.LEFT, is_suffix=False, debug_typos=debug_typos, verbose=verbose
+    )

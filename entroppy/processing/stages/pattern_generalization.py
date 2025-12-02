@@ -119,6 +119,7 @@ def generalize_typo_patterns(
         verbose,
         config.debug_words,
         config.debug_typo_matcher,
+        jobs=config.jobs,
     )
 
     # Remove original corrections that have been generalized

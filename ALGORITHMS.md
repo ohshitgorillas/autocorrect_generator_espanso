@@ -277,9 +277,9 @@ QMK filtering applies four sequential steps:
 
 **2. Same Typo Text Conflicts** - When the same typo text appears with different boundaries, keeps the least restrictive boundary (NONE > LEFT/RIGHT > BOTH) since QMK doesn't support boundaries. The removed corrections are tracked as conflicts.
 
-**3. Suffix Conflicts (RTL Matching)** - QMK scans right-to-left, so shorter suffix typos make longer ones redundant. If a longer typo ends with a shorter typo and produces the same correction result, the longer one is removed. This check applies across all boundary types since QMK's RTL matching doesn't respect boundaries during matching.
+**3. Suffix Conflicts (RTL Matching)** - QMK scans right-to-left, so shorter suffix typos make longer ones redundant. If a longer typo ends with a shorter typo and produces the same correction result, the longer one is removed. This check applies across all boundary types since QMK's RTL matching doesn't respect boundaries during matching. This is an optimization that only removes conflicts where the pattern would work correctly.
 
-**4. Substring Conflicts (QMK Hard Constraint)** - QMK's compiler rejects any case where one typo is a substring of another, regardless of position (prefix, suffix, or middle) or boundary type. The shorter typo is kept and the longer one is removed.
+**4. Substring Conflicts (QMK Hard Constraint)** - QMK's compiler rejects any case where one typo is a substring of another, regardless of position (prefix, suffix, or middle) or boundary type. This catches all remaining substring conflicts that weren't already removed by suffix conflict detection, including cases where the pattern wouldn't work correctly. The shorter typo is kept and the longer one is removed. This is a hard constraint in QMK's trie structure that applies to all substring relationships, not just those that would produce correct results.
 
 #### Espanso Filtering
 

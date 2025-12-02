@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **QMK substring conflict detection now catches all substring relationships**: Fixed QMK compilation errors by ensuring all substring conflicts (prefix, suffix, and middle) are detected and removed
+  - **Previous behavior**: Only checked if shorter typos appeared as suffixes of longer typos, and only removed conflicts where applying the pattern would produce the correct result
+    - Missed cases like "sll" vs "asll" where "sll" is a suffix but the pattern wouldn't work correctly
+    - QMK compiler rejected these cases with errors like "Typos may not be substrings of one another"
+  - **New behavior**: Checks for ANY substring relationship (prefix, suffix, or middle) and removes ALL conflicts regardless of whether the pattern would work correctly
+    - QMK's compiler rejects ALL substring relationships as a hard constraint in its trie structure
+    - Catches all cases that weren't already removed by suffix conflict detection (which only removes conflicts where patterns work correctly)
+  - **Files modified**: `entroppy/platforms/qmk/typo_index.py`
+  - **Impact**: QMK dictionaries now compile successfully without substring violation errors
+
 ### Changed
 
 - **Pattern generalization performance optimization**: Optimized pattern extraction and validation for faster processing

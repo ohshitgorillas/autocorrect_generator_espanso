@@ -107,22 +107,19 @@ class TypoIndex:
     def find_substring_conflicts(
         self, corrections: list[Correction], verbose: bool = False
     ) -> tuple[list[Correction], list]:
-        """Find substring conflicts using the reverse suffix index.
+        """Find substring conflicts - QMK's hard constraint.
 
         A substring conflict occurs when:
         - typo2 is a substring of typo1 (typo1 is longer)
-        - For QMK (right-to-left matching), typo2 must appear as a SUFFIX of typo1
-          (at the end), since QMK scans right-to-left and would see the suffix first
-        - Applying the pattern (typo2 → word2) to typo1 must produce word1
-          (i.e., remaining + word2 == word1)
-        - This is a hard QMK constraint, but only if the pattern produces correct result
+        - Can appear as prefix, suffix, or middle substring
+        - QMK's compiler rejects ANY substring relationship regardless of position
+          or boundary type (hard constraint in QMK's trie structure)
 
-        If the pattern would produce an incorrect result, the longer typo is kept
-        (e.g., `toin → tion` pattern should NOT block `washingtoin → washington` because
-        applying the pattern would produce `washingtion` ≠ `washington`).
+        This catches all substring conflicts that weren't already removed by
+        find_suffix_conflicts (which only removes conflicts where the pattern
+        would produce the correct result). QMK rejects ALL substring relationships.
 
-        Uses reverse suffix index for O(1) lookups: for each typo, check if it ends
-        with any shorter typo that we've already processed.
+        We keep the shorter typo and remove the longer one.
 
         Args:
             corrections: List of corrections to check
@@ -156,29 +153,19 @@ class TypoIndex:
 
             is_blocked = False
 
-            # Use reverse suffix index: check all suffixes of typo1
-            # For each suffix, check if we've seen a shorter typo with that exact text
-            # For QMK (right-to-left), only check if shorter typos appear as SUFFIXES
-            for i in range(len(typo1)):
-                suffix = typo1[i:]
-                if suffix in shorter_typos and suffix != typo1:
-                    # Found a shorter typo that matches this suffix
-                    typo2, word2, _ = shorter_typos[suffix]
-                    if typo2 in removed_typos:
-                        continue
+            # Check if typo1 contains any shorter typo as a substring (prefix, suffix, or middle)
+            # Check all shorter typos we've seen so far
+            for typo2, word2, _ in shorter_typos.values():
+                if typo2 in removed_typos:
+                    continue
 
-                    # Verify it would produce the same correction
-                    # If applying the pattern doesn't produce the expected result,
-                    # it's not a valid conflict - keep the longer typo
-                    remaining = typo1[: -len(typo2)]
-                    expected = remaining + word2
-                    if expected == word1:
-                        # Valid conflict: pattern produces same result
-                        is_blocked = True
-                        conflicts.append((typo1, word1, typo2, word2, bound1))
-                        removed_typos.add(typo1)
-                        break
-                    # Invalid conflict: pattern would produce wrong result, keep longer typo
+                # Check if typo2 is a substring of typo1 (anywhere: prefix, suffix, or middle)
+                if typo2 in typo1 and typo2 != typo1:
+                    # Found a substring conflict - QMK rejects this regardless of position
+                    is_blocked = True
+                    conflicts.append((typo1, word1, typo2, word2, bound1))
+                    removed_typos.add(typo1)
+                    break
 
             if not is_blocked:
                 kept.append((typo1, word1, bound1))

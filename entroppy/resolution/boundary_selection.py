@@ -1,7 +1,5 @@
 """Boundary selection logic for collision resolution."""
 
-from typing import TYPE_CHECKING
-
 from entroppy.core import BoundaryType
 from entroppy.core.boundaries import (
     BoundaryIndex,
@@ -16,9 +14,6 @@ from entroppy.utils.debug import (
     is_debug_word,
     log_debug_typo,
 )
-
-if TYPE_CHECKING:
-    from entroppy.core.types import Correction
 
 
 def _check_typo_in_target_word(
@@ -147,13 +142,23 @@ def _would_cause_false_trigger(
     elif boundary == BoundaryType.LEFT:
         # LEFT matches at word start, so false trigger if typo appears as prefix
         # (LEFT would match words starting with typo, which is incorrect)
-        would_cause = would_trigger_start
-        reason = "typo appears as prefix" if would_trigger_start else None
+        would_cause = (
+            would_trigger_start
+            or would_trigger_start_target
+            or would_trigger_start_val
+            or would_trigger_start_src
+        )
+        reason = "typo appears as prefix" if would_cause else None
     elif boundary == BoundaryType.RIGHT:
         # RIGHT matches at word end, so false trigger if typo appears as suffix
         # (RIGHT would match words ending with typo, which is incorrect)
-        would_cause = would_trigger_end
-        reason = "typo appears as suffix" if would_trigger_end else None
+        would_cause = (
+            would_trigger_end
+            or would_trigger_end_target
+            or would_trigger_end_val
+            or would_trigger_end_src
+        )
+        reason = "typo appears as suffix" if would_cause else None
     elif boundary == BoundaryType.BOTH:
         # BOTH matches as standalone word only, so it would NOT cause false triggers
         # for substrings (because BOTH only matches exact words, not words containing the typo)

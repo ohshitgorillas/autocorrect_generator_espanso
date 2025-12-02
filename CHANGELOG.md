@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Pattern extraction algorithm fix**: Fixed pattern extraction to find patterns across corrections with different "other parts"
+  - **Previous behavior**: Grouped corrections by `(other_part, length)` first, then looked for patterns within each group
+    - Missed patterns like "tion" → "tion" when corrections had different prefixes (e.g., "action" vs "lection")
+  - **New behavior**: Groups directly by `(typo_pattern, word_pattern, boundary)` across ALL corrections
+    - Finds patterns regardless of whether corrections share the same prefix/suffix
+    - Example: Now correctly finds "tion" → "tion" pattern from "action" → "action" and "lection" → "lection" despite different prefixes
+  - **Files modified**: `entroppy/core/pattern_extraction.py`
+  - **Impact**: Discovers more patterns, especially for suffix patterns like "tion", "ing", etc.
+
+### Added
+
+- **Debug logging for pattern extraction**: Added comprehensive debug logging to pattern extraction process
+  - Shows which corrections are being analyzed
+  - Logs pattern candidates at each length being checked
+  - Explains why patterns are skipped (identical pattern, other_part mismatch, etc.)
+  - Shows final patterns found with occurrence counts
+  - Activated with `--debug --verbose --debug-typos "pattern"` flags
+  - **Files modified**: `entroppy/core/pattern_extraction.py`, `entroppy/core/patterns.py`
+  - **Impact**: Makes it easier to diagnose why specific patterns aren't being found
+
 ### Changed
 
 - **QMK platform performance optimizations**

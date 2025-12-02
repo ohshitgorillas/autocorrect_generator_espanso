@@ -68,14 +68,20 @@ def generalize_patterns(
     # Build source word index for efficient corruption checks
     source_word_index = SourceWordIndex(source_words, match_direction)
 
+    # Extract debug typos for pattern extraction logging
+    debug_typos_set: set[str] | None = None
+    if debug_typo_matcher:
+        # Extract exact patterns from matcher for debug logging
+        debug_typos_set = set(debug_typo_matcher.exact_patterns)
+
     # Choose pattern finding strategy based on match direction
     if match_direction == MatchDirection.RIGHT_TO_LEFT:
         # RTL matching (QMK): look for prefix patterns (LEFT boundary)
-        found_patterns = find_prefix_patterns(corrections)
+        found_patterns = find_prefix_patterns(corrections, debug_typos=debug_typos_set)
         pattern_type = "prefix"
     else:
         # LTR matching (Espanso): look for suffix patterns (RIGHT boundary)
-        found_patterns = find_suffix_patterns(corrections)
+        found_patterns = find_suffix_patterns(corrections, debug_typos=debug_typos_set)
         pattern_type = "suffix"
 
     if verbose:

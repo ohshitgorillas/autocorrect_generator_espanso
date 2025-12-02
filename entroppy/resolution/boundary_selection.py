@@ -98,9 +98,7 @@ def _would_cause_false_trigger(
     would_trigger_start = (
         would_trigger_start_target or would_trigger_start_val or would_trigger_start_src
     )
-    would_trigger_end = (
-        would_trigger_end_target or would_trigger_end_val or would_trigger_end_src
-    )
+    would_trigger_end = would_trigger_end_target or would_trigger_end_val or would_trigger_end_src
     is_substring = is_substring_target or is_substring_val or is_substring_src
 
     # Determine if boundary would cause false triggers

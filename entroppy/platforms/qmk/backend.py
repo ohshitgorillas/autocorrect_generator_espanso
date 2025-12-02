@@ -7,7 +7,10 @@ from entroppy.core import Config, Correction
 from entroppy.platforms.base import MatchDirection, PlatformBackend, PlatformConstraints
 from entroppy.platforms.qmk.filtering import filter_corrections as qmk_filter_corrections
 from entroppy.platforms.qmk.output import generate_output as qmk_generate_output
-from entroppy.platforms.qmk.ranking import rank_corrections as qmk_rank_corrections
+from entroppy.platforms.qmk.ranking import (
+    _build_pattern_sets,
+    rank_corrections as qmk_rank_corrections,
+)
 from entroppy.platforms.qmk.reports import generate_qmk_ranking_report
 from entroppy.utils import Constants
 
@@ -34,6 +37,9 @@ class QMKBackend(PlatformBackend):
         self._user_corrections = []
         self._pattern_scores = []
         self._direct_scores = []
+        # Cache for pattern sets to avoid rebuilding on every ranking call
+        self._cached_pattern_typos: set[tuple[str, str]] | None = None
+        self._cached_replaced_by_patterns: set[tuple[str, str]] | None = None
 
     def get_constraints(self) -> PlatformConstraints:
         """Return QMK constraints."""
@@ -79,8 +85,16 @@ class QMKBackend(PlatformBackend):
         3. Direct corrections (scored by word frequency)
 
         Applies max_corrections limit if specified in config.
+        Uses cached pattern sets to avoid rebuilding on every call.
         """
         max_corrections = config.max_corrections if config else None
+
+        # Build or use cached pattern sets
+        if self._cached_pattern_typos is None or self._cached_replaced_by_patterns is None:
+            self._cached_pattern_typos, self._cached_replaced_by_patterns = _build_pattern_sets(
+                patterns, pattern_replacements
+            )
+
         (
             ranked,
             self._user_corrections,
@@ -88,7 +102,13 @@ class QMKBackend(PlatformBackend):
             self._direct_scores,
             _,
         ) = qmk_rank_corrections(
-            corrections, patterns, pattern_replacements, user_words, max_corrections
+            corrections,
+            patterns,
+            pattern_replacements,
+            user_words,
+            max_corrections,
+            self._cached_pattern_typos,
+            self._cached_replaced_by_patterns,
         )
 
         return ranked

@@ -218,20 +218,30 @@ def process_collision_case(
     if is_debug_collision:
         # Log collision details
         words_with_freqs = ", ".join([f"{w} (freq: {f:.2e})" for w, f in word_freqs])
+        matched_patterns = (
+            debug_typo_matcher.get_matching_patterns(typo, BoundaryType.NONE)
+            if debug_typo_matcher
+            else None
+        )
         log_debug_typo(
             typo,
             f"Collision detected: {typo} → [{words_with_freqs}] (ratio: {ratio:.2f})",
-            [],
+            matched_patterns,
             "Stage 3",
         )
 
     # Check if ratio is sufficient to resolve collision
     if ratio <= freq_ratio:
         if is_debug_collision:
+            matched_patterns = (
+                debug_typo_matcher.get_matching_patterns(typo, BoundaryType.NONE)
+                if debug_typo_matcher
+                else None
+            )
             log_debug_typo(
                 typo,
                 f"SKIPPED - ambiguous collision, ratio {ratio:.2f} <= threshold {freq_ratio}",
-                [],
+                matched_patterns,
                 "Stage 3",
             )
         return None, False, None, ratio, None

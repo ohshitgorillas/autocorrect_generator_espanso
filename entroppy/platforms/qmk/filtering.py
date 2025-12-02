@@ -3,6 +3,7 @@
 from collections import defaultdict
 
 from entroppy.core import BoundaryType, Correction
+from entroppy.platforms.qmk.typo_index import TypoIndex
 
 
 def filter_character_set(corrections: list[Correction]) -> tuple[list[Correction], list]:
@@ -21,6 +22,62 @@ def filter_character_set(corrections: list[Correction]) -> tuple[list[Correction
         filtered.append((typo.lower(), word.lower(), boundary))
 
     return filtered, char_filtered
+
+
+def filter_character_set_and_resolve_same_typo(
+    corrections: list[Correction],
+) -> tuple[list[Correction], list, list]:
+    """
+    Combined pass: filter invalid characters and resolve same-typo conflicts.
+
+    This combines two operations in a single pass to reduce iterations:
+    1. Character set validation (only a-z and ')
+    2. Same-typo conflict resolution (keep least restrictive boundary)
+
+    Returns:
+        Tuple of (filtered_corrections, char_filtered, same_typo_conflicts)
+    """
+    char_filtered = []
+    typo_groups = defaultdict(list)
+
+    # Single pass: filter characters and group by typo
+    for typo, word, boundary in corrections:
+        # Character validation
+        if not all(c.isalpha() or c == "'" for c in typo.lower()):
+            char_filtered.append((typo, word, "typo contains invalid chars"))
+            continue
+        if not all(c.isalpha() or c == "'" for c in word.lower()):
+            char_filtered.append((typo, word, "word contains invalid chars"))
+            continue
+
+        # Convert to lowercase and group by typo
+        typo_lower = typo.lower()
+        word_lower = word.lower()
+        typo_groups[typo_lower].append((typo_lower, word_lower, boundary))
+
+    # Resolve same-typo conflicts
+    boundary_priority = {
+        BoundaryType.NONE: 0,
+        BoundaryType.LEFT: 1,
+        BoundaryType.RIGHT: 1,
+        BoundaryType.BOTH: 2,
+    }
+
+    deduped = []
+    same_typo_conflicts = []
+
+    for _, corrections_list in typo_groups.items():
+        if len(corrections_list) == 1:
+            deduped.append(corrections_list[0])
+        else:
+            sorted_by_restriction = sorted(corrections_list, key=lambda c: boundary_priority[c[2]])
+            kept = sorted_by_restriction[0]
+            deduped.append(kept)
+
+            for removed in sorted_by_restriction[1:]:
+                same_typo_conflicts.append((removed[0], removed[1], kept[0], kept[1], removed[2]))
+
+    return deduped, char_filtered, same_typo_conflicts
 
 
 def resolve_same_typo_conflicts(corrections: list[Correction]) -> tuple[list[Correction], list]:
@@ -58,49 +115,6 @@ def resolve_same_typo_conflicts(corrections: list[Correction]) -> tuple[list[Cor
     return deduped, conflicts
 
 
-def detect_conflicts_generic(
-    corrections: list[Correction], conflict_check_fn
-) -> tuple[list[Correction], list]:
-    """
-    Generic conflict detection for QMK constraints.
-
-    Args:
-        corrections: List of corrections to analyze
-        conflict_check_fn: Function that takes (typo1, word1, typo2, word2)
-                         and returns True if there's a conflict
-
-    Returns:
-        Tuple of (kept_corrections, conflicts)
-    """
-    # Sort all corrections by typo length (shortest first)
-    sorted_corrections = sorted(corrections, key=lambda c: len(c[0]))
-
-    kept = []
-    conflicts = []
-    removed_typos = set()
-
-    for i, (typo1, word1, bound1) in enumerate(sorted_corrections):
-        if typo1 in removed_typos:
-            continue
-
-        is_blocked = False
-        # Check against all shorter typos (processed earlier)
-        for typo2, word2, _ in sorted_corrections[:i]:
-            if typo2 in removed_typos:
-                continue
-
-            if conflict_check_fn(typo1, word1, typo2, word2):
-                is_blocked = True
-                conflicts.append((typo1, word1, typo2, word2, bound1))
-                removed_typos.add(typo1)
-                break
-
-        if not is_blocked:
-            kept.append((typo1, word1, bound1))
-
-    return kept, conflicts
-
-
 def detect_suffix_conflicts(corrections: list[Correction]) -> tuple[list[Correction], list]:
     """
     Detect RTL suffix conflicts across ALL typos.
@@ -112,17 +126,15 @@ def detect_suffix_conflicts(corrections: list[Correction]) -> tuple[list[Correct
 
     This checks across all boundary types since QMK's RTL matching
     doesn't respect boundaries during the matching phase.
+
+    Uses TypoIndex for optimized O(n log n) conflict detection instead of O(n²).
     """
+    if not corrections:
+        return [], []
 
-    def check_suffix_conflict(typo1, word1, typo2, word2):
-        # Check if typo1 ends with typo2 AND produces same correction
-        if typo1.endswith(typo2) and typo1 != typo2:
-            remaining = typo1[: -len(typo2)]
-            expected = remaining + word2
-            return expected == word1
-        return False
-
-    return detect_conflicts_generic(corrections, check_suffix_conflict)
+    # Build index once for efficient lookups
+    index = TypoIndex(corrections)
+    return index.find_suffix_conflicts(corrections)
 
 
 def detect_substring_conflicts(corrections: list[Correction]) -> tuple[list[Correction], list]:
@@ -139,13 +151,15 @@ def detect_substring_conflicts(corrections: list[Correction]) -> tuple[list[Corr
     - "xbeejy" contains "beej" in middle
 
     We keep the shorter typo and remove the longer one.
+
+    Uses TypoIndex for optimized O(n log n) conflict detection instead of O(n²).
     """
+    if not corrections:
+        return [], []
 
-    def check_substring_conflict(typo1: str, _word1: str, typo2: str, _word2: str) -> bool:
-        # If typo2 is anywhere in typo1, QMK rejects it
-        return typo2 in typo1 and typo1 != typo2
-
-    return detect_conflicts_generic(corrections, check_substring_conflict)
+    # Build index once for efficient lookups
+    index = TypoIndex(corrections)
+    return index.find_substring_conflicts(corrections)
 
 
 def filter_corrections(
@@ -159,6 +173,8 @@ def filter_corrections(
     - Suffix conflict detection (RTL matching optimization)
     - Substring conflict detection (QMK's hard constraint)
 
+    Optimized to combine character filtering and same-typo resolution in a single pass.
+
     Args:
         corrections: List of corrections to filter
         allowed_chars: Set of allowed characters (for validation)
@@ -166,8 +182,12 @@ def filter_corrections(
     Returns:
         Tuple of (filtered_corrections, metadata)
     """
-    filtered, char_filtered = filter_character_set(corrections)
-    deduped, same_typo_conflicts = resolve_same_typo_conflicts(filtered)
+    # Combined pass: character filtering + same-typo conflict resolution
+    deduped, char_filtered, same_typo_conflicts = filter_character_set_and_resolve_same_typo(
+        corrections
+    )
+
+    # Conflict detection passes (require sorted/grouped data, so kept separate)
     after_suffix, suffix_conflicts = detect_suffix_conflicts(deduped)
     final, substring_conflicts = detect_substring_conflicts(after_suffix)
 

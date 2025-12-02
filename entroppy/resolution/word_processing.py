@@ -19,6 +19,7 @@ def _add_debug_message(
     typo: str,
     message_word: str,
     message_typo: str,
+    debug_typo_matcher: "DebugTypoMatcher | None" = None,
 ) -> None:
     """Add debug messages for both word and typo debugging.
 
@@ -30,11 +31,23 @@ def _add_debug_message(
         typo: The typo being processed
         message_word: Message to add for word debugging
         message_typo: Message to add for typo debugging
+        debug_typo_matcher: Optional matcher to get matched patterns for typo
     """
     if is_debug:
         debug_messages.append(f"[DEBUG WORD: '{word}'] [Stage 2] {message_word}")
     if typo_debug_check:
-        debug_messages.append(f"[DEBUG TYPO: '{typo}'] [Stage 2] {message_typo}")
+        # Get matched patterns if matcher is available
+        if debug_typo_matcher:
+            matched_patterns = debug_typo_matcher.get_matching_patterns(typo, BoundaryType.NONE)
+            if matched_patterns:
+                patterns_str = ", ".join(matched_patterns)
+                debug_messages.append(
+                    f"[DEBUG TYPO: '{typo}' (matched: {patterns_str})] [Stage 2] {message_typo}"
+                )
+            else:
+                debug_messages.append(f"[DEBUG TYPO: '{typo}'] [Stage 2] {message_typo}")
+        else:
+            debug_messages.append(f"[DEBUG TYPO: '{typo}'] [Stage 2] {message_typo}")
 
 
 def process_word(
@@ -97,6 +110,7 @@ def process_word(
                 typo,
                 f"Typo '{typo}' filtered - is a source word",
                 "Filtered - is a source word",
+                debug_typo_matcher,
             )
             continue
 
@@ -110,6 +124,7 @@ def process_word(
                 typo,
                 f"Typo '{typo}' filtered - is a valid word",
                 "Filtered - is a valid word in dictionary",
+                debug_typo_matcher,
             )
             continue
 
@@ -129,6 +144,7 @@ def process_word(
                     typo,
                     f"Typo '{typo}' filtered - {freq_msg}",
                     f"Filtered - {freq_msg}",
+                    debug_typo_matcher,
                 )
                 continue
 

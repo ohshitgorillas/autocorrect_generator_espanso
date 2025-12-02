@@ -9,20 +9,41 @@ def separate_by_type(
     patterns: list[Correction],
     pattern_replacements: dict[Correction, list[Correction]],
     user_words: set[str],
+    cached_pattern_typos: set[tuple[str, str]] | None = None,
+    cached_replaced_by_patterns: set[tuple[str, str]] | None = None,
 ) -> tuple[list[Correction], list[Correction], list[Correction]]:
-    """Separate corrections into user words, patterns, and direct corrections."""
+    """Separate corrections into user words, patterns, and direct corrections.
+
+    Args:
+        corrections: List of corrections to separate
+        patterns: List of pattern corrections
+        pattern_replacements: Dictionary mapping patterns to their replacements
+        user_words: Set of user-defined words
+        cached_pattern_typos: Optional cached set of (typo, word) tuples for patterns
+        cached_replaced_by_patterns: Optional cached set of (typo, word) tuples replaced by patterns
+
+    Returns:
+        Tuple of (user_corrections, pattern_corrections, direct_corrections)
+    """
     user_corrections = []
     pattern_corrections = []
     direct_corrections = []
 
-    pattern_typos = {(p[0], p[1]) for p in patterns}
+    # Use cached sets if provided, otherwise build them
+    if cached_pattern_typos is not None:
+        pattern_typos = cached_pattern_typos
+    else:
+        pattern_typos = {(p[0], p[1]) for p in patterns}
 
-    replaced_by_patterns = set()
-    for pattern in patterns:
-        pattern_key = (pattern[0], pattern[1], pattern[2])
-        if pattern_key in pattern_replacements:
-            for replaced in pattern_replacements[pattern_key]:
-                replaced_by_patterns.add((replaced[0], replaced[1]))
+    if cached_replaced_by_patterns is not None:
+        replaced_by_patterns = cached_replaced_by_patterns
+    else:
+        replaced_by_patterns = set()
+        for pattern in patterns:
+            pattern_key = (pattern[0], pattern[1], pattern[2])
+            if pattern_key in pattern_replacements:
+                for replaced in pattern_replacements[pattern_key]:
+                    replaced_by_patterns.add((replaced[0], replaced[1]))
 
     for typo, word, boundary in corrections:
         if word in user_words:
@@ -33,6 +54,30 @@ def separate_by_type(
             direct_corrections.append((typo, word, boundary))
 
     return user_corrections, pattern_corrections, direct_corrections
+
+
+def _build_pattern_sets(
+    patterns: list[Correction], pattern_replacements: dict[Correction, list[Correction]]
+) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+    """Build pattern sets for caching.
+
+    Args:
+        patterns: List of pattern corrections
+        pattern_replacements: Dictionary mapping patterns to their replacements
+
+    Returns:
+        Tuple of (pattern_typos, replaced_by_patterns) sets
+    """
+    pattern_typos = {(p[0], p[1]) for p in patterns}
+
+    replaced_by_patterns = set()
+    for pattern in patterns:
+        pattern_key = (pattern[0], pattern[1], pattern[2])
+        if pattern_key in pattern_replacements:
+            for replaced in pattern_replacements[pattern_key]:
+                replaced_by_patterns.add((replaced[0], replaced[1]))
+
+    return pattern_typos, replaced_by_patterns
 
 
 def score_patterns(
@@ -68,6 +113,8 @@ def rank_corrections(
     pattern_replacements: dict[Correction, list[Correction]],
     user_words: set[str],
     max_corrections: int | None = None,
+    cached_pattern_typos: set[tuple[str, str]] | None = None,
+    cached_replaced_by_patterns: set[tuple[str, str]] | None = None,
 ) -> tuple[
     list[Correction],
     list[Correction],
@@ -83,26 +130,70 @@ def rank_corrections(
     2. Patterns (scored by sum of replaced word frequencies)
     3. Direct corrections (scored by word frequency)
 
+    Optimized to use a single unified sort with tier-based comparison instead of
+    separate sorts for patterns and direct corrections.
+
     Args:
         corrections: List of corrections to rank
         patterns: List of pattern corrections
         pattern_replacements: Dictionary mapping patterns to their replacements
         user_words: Set of user-defined words
         max_corrections: Optional limit on number of corrections
+        cached_pattern_typos: Optional cached set of (typo, word) tuples for patterns
+        cached_replaced_by_patterns: Optional cached set of (typo, word) tuples replaced by patterns
 
     Returns:
         Tuple of (ranked_corrections, user_corrections, pattern_scores, direct_scores, all_scored)
     """
     user_corrections, pattern_corrections, direct_corrections = separate_by_type(
-        corrections, patterns, pattern_replacements, user_words
+        corrections,
+        patterns,
+        pattern_replacements,
+        user_words,
+        cached_pattern_typos,
+        cached_replaced_by_patterns,
     )
 
-    pattern_scores = score_patterns(pattern_corrections, pattern_replacements)
-    direct_scores = score_direct_corrections(direct_corrections)
+    # Score all corrections with unified tier-based scoring
+    # Tier 0: User words (handled separately, infinite priority)
+    # Tier 1: Patterns (scored by sum of replacement frequencies)
+    # Tier 2: Direct corrections (scored by word frequency)
+    all_scored_items = []
 
-    all_scored = pattern_scores + direct_scores
-    all_scored.sort(key=lambda x: x[0], reverse=True)
+    # Score patterns
+    pattern_scores = []
+    for typo, word, boundary in pattern_corrections:
+        pattern_key = (typo, word, boundary)
+        if pattern_key in pattern_replacements:
+            total_freq = sum(
+                cached_word_frequency(replaced_word, "en")
+                for _, replaced_word, _ in pattern_replacements[pattern_key]
+            )
+            score_tuple = (total_freq, typo, word, boundary)
+            pattern_scores.append(score_tuple)
+            # Tier 1 for patterns
+            all_scored_items.append((1, total_freq, typo, word, boundary))
 
+    # Score direct corrections
+    direct_scores = []
+    for typo, word, boundary in direct_corrections:
+        freq = cached_word_frequency(word, "en")
+        score_tuple = (freq, typo, word, boundary)
+        direct_scores.append(score_tuple)
+        # Tier 2 for direct corrections
+        all_scored_items.append((2, freq, typo, word, boundary))
+
+    # Single unified sort: by tier (ascending), then by score (descending)
+    # This ensures patterns (tier 1) come before direct (tier 2), and within each tier,
+    # higher scores come first
+    all_scored_items.sort(key=lambda x: (x[0], -x[1]))
+
+    # Extract the scored items in sorted order (without tier)
+    all_scored = [
+        (score, typo, word, boundary) for _, score, typo, word, boundary in all_scored_items
+    ]
+
+    # Build ranked list: user words first, then sorted patterns and direct corrections
     ranked = user_corrections + [(t, w, b) for _, t, w, b in all_scored]
 
     # Apply max_corrections limit if specified

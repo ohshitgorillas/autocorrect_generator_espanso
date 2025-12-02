@@ -3,6 +3,7 @@
 from collections import defaultdict
 
 from loguru import logger
+from tqdm import tqdm
 
 from entroppy.core import BoundaryType, Correction
 from entroppy.platforms.qmk.typo_index import TypoIndex
@@ -27,7 +28,7 @@ def filter_character_set(corrections: list[Correction]) -> tuple[list[Correction
 
 
 def filter_character_set_and_resolve_same_typo(
-    corrections: list[Correction],
+    corrections: list[Correction], verbose: bool = False
 ) -> tuple[list[Correction], list, list]:
     """
     Combined pass: filter invalid characters and resolve same-typo conflicts.
@@ -36,6 +37,10 @@ def filter_character_set_and_resolve_same_typo(
     1. Character set validation (only a-z and ')
     2. Same-typo conflict resolution (keep least restrictive boundary)
 
+    Args:
+        corrections: List of corrections to filter
+        verbose: Whether to show progress bar
+
     Returns:
         Tuple of (filtered_corrections, char_filtered, same_typo_conflicts)
     """
@@ -43,7 +48,13 @@ def filter_character_set_and_resolve_same_typo(
     typo_groups = defaultdict(list)
 
     # Single pass: filter characters and group by typo
-    for typo, word, boundary in corrections:
+    corrections_iter = corrections
+    if verbose:
+        corrections_iter = tqdm(
+            corrections, desc="  Filtering characters", unit="correction", leave=False
+        )
+
+    for typo, word, boundary in corrections_iter:
         # Character validation
         if not all(c.isalpha() or c == "'" for c in typo.lower()):
             char_filtered.append((typo, word, "typo contains invalid chars"))
@@ -117,7 +128,9 @@ def resolve_same_typo_conflicts(corrections: list[Correction]) -> tuple[list[Cor
     return deduped, conflicts
 
 
-def detect_suffix_conflicts(corrections: list[Correction]) -> tuple[list[Correction], list]:
+def detect_suffix_conflicts(
+    corrections: list[Correction], verbose: bool = False
+) -> tuple[list[Correction], list]:
     """
     Detect RTL suffix conflicts across ALL typos.
 
@@ -130,16 +143,25 @@ def detect_suffix_conflicts(corrections: list[Correction]) -> tuple[list[Correct
     doesn't respect boundaries during the matching phase.
 
     Uses TypoIndex for optimized O(n log n) conflict detection instead of O(n²).
+
+    Args:
+        corrections: List of corrections to check
+        verbose: Whether to show progress bar
     """
     if not corrections:
         return [], []
 
     # Build index once for efficient lookups
+    if verbose:
+        logger.info("  Building suffix conflict index...")
     index = TypoIndex(corrections)
-    return index.find_suffix_conflicts(corrections)
+
+    return index.find_suffix_conflicts(corrections, verbose)
 
 
-def detect_substring_conflicts(corrections: list[Correction]) -> tuple[list[Correction], list]:
+def detect_substring_conflicts(
+    corrections: list[Correction], verbose: bool = False
+) -> tuple[list[Correction], list]:
     """
     Detect general substring conflicts required by QMK.
 
@@ -155,17 +177,24 @@ def detect_substring_conflicts(corrections: list[Correction]) -> tuple[list[Corr
     We keep the shorter typo and remove the longer one.
 
     Uses TypoIndex for optimized O(n log n) conflict detection instead of O(n²).
+
+    Args:
+        corrections: List of corrections to check
+        verbose: Whether to show progress bar
     """
     if not corrections:
         return [], []
 
     # Build index once for efficient lookups
+    if verbose:
+        logger.info("  Building substring conflict index...")
     index = TypoIndex(corrections)
-    return index.find_substring_conflicts(corrections)
+
+    return index.find_substring_conflicts(corrections, verbose)
 
 
 def filter_corrections(
-    corrections: list[Correction],
+    corrections: list[Correction], verbose: bool = False
 ) -> tuple[list[Correction], dict]:
     """
     Apply QMK-specific filtering.
@@ -179,18 +208,19 @@ def filter_corrections(
 
     Args:
         corrections: List of corrections to filter
+        verbose: Whether to show progress bars
 
     Returns:
         Tuple of (filtered_corrections, metadata)
     """
     # Combined pass: character filtering + same-typo conflict resolution
     deduped, char_filtered, same_typo_conflicts = filter_character_set_and_resolve_same_typo(
-        corrections
+        corrections, verbose
     )
 
     # Conflict detection passes (require sorted/grouped data, so kept separate)
-    after_suffix, suffix_conflicts = detect_suffix_conflicts(deduped)
-    final, substring_conflicts = detect_substring_conflicts(after_suffix)
+    after_suffix, suffix_conflicts = detect_suffix_conflicts(deduped, verbose)
+    final, substring_conflicts = detect_substring_conflicts(after_suffix, verbose)
 
     # Debug: Check for toin-related conflicts
     toin_patterns = [c for c in final if "toin" in c[0].lower()]

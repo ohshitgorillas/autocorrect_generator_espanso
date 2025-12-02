@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **QMK filtering performance optimization**: Removed expensive unused substring index building from `TypoIndex` class
+  - **Previous behavior**: Built all substrings for each typo (O(n × m²) complexity) that were never used
+  - **New behavior**: Only builds necessary indexes (typo-to-correction mapping and length grouping)
+  - **Conflict detection**: Optimized to use O(1) dictionary lookups instead of O(n²) nested loops
+  - **Impact**: Significantly faster filtering, especially for large correction sets (10K+ corrections)
+  - **Files modified**: `entroppy/platforms/qmk/typo_index.py`
+
 ### Fixed
 
 - **Collision resolution now determines boundaries before frequency comparison**: Fixed architectural issue where collision resolution happened before boundary determination, causing valid corrections with different boundaries to be incorrectly rejected as ambiguous

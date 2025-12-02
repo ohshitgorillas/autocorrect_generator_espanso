@@ -66,7 +66,7 @@ class QMKBackend(PlatformBackend):
         - Suffix conflict detection (RTL matching optimization)
         - Substring conflict detection (QMK's hard constraint)
         """
-        return qmk_filter_corrections(corrections)
+        return qmk_filter_corrections(corrections, config.verbose)
 
     def rank_corrections(
         self,
@@ -95,6 +95,7 @@ class QMKBackend(PlatformBackend):
                 patterns, pattern_replacements
             )
 
+        verbose = config.verbose if config else False
         (
             ranked,
             self._user_corrections,
@@ -109,6 +110,7 @@ class QMKBackend(PlatformBackend):
             max_corrections,
             self._cached_pattern_typos,
             self._cached_replaced_by_patterns,
+            verbose,
         )
 
         return ranked

@@ -1,5 +1,7 @@
 """QMK ranking and scoring logic."""
 
+from tqdm import tqdm
+
 from entroppy.core import BoundaryType, Correction
 from entroppy.utils.helpers import cached_word_frequency
 
@@ -81,11 +83,19 @@ def _build_pattern_sets(
 
 
 def score_patterns(
-    pattern_corrections: list[Correction], pattern_replacements: dict[Correction, list[Correction]]
+    pattern_corrections: list[Correction],
+    pattern_replacements: dict[Correction, list[Correction]],
+    verbose: bool = False,
 ) -> list[tuple[float, str, str, BoundaryType]]:
     """Score patterns by sum of replaced word frequencies."""
     scores = []
-    for typo, word, boundary in pattern_corrections:
+    pattern_iter = pattern_corrections
+    if verbose:
+        pattern_iter = tqdm(
+            pattern_corrections, desc="  Scoring patterns", unit="pattern", leave=False
+        )
+
+    for typo, word, boundary in pattern_iter:
         pattern_key = (typo, word, boundary)
         if pattern_key in pattern_replacements:
             total_freq = sum(
@@ -97,11 +107,20 @@ def score_patterns(
 
 
 def score_direct_corrections(
-    direct_corrections: list[Correction],
+    direct_corrections: list[Correction], verbose: bool = False
 ) -> list[tuple[float, str, str, BoundaryType]]:
     """Score direct corrections by word frequency."""
     scores = []
-    for typo, word, boundary in direct_corrections:
+    direct_iter = direct_corrections
+    if verbose:
+        direct_iter = tqdm(
+            direct_corrections,
+            desc="  Scoring direct corrections",
+            unit="correction",
+            leave=False,
+        )
+
+    for typo, word, boundary in direct_iter:
         freq = cached_word_frequency(word, "en")
         scores.append((freq, typo, word, boundary))
     return scores
@@ -115,6 +134,7 @@ def rank_corrections(
     max_corrections: int | None = None,
     cached_pattern_typos: set[tuple[str, str]] | None = None,
     cached_replaced_by_patterns: set[tuple[str, str]] | None = None,
+    verbose: bool = False,
 ) -> tuple[
     list[Correction],
     list[Correction],
@@ -141,6 +161,7 @@ def rank_corrections(
         max_corrections: Optional limit on number of corrections
         cached_pattern_typos: Optional cached set of (typo, word) tuples for patterns
         cached_replaced_by_patterns: Optional cached set of (typo, word) tuples replaced by patterns
+        verbose: Whether to show progress bars
 
     Returns:
         Tuple of (ranked_corrections, user_corrections, pattern_scores, direct_scores, all_scored)
@@ -161,27 +182,16 @@ def rank_corrections(
     all_scored_items = []
 
     # Score patterns
-    pattern_scores = []
-    for typo, word, boundary in pattern_corrections:
-        pattern_key = (typo, word, boundary)
-        if pattern_key in pattern_replacements:
-            total_freq = sum(
-                cached_word_frequency(replaced_word, "en")
-                for _, replaced_word, _ in pattern_replacements[pattern_key]
-            )
-            score_tuple = (total_freq, typo, word, boundary)
-            pattern_scores.append(score_tuple)
-            # Tier 1 for patterns
-            all_scored_items.append((1, total_freq, typo, word, boundary))
+    pattern_scores = score_patterns(pattern_corrections, pattern_replacements, verbose)
+    for score, typo, word, boundary in pattern_scores:
+        # Tier 1 for patterns
+        all_scored_items.append((1, score, typo, word, boundary))
 
     # Score direct corrections
-    direct_scores = []
-    for typo, word, boundary in direct_corrections:
-        freq = cached_word_frequency(word, "en")
-        score_tuple = (freq, typo, word, boundary)
-        direct_scores.append(score_tuple)
+    direct_scores = score_direct_corrections(direct_corrections, verbose)
+    for score, typo, word, boundary in direct_scores:
         # Tier 2 for direct corrections
-        all_scored_items.append((2, freq, typo, word, boundary))
+        all_scored_items.append((2, score, typo, word, boundary))
 
     # Single unified sort: by tier (ascending), then by score (descending)
     # This ensures patterns (tier 1) come before direct (tier 2), and within each tier,

@@ -1,31 +1,22 @@
-"""Pipeline stages for processing typos."""
+"""Pipeline stages for processing typos.
+
+NOTE: Stages 3-6 (collision resolution, pattern generalization, conflict removal)
+have been replaced by the iterative solver architecture in entroppy/resolution/.
+Only stages 1-2 (dictionary loading, typo generation) remain here.
+"""
 
 from .data_models import (
     DictionaryData,
     TypoGenerationResult,
-    CollisionResolutionResult,
-    PatternGeneralizationResult,
-    ConflictRemovalResult,
-    OutputGenerationResult,
 )
 from .dictionary_loading import load_dictionaries
 from .typo_generation import generate_typos
-from .collision_resolution import resolve_typo_collisions
-from .pattern_generalization import generalize_typo_patterns
-from .conflict_removal import remove_typo_conflicts
 
 __all__ = [
     # Data models
     "DictionaryData",
     "TypoGenerationResult",
-    "CollisionResolutionResult",
-    "PatternGeneralizationResult",
-    "ConflictRemovalResult",
-    "OutputGenerationResult",
     # Stage functions
     "load_dictionaries",
     "generate_typos",
-    "resolve_typo_collisions",
-    "generalize_typo_patterns",
-    "remove_typo_conflicts",
 ]

@@ -27,6 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Log file uses the same timestamp format as the report directory for easy correlation
   - File format matches console output (no color codes, timestamps in debug mode)
 
+- **Configurable solver iterations**: Added `max_iterations` setting (CLI: `--max-iterations`, JSON: `"max_iterations"`) to control the maximum number of solver iterations (default: 10)
+
 ### Changed
 
 - **Code refactoring and modularization**: Split large files (>500 lines) into focused modules, extracted debug logging into separate modules, and refactored large functions into smaller helpers

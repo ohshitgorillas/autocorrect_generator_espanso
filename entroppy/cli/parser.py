@@ -125,6 +125,12 @@ Example config.json:
         help="Skip typos with wordfreq frequency above this",
         default=0.0,
     )
+    parser.add_argument(
+        "--max-iterations",
+        type=int,
+        help="Maximum iterations for iterative solver (default: 10)",
+        default=10,
+    )
 
     # Flags
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")

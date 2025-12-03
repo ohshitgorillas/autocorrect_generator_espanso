@@ -136,7 +136,7 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     ]
 
     # Run solver
-    solver = IterativeSolver(passes)
+    solver = IterativeSolver(passes, max_iterations=config.max_iterations)
     solver_result = solver.solve(state)
 
     solver_elapsed = time.time() - solver_start

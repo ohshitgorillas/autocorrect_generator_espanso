@@ -63,7 +63,7 @@ class PatternGeneralizationPass(Pass):
                     verbose=False,
                     debug_words=state.debug_words,
                     debug_typo_matcher=state.debug_typo_matcher,
-                    jobs=1,  # Single-threaded for now (can be parallelized later)
+                    jobs=self.context.jobs,
                     is_in_graveyard=state.is_in_graveyard,
                 )
             )

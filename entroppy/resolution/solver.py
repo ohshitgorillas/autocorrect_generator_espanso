@@ -194,8 +194,16 @@ class IterativeSolver:
             patterns_change = len(state.active_patterns) - previous_patterns
             graveyard_change = len(state.graveyard) - previous_graveyard
 
-            if not state.is_dirty:
-                logger.info(f"  ✓ Converged (no changes in iteration {iteration})")
+            # Check if we've converged (no net changes)
+            converged_this_iteration = (
+                corrections_change == 0
+                and patterns_change == 0
+                and graveyard_change == 0
+            )
+
+            if converged_this_iteration:
+                logger.info(f"  ✓ Converged (no net changes in iteration {iteration})")
+                state.clear_dirty_flag()  # Mark as clean to exit loop
             else:
                 logger.info(
                     f"  State changed: corrections {corrections_change:+d}, "

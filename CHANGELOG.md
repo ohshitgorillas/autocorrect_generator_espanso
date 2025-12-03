@@ -65,6 +65,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Collision resolution architecture**: Fixed issue where valid corrections with different boundaries were incorrectly rejected
   - Now determines boundaries before frequency comparison, allowing multiple valid corrections per typo when using different boundaries
 
+- **Solver convergence detection**: Fixed issue where solver continued running after convergence
+  - Solver now properly detects convergence when net changes are zero (corrections, patterns, and graveyard all unchanged)
+  - Previously, solver would continue until max iterations even when passes were making offsetting changes (e.g., CandidateSelection adding corrections that PatternGeneralization immediately removed)
+  - Convergence is now based on net state changes rather than just the `is_dirty` flag
+
 ### Performance
 
 - **Word frequency lookup caching**: Added `@functools.lru_cache` wrapper, reducing collision resolution time by 30-50% for large datasets

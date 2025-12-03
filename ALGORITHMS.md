@@ -201,6 +201,23 @@ Prefix patterns work similarly but extract from the beginning of words:
 
 **Boundary inclusion**: For prefix patterns, corrections with both `LEFT` and `NONE` boundaries are included, since NONE boundary corrections can still have valid prefix patterns.
 
+### Pattern Extraction Caching
+
+To optimize performance across solver iterations, pattern extraction results are cached per correction. This avoids re-extracting patterns for the same corrections on each iteration.
+
+**Caching Strategy:**
+- **Cache Key**: `(typo, word, boundary, is_suffix)` - uniquely identifies a correction and pattern type (prefix vs suffix)
+- **Cache Value**: List of all valid patterns extracted from that correction: `(typo_pattern, word_pattern, boundary, length)`
+- **Cache Lifetime**: Persists across all solver iterations (stored in `PatternGeneralizationPass` instance)
+- **Cache Invalidation**: Not needed - patterns are extracted once per correction, then filtered by graveyard state on each iteration
+
+**How It Works:**
+1. On first extraction: Extract all valid patterns from a correction (without graveyard filtering) and store in cache
+2. On subsequent iterations: Retrieve cached patterns and filter by current graveyard state (which changes as patterns are rejected)
+3. Benefits: Eliminates redundant pattern extraction work when corrections persist across multiple iterations
+
+**Performance Impact**: Significantly reduces pattern extraction time for iterative solver runs, especially when many corrections persist across iterations.
+
 ### Pattern Validation
 
 Not all patterns are valid. Each pattern must pass these checks in order:

@@ -73,6 +73,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Iteration logging**: Added per-iteration logging to iterative solver showing corrections, patterns, graveyard size, and convergence progress
 - **Progress bars and debug logging**: Added progress indicators for pattern generalization and comprehensive debug logging for pattern extraction, QMK filtering, and ranking phases
 - **Enhanced debug logging coverage**: Added separate debug logging modules for pattern generalization, dictionary loading, and platform filtering stages. Improved visibility into previously silent areas including pattern collision resolution, cross-boundary pattern conflicts, pattern substring conflicts, and platform max_corrections limit application
 

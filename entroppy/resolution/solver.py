@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from loguru import logger
+
 from entroppy.core import BoundaryIndex
 from entroppy.matching import ExclusionMatcher
 from entroppy.platforms.base import PlatformBackend
@@ -144,18 +146,80 @@ class IterativeSolver:
             SolverResult with final corrections and metadata
         """
         iteration = 0
+        previous_corrections = len(state.active_corrections)
+        previous_patterns = len(state.active_patterns)
+        previous_graveyard = len(state.graveyard)
+
+        logger.info(f"Starting iterative solver (max {self.max_iterations} iterations)")
 
         while state.is_dirty and iteration < self.max_iterations:
             state.start_iteration()
+            iteration += 1
+
+            logger.info(f"\n--- Iteration {iteration} ---")
+            logger.info(
+                f"  Active corrections: {len(state.active_corrections)}, "
+                f"Active patterns: {len(state.active_patterns)}, "
+                f"Graveyard: {len(state.graveyard)}"
+            )
 
             # Run all passes in sequence
             for pass_instance in self.passes:
+                corrections_before = len(state.active_corrections)
+                patterns_before = len(state.active_patterns)
+                graveyard_before = len(state.graveyard)
+
                 pass_instance.run(state)
 
-            iteration += 1
+                corrections_after = len(state.active_corrections)
+                patterns_after = len(state.active_patterns)
+                graveyard_after = len(state.graveyard)
+
+                corrections_delta = corrections_after - corrections_before
+                patterns_delta = patterns_after - patterns_before
+                graveyard_delta = graveyard_after - graveyard_before
+
+                if corrections_delta != 0 or patterns_delta != 0 or graveyard_delta != 0:
+                    changes = []
+                    if corrections_delta != 0:
+                        changes.append(f"corrections: {corrections_delta:+d}")
+                    if patterns_delta != 0:
+                        changes.append(f"patterns: {patterns_delta:+d}")
+                    if graveyard_delta != 0:
+                        changes.append(f"graveyard: {graveyard_delta:+d}")
+                    logger.info(f"  [{pass_instance.name}] {', '.join(changes)}")
+
+            # Check convergence progress
+            corrections_change = len(state.active_corrections) - previous_corrections
+            patterns_change = len(state.active_patterns) - previous_patterns
+            graveyard_change = len(state.graveyard) - previous_graveyard
+
+            if not state.is_dirty:
+                logger.info(f"  ✓ Converged (no changes in iteration {iteration})")
+            else:
+                logger.info(
+                    f"  State changed: corrections {corrections_change:+d}, "
+                    f"patterns {patterns_change:+d}, graveyard {graveyard_change:+d}"
+                )
+
+            previous_corrections = len(state.active_corrections)
+            previous_patterns = len(state.active_patterns)
+            previous_graveyard = len(state.graveyard)
 
         # Check if we converged or hit the limit
         converged = not state.is_dirty
+
+        if not converged:
+            logger.warning(
+                f"  ⚠ Solver reached max iterations ({self.max_iterations}) without converging"
+            )
+
+        logger.info(
+            f"\nSolver completed: {iteration} iteration(s), "
+            f"{len(state.active_corrections)} corrections, "
+            f"{len(state.active_patterns)} patterns, "
+            f"{len(state.graveyard)} in graveyard"
+        )
 
         return SolverResult(
             corrections=list(state.active_corrections),

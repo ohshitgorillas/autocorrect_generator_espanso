@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from entroppy.core.patterns import generalize_patterns
-from entroppy.platforms.base import MatchDirection
+from entroppy.core.types import MatchDirection
 from entroppy.resolution.solver import Pass
 from entroppy.resolution.state import RejectionReason
 

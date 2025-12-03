@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Any
 
 from entroppy.core import Config, Correction
-from entroppy.platforms.base import MatchDirection, PlatformBackend, PlatformConstraints
+from entroppy.core.types import MatchDirection
+from entroppy.platforms.base import PlatformBackend, PlatformConstraints
 from entroppy.platforms.qmk.filtering import filter_corrections as qmk_filter_corrections
 from entroppy.platforms.qmk.output import generate_output as qmk_generate_output
 from entroppy.platforms.qmk.ranking import _build_pattern_sets

@@ -9,7 +9,7 @@ from entroppy.core.boundaries import (
     would_trigger_at_end,
     would_trigger_at_start,
 )
-from entroppy.platforms.base import MatchDirection
+from entroppy.core.types import MatchDirection
 from entroppy.utils.debug import log_debug_correction
 
 if TYPE_CHECKING:

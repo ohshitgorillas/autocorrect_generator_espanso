@@ -20,8 +20,7 @@ from entroppy.core.pattern_validation_worker import (
     _validate_single_pattern_worker,
     init_pattern_validation_worker,
 )
-from entroppy.core.types import Correction
-from entroppy.platforms.base import MatchDirection
+from entroppy.core.types import Correction, MatchDirection
 from entroppy.utils.debug import is_debug_correction
 
 from .pattern_logging import (

@@ -11,8 +11,7 @@ from entroppy.core.pattern_validation import (
     check_pattern_conflicts,
     validate_pattern_for_all_occurrences,
 )
-from entroppy.core.types import Correction
-from entroppy.platforms.base import MatchDirection
+from entroppy.core.types import Correction, MatchDirection
 
 if TYPE_CHECKING:
     from entroppy.utils.debug import DebugTypoMatcher

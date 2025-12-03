@@ -1,6 +1,8 @@
 """Platform abstraction for EntropPy."""
 
-from .base import MatchDirection, PlatformBackend, PlatformConstraints
+from entroppy.core.types import MatchDirection
+
+from .base import PlatformBackend, PlatformConstraints
 from .espanso import EspansoBackend
 from .qmk import QMKBackend
 

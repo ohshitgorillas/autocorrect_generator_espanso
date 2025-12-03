@@ -13,8 +13,7 @@ from entroppy.core.pattern_validation_runner import (
     _run_parallel_validation,
     _run_single_threaded_validation,
 )
-from entroppy.core.types import Correction
-from entroppy.platforms.base import MatchDirection
+from entroppy.core.types import Correction, MatchDirection
 
 if TYPE_CHECKING:
     from entroppy.utils.debug import DebugTypoMatcher

@@ -4,20 +4,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from entroppy.core.types import MatchDirection
 
 if TYPE_CHECKING:
     from entroppy.core.config import Config
     from entroppy.core.types import Correction
-
-
-class MatchDirection(Enum):
-    """Direction in which platform scans for matches."""
-
-    LEFT_TO_RIGHT = "ltr"  # Espanso
-    RIGHT_TO_LEFT = "rtl"  # QMK
 
 
 @dataclass

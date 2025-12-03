@@ -7,7 +7,8 @@ from typing import Any
 from loguru import logger
 
 from entroppy.core import Config, Correction
-from entroppy.platforms.base import MatchDirection, PlatformBackend, PlatformConstraints
+from entroppy.core.types import MatchDirection
+from entroppy.platforms.base import PlatformBackend, PlatformConstraints
 from entroppy.platforms.espanso.file_writing import write_yaml_files
 from entroppy.platforms.espanso.organization import organize_by_letter
 from entroppy.platforms.espanso.ram_estimation import estimate_ram_usage

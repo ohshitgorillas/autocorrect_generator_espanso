@@ -14,6 +14,7 @@ from entroppy.utils.debug import log_debug_correction
 
 if TYPE_CHECKING:
     from entroppy.utils.debug import DebugTypoMatcher
+    from entroppy.core.pattern_indexes import SourceWordIndex
 
 
 # Cache for pattern validation results

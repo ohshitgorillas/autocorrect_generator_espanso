@@ -29,6 +29,7 @@ class PassContext:
     source_words_set: set[str]
     user_words_set: set[str]
     exclusion_matcher: ExclusionMatcher | None
+    exclusion_set: set[str]  # Original exclusion patterns for worker context
 
     # Boundary detection indices
     validation_index: BoundaryIndex
@@ -40,6 +41,7 @@ class PassContext:
     # Configuration
     min_typo_length: int
     collision_threshold: float
+    jobs: int
 
     @classmethod
     def from_dictionary_data(
@@ -48,6 +50,7 @@ class PassContext:
         platform: PlatformBackend | None,
         min_typo_length: int,
         collision_threshold: float,
+        jobs: int = 1,
     ) -> "PassContext":
         """Create context from dictionary data.
 
@@ -70,11 +73,13 @@ class PassContext:
             source_words_set=dictionary_data.source_words_set,
             user_words_set=dictionary_data.user_words_set,
             exclusion_matcher=dictionary_data.exclusion_matcher,
+            exclusion_set=dictionary_data.exclusions,
             validation_index=validation_index,
             source_index=source_index,
             platform=platform,
             min_typo_length=min_typo_length,
             collision_threshold=collision_threshold,
+            jobs=jobs,
         )
 
 

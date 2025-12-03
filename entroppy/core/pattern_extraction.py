@@ -76,6 +76,10 @@ def _find_patterns(
     )
     debug_enabled = debug_typos is not None and len(debug_typos) > 0
 
+    # Track cache statistics
+    cache_hits = 0
+    cache_misses = 0
+
     # Filter corrections by boundary type
     # For suffix patterns (RIGHT), also include NONE boundary (matches anywhere, so suffix is valid)
     # For prefix patterns (LEFT), also include NONE boundary (matches anywhere, so prefix is valid)
@@ -149,11 +153,18 @@ def _find_patterns(
         cached_patterns = None
         if pattern_cache is not None and cache_key in pattern_cache:
             cached_patterns = pattern_cache[cache_key]
+            cache_hits += 1
             if is_debug:
                 logger.debug(f"  Using cached patterns: {len(cached_patterns)} patterns found")
+            elif verbose:
+                logger.debug(
+                    f"[CACHE HIT] {typo}→{word} ({boundary.value}, "
+                    f"{'suffix' if is_suffix else 'prefix'}): {len(cached_patterns)} patterns"
+                )
 
         # Extract patterns if not cached
         if cached_patterns is None:
+            cache_misses += 1
             cached_patterns = []
             # Extract all valid patterns at once by iterating through possible pattern lengths
             # Start from longest patterns (more specific) and work backwards
@@ -198,6 +209,12 @@ def _find_patterns(
             # Store in cache for future iterations
             if pattern_cache is not None:
                 pattern_cache[cache_key] = cached_patterns
+                if verbose and not is_debug:
+                    logger.debug(
+                        f"[CACHE MISS] {typo}→{word} ({boundary.value}, "
+                        f"{'suffix' if is_suffix else 'prefix'}): "
+                        f"extracted {len(cached_patterns)} patterns"
+                    )
 
         # Process cached patterns, filtering by graveyard
         for typo_pattern, word_pattern, pattern_boundary, length in cached_patterns:
@@ -241,6 +258,14 @@ def _find_patterns(
     if debug_enabled:
         logger.debug(
             f"[PATTERN EXTRACTION] Found {len(pattern_candidates)} unique pattern candidates"
+        )
+
+    # Log cache statistics if cache is being used
+    if pattern_cache is not None and verbose:
+        cache_size = len(pattern_cache)
+        logger.debug(
+            f"[PATTERN EXTRACTION] Cache stats: {cache_hits} hits, {cache_misses} misses, "
+            f"{cache_size} total entries"
         )
 
     # Add all patterns that have 2+ occurrences

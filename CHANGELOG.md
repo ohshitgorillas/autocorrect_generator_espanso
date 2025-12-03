@@ -2,53 +2,26 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Pattern redundancy detection**: Longer patterns are now rejected when a shorter pattern already handles the same cases (e.g., `otehr -> other` rejected if `tehr -> ther` exists). Prevents duplicate patterns and ensures QMK compilation succeeds.
+- **Debug typos exact vs wildcard matching**: Exact patterns (e.g., `"teh"`) now use exact matching only, while wildcard patterns (e.g., `"*teh*"`) use substring matching. Previously, exact patterns would match all typos containing the substring.
+- **Pattern validation boundary checks**: Patterns with safe boundaries (RIGHT, LEFT, BOTH) now skip position checks where they cannot match, fixing incorrect rejections like "teh -> the" with RIGHT boundary.
+- **Substring conflict detection**: Now includes patterns in conflict detection (not just direct corrections), checks all positions (not just prefix/suffix), and simplified QMK filtering to prevent restoring invalid corrections.
+- **Type errors and report generation**: Fixed all mypy type errors across 88 files and ensured report generation properly extracts data from solver state.
+
 ### Performance
 
-- **Parallelized Candidate Selection (Phase 1)**: Refactored `CandidateSelectionPass` to use multiprocessing for processing raw typos
-  - Added `jobs` parameter to `PassContext` to enable parallel execution
-  - Implemented Map-Reduce approach: workers process batches of typos in parallel, returning proposed corrections and graveyard entries
-  - Main thread aggregates results and applies them to `DictionaryState`
-  - Uses chunk-based processing (4 chunks per worker) for load balancing
-  - Falls back to sequential mode when `jobs=1` or for small datasets (<100 typos)
-  - **Estimated Gain**: Linear speedup proportional to CPU cores (e.g., 8-10x faster on 12-core machine)
-  - **Impact**: Dramatically reduces processing time for large datasets (250k+ typos) from "unmanageable" to "minutes"
-- **Enabled Pattern Generalization Parallelism (Phase 2)**: Updated `PatternGeneralizationPass` to use parallel pattern validation
-  - Changed from hardcoded `jobs=1` to `self.context.jobs` to leverage existing parallel validation infrastructure
-  - Pattern validation now uses multiple CPU cores when `config.jobs > 1`
-  - **Estimated Gain**: Significant reduction in "Pattern Generalization" phase time (often the longest running phase), with linear speedup proportional to CPU cores
-- **Parallelized Conflict Detection (Phase 3)**: Refactored `ConflictRemovalPass` to process boundary groups in parallel
-  - Boundary groups (LEFT, RIGHT, BOTH, NONE) are now processed concurrently using multiprocessing
-  - Large boundary groups (>1000 corrections) are automatically sharded by first character for better load balancing
-  - Workers return blocked corrections and graveyard entries, which are aggregated and applied in the main thread
-  - Falls back to sequential mode when `jobs=1` or for small datasets (<100 corrections)
-  - **Estimated Gain**: Linear speedup proportional to CPU cores, especially beneficial for large NONE boundary groups which often contain the majority of corrections
-- **Pattern Extraction Caching**: Added caching for pattern extraction results across solver iterations
-  - Pattern extraction results are now cached per correction in `PatternGeneralizationPass`
-  - Patterns are extracted once per correction and reused across iterations, with graveyard filtering applied per iteration
-  - **Estimated Gain**: Significant reduction in pattern extraction time for iterative solver runs, especially when many corrections persist across multiple iterations
-  - **Impact**: Eliminates redundant pattern extraction work, reducing overall solver runtime
+- **QMK ranking optimizations**: Batch word frequency lookups (O(1) access), lazy pattern scoring, optimized debug logging, and separate tier sorting. Expected 70-90% reduction in ranking time.
+- **Parallelized solver passes**: Candidate selection, pattern generalization, and conflict detection now use multiprocessing with linear speedup proportional to CPU cores. Pattern extraction results cached across iterations.
 
 ### Added
 
-- **Progress bars for iterative solver**: Added real-time progress tracking for solver iterations and passes when `--verbose` is enabled
-  - Iteration progress bar shows current iteration, corrections, patterns, and graveyard counts
-  - Nested pass progress bar shows which pass is currently running
-  - Provides better visibility into solver progress during long-running operations
+- **Progress bars for iterative solver**: Real-time progress tracking for iterations and passes when `--verbose` is enabled.
 
 ### Changed
 
-- **Refactored pattern extraction for maintainability**: Split `_find_patterns()` function (260 lines) into smaller, focused helper functions
-  - Extracted boundary filtering, debug tracking setup, pattern extraction from single correction, cached pattern processing, common pattern finding, and debug logging into separate functions
-  - Main function reduced from ~260 to ~70 lines with clearer flow and single-responsibility helpers
-  - Improved code maintainability and testability without changing functionality
-
-### Fixed
-- Fixed all mypy type errors across 88 source files, including missing imports, type annotations, tqdm iterator assignments, and None type handling
-- Report generation now properly extracts data from solver state and generates all reports including collisions, conflicts, exclusions, and platform-specific reports (e.g., `qmk_ranking.txt`)
-- **Substring conflict detection now includes patterns**: `ConflictRemovalPass` was only checking `active_corrections` and ignoring `active_patterns`, causing conflicts between patterns (e.g., "atoin" vs "toin") to be missed. Patterns are now included in conflict detection and can conflict with each other and with direct corrections.
-- **Substring detection checks all positions**: Conflict detectors were only checking prefix for LEFT/NONE/BOTH boundaries and suffix for RIGHT boundaries, missing conflicts where a shorter typo appears in the middle or at a different position (e.g., "atoin" contains "toin" as a suffix, not a prefix). Now checks for substring relationships anywhere in the typo.
-- **Simplified QMK filtering to prevent restoring invalid corrections**: Removed suffix/substring conflict detection and same-typo conflict resolution from QMK filtering phase. The previous logic was removing good corrections (like "teh" -> "the") and restoring bad ones (like "geou" -> "grou"). QMK supports boundaries, so all boundary variants are now kept, and conflict resolution is handled by the iterative solver.
-- **Improved pattern rejection logging**: Pattern rejection messages now include example validation words (e.g., "Would trigger at start of validation words (e.g., 'tehran')") and show full correction results including suffixes (e.g., "gorgrous" instead of "gorgrou").
+- **Refactored pattern extraction**: Split `_find_patterns()` (260 → 70 lines) into focused helper functions for better maintainability.
 
 All notable changes to this project will be documented in this file.
 

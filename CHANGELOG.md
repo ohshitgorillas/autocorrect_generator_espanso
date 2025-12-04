@@ -29,6 +29,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - PlatformSubstringConflictPass: Shows progress for typos being checked (now tracks individual typos instead of length buckets)
   - PlatformConstraintsPass: Shows separate progress for corrections and patterns
 - **Refactored pattern extraction**: Split `_find_patterns()` (260 → 70 lines) into focused helper functions for better maintainability.
+- **Code refactoring for maintainability**: Broke up large files and functions to improve code maintainability:
+  - Split `candidate_selection.py` (834 lines) into `candidate_selection.py` (479 lines) and `candidate_selection_workers.py` (404 lines) for better separation of worker functions
+  - Extracted helper functions from large functions in `pattern_validation_runner.py` and `correction_processing.py` to reduce function complexity
+  - All functions are now under 100 lines of code (excluding comments)
+  - Files over 500 lines have been split into focused modules with single responsibilities
 
 ### Performance
 

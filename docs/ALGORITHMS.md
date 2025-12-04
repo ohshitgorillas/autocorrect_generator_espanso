@@ -234,6 +234,7 @@ For each typo, EntropPy selects the **least restrictive boundary** that doesn't 
 
 1. **Determine natural boundary** using `determine_boundaries()`:
    - Checks if typo appears as substring in validation or source words
+   - Uses **filtered validation set** (respects user exclusion patterns) for boundary detection
    - Returns `NONE` if typo doesn't appear anywhere, `BOTH` if appears only in middle, `LEFT`/`RIGHT` if appears at word boundaries
 
 2. **Get boundary order to try** based on natural boundary:
@@ -246,7 +247,7 @@ For each typo, EntropPy selects the **least restrictive boundary** that doesn't 
    - **Target word check (highest priority)**: Check if typo appears as prefix/suffix/substring of the target word itself
      - This prevents "predictive corrections" where the correction would trigger when typing the correct word
      - Example: `alway -> always` with NONE/LEFT boundary would trigger when typing "always", producing "alwayss"
-   - **Validation words check**: Check if typo appears as prefix/suffix/substring in validation dictionary
+   - **Validation words check**: Check if typo appears as prefix/suffix/substring in validation dictionary (uses **full validation set** to catch all garbage corrections, regardless of user exclusions)
    - **Source words check**: Check if typo appears as prefix/suffix/substring in source words
    - **NONE**: Would cause false trigger if typo appears as substring anywhere (target, validation, or source)
    - **LEFT**: Would cause false trigger if typo appears as prefix of any word (target, validation, or source)
@@ -255,7 +256,9 @@ For each typo, EntropPy selects the **least restrictive boundary** that doesn't 
 
 4. **Select the first boundary** that doesn't cause false triggers and passes all other checks (length, exclusions)
 
-5. **Fallback**: If all boundaries would cause false triggers or fail other checks, the correction is **not added** (will be retried in next iteration with different state if graveyard allows)
+5. **Graveyard false triggers**: If a boundary would cause false triggers, it is added to the graveyard with `RejectionReason.FALSE_TRIGGER`. This prevents the same unsafe boundary from being retried on subsequent iterations.
+
+6. **Fallback**: If all boundaries would cause false triggers or fail other checks, the correction is **not added** in this iteration. On the next iteration, the graveyard prevents retrying unsafe boundaries, allowing the solver to try safer boundaries (e.g., BOTH instead of NONE) and eventually converge to a safe solution.
 
 **Key Principle**: Select the least restrictive boundary that safely prevents the typo from incorrectly matching the target word, validation words, or source words in unintended contexts. The boundary order is optimized based on the typo's relationship to the target word to avoid testing incompatible boundaries. Target word check takes highest priority to prevent predictive corrections.
 

@@ -413,54 +413,71 @@ def check_bucket_conflicts(
         if progress_bar is not None:
             progress_bar.update(1)
         # Get index key (first character for general substring conflicts)
+        # For QMK, also check against typos that start with the core typo
+        # (e.g., ":aemr" should be checked against "aemr")
         index_key = formatted_typo[0] if formatted_typo else ""
 
-        # Only check against shorter typos with same first character
-        if index_key in candidates_by_char:
-            for shorter_formatted_typo, shorter_corrections in candidates_by_char[index_key]:
-                # Check if shorter is a substring of current
-                if is_substring(shorter_formatted_typo, formatted_typo):
-                    # Check all combinations of corrections with early termination
-                    for correction1, _, boundary1 in shorter_corrections:
-                        # Skip if already marked for removal (early termination)
-                        if correction1 in corrections_to_remove_set:
-                            continue
+        # For QMK boundary prefixes (starts with ':'), also check against the core typo
+        # This handles cases like ":aemr" vs "aemr" where they're in different char buckets
+        index_keys_to_check = [index_key]
+        if formatted_typo.startswith(":") and len(formatted_typo) > 1:
+            # Also check against the core typo (without the leading colon)
+            core_typo_key = formatted_typo[1] if len(formatted_typo) > 1 else ""
+            if core_typo_key:
+                index_keys_to_check.append(core_typo_key)
+        elif not formatted_typo.startswith(":") and formatted_typo:
+            # For core typos, also check against colon-prefixed versions
+            # (they would be indexed under ':')
+            index_keys_to_check.append(":")
 
-                        for correction2, _, boundary2 in corrections_for_typo:
+        # Check against shorter typos with matching index keys
+        for key_to_check in index_keys_to_check:
+            if key_to_check in candidates_by_char:
+                for shorter_formatted_typo, shorter_corrections in candidates_by_char[key_to_check]:
+                    # Check if shorter is a substring of current
+                    if is_substring(shorter_formatted_typo, formatted_typo):
+                        # Check all combinations of corrections with early termination
+                        for correction1, _, boundary1 in shorter_corrections:
                             # Skip if already marked for removal (early termination)
-                            if correction2 in corrections_to_remove_set:
+                            if correction1 in corrections_to_remove_set:
                                 continue
 
-                            # Process conflict pair
-                            result, conflict_pair = process_conflict_pair(
-                                correction1,
-                                correction2,
-                                shorter_formatted_typo,
-                                formatted_typo,
-                                boundary1,
-                                boundary2,
-                                match_direction,
-                                processed_pairs,
-                                corrections_to_remove_set,
-                                validation_index,
-                                source_index,
-                                debug_words,
-                                debug_typo_matcher,
-                            )
+                            for correction2, _, boundary2 in corrections_for_typo:
+                                # Skip if already marked for removal (early termination)
+                                if correction2 in corrections_to_remove_set:
+                                    continue
 
-                            if result is not None:
-                                correction_to_remove, reason = result
-                                corrections_to_remove.append((correction_to_remove, reason))
-                                if conflict_pair is not None:
-                                    removed_correction, conflicting_correction = conflict_pair
-                                    conflict_pairs[removed_correction] = conflicting_correction
-                                    corrections_to_remove_set.add(removed_correction)
+                                # Process conflict pair
+                                result, conflict_pair = process_conflict_pair(
+                                    correction1,
+                                    correction2,
+                                    shorter_formatted_typo,
+                                    formatted_typo,
+                                    boundary1,
+                                    boundary2,
+                                    match_direction,
+                                    processed_pairs,
+                                    corrections_to_remove_set,
+                                    validation_index,
+                                    source_index,
+                                    debug_words,
+                                    debug_typo_matcher,
+                                )
 
-                            # Break early if all corrections for this formatted typo are marked
-                            if all(
-                                c in corrections_to_remove_set for c, _, _ in corrections_for_typo
-                            ):
-                                break
+                                if result is not None:
+                                    correction_to_remove, reason = result
+                                    corrections_to_remove.append((correction_to_remove, reason))
+                                    if conflict_pair is not None:
+                                        removed_correction, conflicting_correction = conflict_pair
+                                        conflict_pairs[removed_correction] = conflicting_correction
+                                        corrections_to_remove_set.add(removed_correction)
+
+                                # Break early if all corrections for this formatted typo are marked
+                                if all(
+                                    c in corrections_to_remove_set
+                                    for c, _, _ in corrections_for_typo
+                                ):
+                                    break
 
         # Add to index for future checks (only shorter typos are added since we
         # process in length order)

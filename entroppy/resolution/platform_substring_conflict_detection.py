@@ -10,6 +10,11 @@ from typing import TYPE_CHECKING
 from entroppy.core.boundaries import BoundaryIndex, BoundaryType
 from entroppy.core.types import MatchDirection
 from entroppy.resolution.false_trigger_check import _check_false_trigger_with_details
+from entroppy.resolution.platform_substring_conflict_debug import (
+    log_boundary_comparison,
+    log_false_trigger_check,
+    log_resolution_decision,
+)
 
 if TYPE_CHECKING:
     from tqdm import tqdm
@@ -115,8 +120,6 @@ def should_remove_shorter(
 
     # Log boundary comparison if debugging
     if debug_words is not None or debug_typo_matcher is not None:
-        from entroppy.resolution.platform_substring_conflict_debug import log_boundary_comparison
-
         # Determine more restrictive typo for logging
         if less_restrictive_boundary == shorter_boundary:
             more_restrictive_typo = longer_typo
@@ -151,10 +154,6 @@ def should_remove_shorter(
 
         # Log false trigger check if debugging
         if debug_words is not None or debug_typo_matcher is not None:
-            from entroppy.resolution.platform_substring_conflict_debug import (
-                log_false_trigger_check,
-            )
-
             reason_value = details.get("reason") if details else None
             reason_str = reason_value if isinstance(reason_value, str) else None
             log_false_trigger_check(
@@ -316,10 +315,6 @@ def process_conflict_pair(
 
         # Log resolution decision if debugging
         if debug_words is not None or debug_typo_matcher is not None:
-            from entroppy.resolution.platform_substring_conflict_debug import (
-                log_resolution_decision,
-            )
-
             log_resolution_decision(
                 typo1,
                 word1,
@@ -347,8 +342,6 @@ def process_conflict_pair(
 
     # Log resolution decision if debugging
     if debug_words is not None or debug_typo_matcher is not None:
-        from entroppy.resolution.platform_substring_conflict_debug import log_resolution_decision
-
         log_resolution_decision(
             typo2,
             word2,

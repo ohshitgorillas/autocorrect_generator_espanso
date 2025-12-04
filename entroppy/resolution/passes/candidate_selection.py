@@ -458,7 +458,17 @@ class CandidateSelectionPass(Pass):
             state: The dictionary state to modify
             typos_to_process: List of (typo, word_list) tuples to process
         """
-        for typo, word_list in typos_to_process:
+        if self.context.verbose:
+            typos_iter: Any = tqdm(
+                typos_to_process,
+                desc=f"    {self.name}",
+                unit="typo",
+                leave=False,
+            )
+        else:
+            typos_iter = typos_to_process
+
+        for typo, word_list in typos_iter:
             # Get unique words for this typo
             unique_words = list(set(word_list))
 
@@ -514,11 +524,13 @@ class CandidateSelectionPass(Pass):
             results = pool.imap_unordered(_process_typo_batch_worker, chunks)
 
             # Wrap with progress bar
-            if self.context.jobs > 1:  # Show progress for parallel processing
+            if (
+                self.context.verbose and self.context.jobs > 1
+            ):  # Show progress for parallel processing
                 results_wrapped_iter: Any = tqdm(
                     results,
                     total=len(chunks),
-                    desc="    Processing typos",
+                    desc=f"    {self.name}",
                     unit="chunk",
                     leave=False,
                 )

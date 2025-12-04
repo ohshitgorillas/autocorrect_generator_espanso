@@ -55,6 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **`--hurtmycpu` flag for comprehensive pattern discovery**: Added `--hurtmycpu` (aliases: `--overnight`, `--takeforever`) flag that generates typos for ALL words in the `english-words` dictionary instead of just the top-N from wordfreq. This enables complete pattern discovery (e.g., finding all `*king` words like "walking", "talking", "working", "looking", etc. to discover the `kign -> king` pattern) while still respecting `--top-n` for final dictionary selection. Processing time increases significantly (hours to overnight) but finds patterns that would otherwise be missed.
 - **Pass timing in verbose output**: Each solver pass now logs its execution time in the verbose output (e.g., "completed in 1m 12s"). This helps identify performance bottlenecks and optimize slow passes.
 - **Platform substring conflict detection**: New `PlatformSubstringConflictPass` in the iterative solver that runs after `ConflictRemovalPass` to catch cross-boundary substring conflicts. Includes debug logging support via `platform_substring_conflict_logging.py`.
 - **Progress bars for iterative solver**: Real-time progress tracking for passes when `--verbose` is enabled.

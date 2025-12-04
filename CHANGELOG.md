@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- **Removed verbose debug logging for non-debug typos**: Removed `[CACHE MISS]` and `[CACHE HIT]` debug log messages that were being logged for all typos when `--verbose` was enabled. These messages are now only logged for debug typos/words (when `--debug-typo` or `--debug-word` is specified).
+
+### Changed
+
 - **Missing false trigger checks in CandidateSelectionPass**: Added false trigger validation to all boundary selection paths in `CandidateSelectionPass`. Previously, corrections could be added with `NONE` boundary even when the typo appeared as a substring in valid words (e.g., `wmo -> wom` matching inside "snowmobile"), causing QMK compiler warnings. Now all boundaries are checked for false triggers before being added, ensuring corrections only use safe boundaries or are rejected if no safe boundary exists.
 - **Cross-boundary substring conflicts**: Added `PlatformSubstringConflictPass` to detect and remove substring conflicts that occur when the same typo text appears with different boundaries. For QMK (RTL), formatted strings like `"aemr"` and `":aemr"` are substrings of each other, causing compiler errors. The pass removes duplicates based on platform matching direction and boundary restrictiveness. Fixes QMK compilation errors like "Typos may not be substrings of one another".
 - **Pattern redundancy detection**: Longer patterns are now rejected when a shorter pattern already handles the same cases (e.g., `otehr -> other` rejected if `tehr -> ther` exists). Prevents duplicate patterns and ensures QMK compilation succeeds.
@@ -29,6 +33,17 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [Unreleased]
+
+### Changed
+
+- **Progress bars in iterative solver**: Progress bars now track actual work items (typos, corrections, patterns) instead of passes
+  - CandidateSelectionPass: Shows progress for typos being processed
+  - PatternGeneralizationPass: Shows progress for patterns being validated
+  - ConflictRemovalPass: Shows progress for corrections/patterns being checked
+  - PlatformSubstringConflictPass: Shows progress for corrections/patterns being processed
+  - PlatformConstraintsPass: Shows separate progress for corrections and patterns
 
 ## [0.6.0] - 2025-12-02
 

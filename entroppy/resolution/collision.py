@@ -180,6 +180,8 @@ def resolve_collisions(
             logger.info("  Preparing worker context...")
 
         # Create context for workers
+        # Note: validation_set parameter should be filtered_validation_set (words matching
+        # exclusion patterns removed) for boundary detection
         context = CollisionResolutionContext(
             validation_set=frozenset(validation_set),
             source_words=frozenset(source_words),
@@ -250,6 +252,8 @@ def resolve_collisions(
     else:
         # Single-threaded mode (original implementation)
         # Build boundary indexes for efficient lookups
+        # Use filtered validation set - words matching exclusion patterns
+        # should not block valid typos
         if verbose:
             logger.info("  Building boundary indexes...")
         validation_index = BoundaryIndex(validation_set)

@@ -130,7 +130,22 @@ entroppy \
     --verbose
 ```
 
-Using `--typo-freq-threshold` catches conjugations and word forms not in `english-words` but present in `wordfreq`. For example, `juts` (both a transposition of `just` and a conjugation of `jut`) appears in `wordfreq` (~2e-7 frequency) but not `english-words`. Without this threshold, the script would incorrectly generate `juts` → `just`.
+**Note on `--typo-freq-threshold`**: This setting is tricky to use effectively. While it can help filter out rare legitimate words (like verb conjugations not in `english-words`), common typos often appear in `wordfreq` at similar frequencies to rare legitimate words:
+
+**Common typos in wordfreq:**
+- `teh` → `the`: 1.10e-06
+- `thes` → `these`: 3.31e-07
+- `adn` → `and`: 2.63e-07
+- `taht` → `that`: 1.62e-07
+- `recieve` → `receive`: 5.62e-07
+
+**Rare legitimate words in wordfreq:**
+- `juts` (conjugation of `jut`): 2.29e-07
+- `jut`: 3.47e-07
+- `jutted`: 6.31e-08
+- `jutting`: 3.98e-07
+
+Since common typos and rare legitimate words overlap in frequency (both around 1e-7 to 1e-6), setting a threshold too high will filter out valid typos you want to correct, while setting it too low won't filter out the rare words you want to exclude. Use this setting carefully and consider using exclusion patterns instead for more precise control.
 
 ### Logging
 - **Default**: Warnings and errors only

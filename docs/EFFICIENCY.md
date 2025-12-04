@@ -27,6 +27,7 @@ Stages 3-6 use an **Iterative Solver Architecture** that runs passes in sequence
 **Operations**:
 - Load validation dictionary from `english-words` package: O(W)
 - Load source words from `wordfreq` (top-N): O(N) where N = top-N value
+  - **With `--hurtmycpu`**: Load ALL words from `english-words` package: O(W) where W = all words in dictionary
 - Load user words from include file: O(U) where U = user words
 - Build exclusion matcher: O(E) where E = exclusion patterns
 
@@ -35,7 +36,9 @@ Stages 3-6 use an **Iterative Solver Architecture** that runs passes in sequence
 
 **Note**: `BoundaryIndex` is not built during this stage; it's built later during iterative solver initialization (Stage 3-6 setup) to provide O(1) prefix/suffix/substring lookups.
 
-**Total**: O(W + N + U + E) - linear in input size
+**Total**:
+- Normal mode: O(W + N + U + E) - linear in input size
+- With `--hurtmycpu`: O(W + U + E) - linear in input size, but W is now the full dictionary (~200,000-300,000 words instead of top-N)
 
 ---
 

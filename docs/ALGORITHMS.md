@@ -36,6 +36,7 @@ Source words come from two places:
 
 - **Top-N from wordfreq**: The most common English words (e.g., `--top-n 5000`)
 - **Include file**: Custom words you specify (e.g., `--include my_words.txt`)
+- **Full dictionary (with `--hurtmycpu`)**: When `--hurtmycpu` is enabled, ALL words from the `english-words` dictionary are used as source words (minus exclusions and length filters). This enables comprehensive pattern discovery but takes significantly longer to process. The `--top-n` argument still controls final dictionary selection/ranking.
 
 ### Validation Dictionary
 

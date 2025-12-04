@@ -331,7 +331,27 @@ class TestPlatformSubstringConflicts:
         ]
 
         solver = IterativeSolver(passes, max_iterations=config.max_iterations)
-        solver.solve(state)  # Side effect: generates output file
+        solver_result = solver.solve(state)
+
+        # Get final corrections and generate output (like pipeline does)
+        all_corrections = solver_result.corrections + solver_result.patterns
+        ranked_corrections = platform.rank_corrections(
+            all_corrections,
+            solver_result.patterns,
+            state.pattern_replacements,
+            dict_data.user_words_set,
+            config,
+        )
+
+        # Apply platform constraints
+        constraints = platform.get_constraints()
+        if constraints.max_corrections and len(ranked_corrections) > constraints.max_corrections:
+            final_corrections = ranked_corrections[: constraints.max_corrections]
+        else:
+            final_corrections = ranked_corrections
+
+        # Generate output file
+        platform.generate_output(final_corrections, config.output, config)
 
         # Read the output file
         output_file = list(output_dir.glob("*.txt"))[0]
@@ -415,7 +435,27 @@ class TestPlatformSubstringConflicts:
         ]
 
         solver = IterativeSolver(passes, max_iterations=config.max_iterations)
-        solver.solve(state)  # Side effect: generates output file
+        solver_result = solver.solve(state)
+
+        # Get final corrections and generate output (like pipeline does)
+        all_corrections = solver_result.corrections + solver_result.patterns
+        ranked_corrections = platform.rank_corrections(
+            all_corrections,
+            solver_result.patterns,
+            state.pattern_replacements,
+            dict_data.user_words_set,
+            config,
+        )
+
+        # Apply platform constraints
+        constraints = platform.get_constraints()
+        if constraints.max_corrections and len(ranked_corrections) > constraints.max_corrections:
+            final_corrections = ranked_corrections[: constraints.max_corrections]
+        else:
+            final_corrections = ranked_corrections
+
+        # Generate output file
+        platform.generate_output(final_corrections, config.output, config)
 
         # Read the output file
         output_file = list(output_dir.glob("*.txt"))[0]
@@ -500,7 +540,27 @@ class TestPlatformSubstringConflicts:
         ]
 
         solver = IterativeSolver(passes, max_iterations=config.max_iterations)
-        solver.solve(state)  # Side effect: generates output file
+        solver_result = solver.solve(state)
+
+        # Get final corrections and generate output (like pipeline does)
+        all_corrections = solver_result.corrections + solver_result.patterns
+        ranked_corrections = platform.rank_corrections(
+            all_corrections,
+            solver_result.patterns,
+            state.pattern_replacements,
+            dict_data.user_words_set,
+            config,
+        )
+
+        # Apply platform constraints
+        constraints = platform.get_constraints()
+        if constraints.max_corrections and len(ranked_corrections) > constraints.max_corrections:
+            final_corrections = ranked_corrections[: constraints.max_corrections]
+        else:
+            final_corrections = ranked_corrections
+
+        # Generate output file
+        platform.generate_output(final_corrections, config.output, config)
 
         # Read the output file
         output_file = list(output_dir.glob("*.txt"))[0]

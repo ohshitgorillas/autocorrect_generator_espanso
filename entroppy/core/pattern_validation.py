@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from entroppy.core.boundaries import (
     BoundaryIndex,
     BoundaryType,
+    is_substring_of_any,
     would_trigger_at_end,
     would_trigger_at_start,
 )
@@ -312,6 +313,21 @@ def check_pattern_conflicts(
             if example_word:
                 return False, f"Would trigger at start of validation words (e.g., '{example_word}')"
             return False, "Would trigger at start of validation words"
+
+    # Check if pattern appears as substring in validation words (for NONE boundary)
+    # NONE boundary matches anywhere, so it would cause false triggers if the pattern
+    # appears as a substring in any validation word
+    if boundary == BoundaryType.NONE:
+        if is_substring_of_any(typo_pattern, validation_index):
+            # Find an example validation word containing the pattern
+            example_word = None
+            for word in validation_set:
+                if typo_pattern in word and typo_pattern != word:
+                    example_word = word
+                    break
+            if example_word:
+                return False, f"Would falsely trigger on correctly spelled word '{example_word}'"
+            return False, "Would falsely trigger on correctly spelled words"
 
     # FIRST: Check if pattern would corrupt target words
     # (highest priority - prevents predictive corrections)

@@ -74,6 +74,7 @@ select = [
     "F",   # pyflakes
     "I",   # isort
     "D",   # pydocstyle
+    "RET", # refurb: catches unnecessary else after return, etc.
 ]
 ignore = [
     "PLR0913", # Too many arguments (pylint: too-many-arguments)

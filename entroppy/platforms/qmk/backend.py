@@ -6,7 +6,6 @@ from typing import Any
 from entroppy.core import Config, Correction
 from entroppy.core.types import MatchDirection
 from entroppy.platforms.base import PlatformBackend, PlatformConstraints
-from entroppy.platforms.qmk.filtering import filter_corrections as qmk_filter_corrections
 from entroppy.platforms.qmk.output import generate_output as qmk_generate_output
 from entroppy.platforms.qmk.ranking import (
     _build_pattern_sets,
@@ -51,18 +50,6 @@ class QMKBackend(PlatformBackend):
             supports_boundaries=True,  # Via ':' notation
             match_direction=MatchDirection.RIGHT_TO_LEFT,
         )
-
-    def filter_corrections(
-        self, corrections: list[Correction], config: Config
-    ) -> tuple[list[Correction], dict[str, Any]]:
-        """Apply QMK-specific filtering.
-
-        - Character set validation (only a-z and ')
-        - Same-typo-text conflict detection (different boundaries)
-        - Suffix conflict detection (RTL matching optimization)
-        - Substring conflict detection (QMK's hard constraint)
-        """
-        return qmk_filter_corrections(corrections)
 
     def rank_corrections(
         self,
@@ -133,11 +120,10 @@ class QMKBackend(PlatformBackend):
         self,
         final_corrections: list[Correction],
         ranked_corrections_before_limit: list[Correction],
-        filtered_corrections: list[Correction],
+        all_corrections: list[Correction],
         patterns: list[Correction],
         pattern_replacements: dict[Correction, list[Correction]],
         user_words: set[str],
-        filter_metadata: dict[str, Any],
         report_dir: Path,
         config: Config,
     ) -> dict[str, Any]:
@@ -145,12 +131,11 @@ class QMKBackend(PlatformBackend):
         return generate_qmk_ranking_report(
             final_corrections,
             ranked_corrections_before_limit,
-            filtered_corrections,
+            all_corrections,
             patterns,
             pattern_replacements,
             self._user_corrections,
             self._pattern_scores,
             self._direct_scores,
-            filter_metadata,
             report_dir,
         )

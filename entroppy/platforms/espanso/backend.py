@@ -44,19 +44,6 @@ class EspansoBackend(PlatformBackend):
             match_direction=MatchDirection.LEFT_TO_RIGHT,
         )
 
-    def filter_corrections(
-        self, corrections: list[Correction], config: Config
-    ) -> tuple[list[Correction], dict[str, Any]]:
-        """Espanso filtering (minimal - accepts everything)."""
-        metadata = {
-            "total_input": len(corrections),
-            "total_output": len(corrections),
-            "filtered_count": 0,
-            "filter_reasons": {},
-        }
-
-        return corrections, metadata
-
     def rank_corrections(
         self,
         corrections: list[Correction],
@@ -99,11 +86,10 @@ class EspansoBackend(PlatformBackend):
         self,
         final_corrections: list[Correction],
         ranked_corrections_before_limit: list[Correction],
-        filtered_corrections: list[Correction],
+        all_corrections: list[Correction],
         patterns: list[Correction],
         pattern_replacements: dict[Correction, list[Correction]],
         user_words: set[str],
-        filter_metadata: dict[str, Any],
         report_dir: Path,
         config: Config,
     ) -> dict[str, Any]:

@@ -248,13 +248,6 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     # Combine corrections and patterns for ranking
     all_corrections = solver_result.corrections + solver_result.patterns
 
-    # Filter corrections (if platform provides additional filtering)
-    filtered_corrections, filter_metadata = platform.filter_corrections(all_corrections, config)
-
-    if report_data:
-        report_data.filtered_corrections = filtered_corrections
-        report_data.filter_metadata = filter_metadata or {}
-
     # Rank corrections
     # Use pattern_replacements from state
     pattern_replacements = state.pattern_replacements.copy()
@@ -264,7 +257,7 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
             pattern_replacements[pattern] = []
 
     ranked_corrections = platform.rank_corrections(
-        filtered_corrections,
+        all_corrections,
         solver_result.patterns,
         pattern_replacements,
         dict_data.user_words_set,
@@ -323,11 +316,10 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
                 platform.generate_platform_report(
                     final_corrections,
                     ranked_corrections,
-                    filtered_corrections,
+                    all_corrections,
                     solver_result.patterns,
                     pattern_replacements,
                     dict_data.user_words_set,
-                    filter_metadata,
                     report_dir,
                     config,
                 )

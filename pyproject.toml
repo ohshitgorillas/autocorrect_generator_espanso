@@ -76,6 +76,7 @@ select = [
     "D",   # pydocstyle
     "RET", # refurb: catches unnecessary else after return, etc.
     "ARG", # ruff: unused function arguments
+    "PLC0415", # pylint: import-outside-toplevel (catches lazy imports)
 ]
 ignore = [
     "PLR0913", # Too many arguments (pylint: too-many-arguments)

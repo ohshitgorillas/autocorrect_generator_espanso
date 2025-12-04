@@ -75,7 +75,7 @@ class PatternGeneralizationPass(Pass):
                     self.context.source_words_set,
                     self.context.min_typo_length,
                     match_direction,
-                    verbose=False,
+                    verbose=self.context.verbose,
                     debug_words=state.debug_words,
                     debug_typo_matcher=state.debug_typo_matcher,
                     jobs=self.context.jobs,

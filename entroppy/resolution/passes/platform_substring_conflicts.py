@@ -114,7 +114,7 @@ class PlatformSubstringConflictPass(Pass):
 
         # Phase 2: Detect conflicts (keeping original nested loop logic)
         corrections_to_remove, conflict_pairs = self._detect_conflicts(
-            formatted_to_corrections, match_direction
+            formatted_to_corrections, match_direction, state
         )
 
         # Phase 3: Remove conflicts and log (using stored conflict pairs)
@@ -200,6 +200,7 @@ class PlatformSubstringConflictPass(Pass):
             str, list[tuple[tuple[str, str, BoundaryType], str, BoundaryType]]
         ],
         match_direction: MatchDirection,
+        state: "DictionaryState",
     ) -> tuple[
         list[tuple[tuple[str, str, BoundaryType], str]],
         dict[tuple[str, str, BoundaryType], tuple[str, str, BoundaryType]],
@@ -217,6 +218,7 @@ class PlatformSubstringConflictPass(Pass):
             formatted_to_corrections: Dict mapping formatted_typo ->
                 list of (correction, typo, boundary)
             match_direction: Platform match direction
+            state: The dictionary state (for debug words/typos)
 
         Returns:
             Tuple of:
@@ -267,6 +269,10 @@ class PlatformSubstringConflictPass(Pass):
                 processed_pairs,
                 corrections_to_remove_set,
                 progress_bar=progress_bar,
+                validation_index=self.context.validation_index,
+                source_index=self.context.source_index,
+                debug_words=state.debug_words,
+                debug_typo_matcher=state.debug_typo_matcher,
             )
 
             all_corrections_to_remove.extend(corrections_to_remove)

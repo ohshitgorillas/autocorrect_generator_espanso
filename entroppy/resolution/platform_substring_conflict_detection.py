@@ -7,11 +7,14 @@ substring conflicts in platform-formatted typo strings.
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from entroppy.core.boundaries import BoundaryType
+from entroppy.core.boundaries import BoundaryIndex, BoundaryType
 from entroppy.core.types import MatchDirection
+from entroppy.resolution.false_trigger_check import _check_false_trigger_with_details
 
 if TYPE_CHECKING:
     from tqdm import tqdm
+
+    from entroppy.utils.debug import DebugTypoMatcher
 
 # Boundary priority mapping: lower number = less restrictive (matches in more contexts)
 # Used to determine which correction to keep when resolving conflicts
@@ -54,58 +57,128 @@ def is_substring(shorter: str, longer: str) -> bool:
 
 def should_remove_shorter(
     match_direction: MatchDirection,
+    shorter_typo: str,
+    longer_typo: str,
     shorter_word: str,
     longer_word: str,
     shorter_boundary: BoundaryType,
     longer_boundary: BoundaryType,
+    validation_index: BoundaryIndex | None = None,
+    source_index: BoundaryIndex | None = None,
+    debug_words: set[str] | None = None,
+    debug_typo_matcher: "DebugTypoMatcher | None" = None,
 ) -> bool:
     """Determine if the shorter formatted typo should be removed.
 
+    When resolving substring conflicts between patterns with different boundaries,
+    we prefer the less restrictive boundary (e.g., NONE over LEFT) if it doesn't
+    trigger garbage corrections. This ensures we keep the most useful correction
+    while avoiding false triggers.
+
     Args:
         match_direction: Platform match direction
+        shorter_typo: The shorter typo string (core typo, not formatted)
+        longer_typo: The longer typo string (core typo, not formatted)
         shorter_word: Word for shorter typo
         longer_word: Word for longer typo
         shorter_boundary: Boundary type for shorter typo
         longer_boundary: Boundary type for longer typo
+        validation_index: Optional boundary index for validation set (for false trigger checks)
+        source_index: Optional boundary index for source words (for false trigger checks)
+        debug_words: Optional set of words to debug
+        debug_typo_matcher: Optional matcher for debug typos
 
     Returns:
         True if shorter should be removed, False if longer should be removed
     """
-    # If they map to the same word, prefer the less restrictive boundary
-    # (both boundaries passed false trigger checks in Stage 3, so less restrictive
-    # matches in more contexts and is more useful)
-    if shorter_word == longer_word:
-        shorter_priority = BOUNDARY_PRIORITY.get(shorter_boundary, 0)
-        longer_priority = BOUNDARY_PRIORITY.get(longer_boundary, 0)
-
-        # Lower priority = less restrictive (NONE=0, LEFT/RIGHT=1, BOTH=2)
-        # If shorter is less restrictive, keep it (return False = don't remove shorter)
-        if shorter_priority < longer_priority:
-            return False  # Keep shorter (less restrictive), remove longer (more restrictive)
-        # If longer is less restrictive, remove shorter (return True = remove shorter)
-        return True  # Remove shorter (more restrictive), keep longer (less restrictive)
-
-    # For RTL (QMK): QMK's compiler rejects ANY substring relationship
-    # Prefer less restrictive boundary (matches in more contexts)
-    if match_direction == MatchDirection.RIGHT_TO_LEFT:
-        shorter_priority = BOUNDARY_PRIORITY.get(shorter_boundary, 0)
-        longer_priority = BOUNDARY_PRIORITY.get(longer_boundary, 0)
-
-        # Lower priority = less restrictive
-        if shorter_priority < longer_priority:
-            return False  # Keep shorter (less restrictive), remove longer (more restrictive)
-        return True  # Remove shorter (more restrictive), keep longer (less restrictive)
-
-    # For LTR (Espanso): shorter would match first, so longer never triggers
-    # But boundaries are handled separately in YAML, so this is less critical
-    # Prefer less restrictive boundary (matches in more contexts)
+    # Determine which boundary is less restrictive
     shorter_priority = BOUNDARY_PRIORITY.get(shorter_boundary, 0)
     longer_priority = BOUNDARY_PRIORITY.get(longer_boundary, 0)
 
-    # Lower priority = less restrictive
+    # Identify the less restrictive boundary
     if shorter_priority < longer_priority:
-        return False  # Keep shorter (less restrictive), remove longer (more restrictive)
-    return True  # Remove shorter (more restrictive), keep longer (less restrictive)
+        less_restrictive_typo = shorter_typo
+        less_restrictive_word = shorter_word
+        less_restrictive_boundary = shorter_boundary
+        more_restrictive_boundary = longer_boundary
+    elif longer_priority < shorter_priority:
+        less_restrictive_typo = longer_typo
+        less_restrictive_word = longer_word
+        less_restrictive_boundary = longer_boundary
+        more_restrictive_boundary = shorter_boundary
+    else:
+        # Same priority (e.g., LEFT and RIGHT both have priority 1)
+        # Default to keeping shorter for RTL, longer for LTR
+        if match_direction == MatchDirection.RIGHT_TO_LEFT:
+            return False  # Keep shorter for RTL
+        return True  # Remove shorter for LTR
+
+    # Log boundary comparison if debugging
+    if debug_words is not None or debug_typo_matcher is not None:
+        from entroppy.resolution.platform_substring_conflict_debug import log_boundary_comparison
+
+        # Determine more restrictive typo for logging
+        if less_restrictive_boundary == shorter_boundary:
+            more_restrictive_typo = longer_typo
+        else:
+            more_restrictive_typo = shorter_typo
+
+        log_boundary_comparison(
+            shorter_typo,
+            shorter_word,
+            shorter_boundary,
+            longer_typo,
+            longer_word,
+            longer_boundary,
+            less_restrictive_typo,
+            less_restrictive_boundary,
+            more_restrictive_typo,
+            more_restrictive_boundary,
+            debug_words or set(),
+            debug_typo_matcher,
+        )
+
+    # If we have validation/source indices, check if the less restrictive boundary
+    # would cause false triggers. If it doesn't, prefer it over the more restrictive one.
+    if validation_index is not None and source_index is not None:
+        would_cause, details = _check_false_trigger_with_details(
+            less_restrictive_typo,
+            less_restrictive_boundary,
+            validation_index,
+            source_index,
+            target_word=less_restrictive_word,
+        )
+
+        # Log false trigger check if debugging
+        if debug_words is not None or debug_typo_matcher is not None:
+            from entroppy.resolution.platform_substring_conflict_debug import (
+                log_false_trigger_check,
+            )
+
+            reason_value = details.get("reason") if details else None
+            reason_str = reason_value if isinstance(reason_value, str) else None
+            log_false_trigger_check(
+                less_restrictive_typo,
+                less_restrictive_word,
+                less_restrictive_boundary,
+                would_cause,
+                reason_str,
+                debug_words or set(),
+                debug_typo_matcher,
+            )
+
+        if not would_cause:
+            # Less restrictive boundary doesn't trigger garbage corrections - prefer it
+            # Remove the more restrictive one
+            if less_restrictive_boundary == shorter_boundary:
+                return False  # Keep shorter (less restrictive), remove longer (more restrictive)
+            return True  # Remove shorter (more restrictive), keep longer (less restrictive)
+
+    # Less restrictive boundary would cause false triggers, or we don't have indices
+    # Fall back to keeping the more restrictive boundary (which is safer)
+    if more_restrictive_boundary == shorter_boundary:
+        return False  # Keep shorter (more restrictive), remove longer (less restrictive)
+    return True  # Remove shorter (less restrictive), keep longer (more restrictive)
 
 
 def build_length_buckets(
@@ -142,6 +215,10 @@ def process_conflict_pair(
     match_direction: MatchDirection,
     processed_pairs: set[frozenset[tuple[str, str, BoundaryType]]],
     corrections_to_remove_set: set[tuple[str, str, BoundaryType]],
+    validation_index: BoundaryIndex | None = None,
+    source_index: BoundaryIndex | None = None,
+    debug_words: set[str] | None = None,
+    debug_typo_matcher: "DebugTypoMatcher | None" = None,
 ) -> tuple[
     tuple[tuple[str, str, BoundaryType], str] | None,
     tuple[tuple[str, str, BoundaryType], tuple[str, str, BoundaryType]] | None,
@@ -158,6 +235,10 @@ def process_conflict_pair(
         match_direction: Platform match direction
         processed_pairs: Set of already processed correction pairs
         corrections_to_remove_set: Set of corrections already marked for removal
+        validation_index: Optional boundary index for validation set (for false trigger checks)
+        source_index: Optional boundary index for source words (for false trigger checks)
+        debug_words: Optional set of words to debug
+        debug_typo_matcher: Optional matcher for debug typos
 
     Returns:
         Tuple of:
@@ -174,16 +255,57 @@ def process_conflict_pair(
         return None, None
     processed_pairs.add(pair_id)
 
-    # Determine which one to remove based on match direction
-    _, word1, _ = correction1
-    _, word2, _ = correction2
+    # Determine which one to remove based on match direction and false trigger checks
+    typo1, word1, _ = correction1
+    typo2, word2, _ = correction2
+
+    # Determine which boundary is less restrictive for logging
+    shorter_priority = BOUNDARY_PRIORITY.get(boundary1, 0)
+    longer_priority = BOUNDARY_PRIORITY.get(boundary2, 0)
+    if shorter_priority < longer_priority:
+        less_restrictive_typo = typo1
+        less_restrictive_boundary = boundary1
+    elif longer_priority < shorter_priority:
+        less_restrictive_typo = typo2
+        less_restrictive_boundary = boundary2
+    else:
+        # Same priority - determine based on match direction
+        if match_direction == MatchDirection.RIGHT_TO_LEFT:
+            less_restrictive_typo = typo1
+            less_restrictive_boundary = boundary1
+        else:
+            less_restrictive_typo = typo2
+            less_restrictive_boundary = boundary2
+
+    # Check false triggers to determine decision
+    checked_false_triggers = validation_index is not None and source_index is not None
+    would_cause_false_triggers: bool | None = None
+    false_trigger_reason: str | None = None
+
+    if checked_false_triggers and validation_index is not None and source_index is not None:
+        would_cause, details = _check_false_trigger_with_details(
+            less_restrictive_typo,
+            less_restrictive_boundary,
+            validation_index,
+            source_index,
+            target_word=word1 if less_restrictive_typo == typo1 else word2,
+        )
+        would_cause_false_triggers = would_cause
+        reason_value = details.get("reason") if details else None
+        false_trigger_reason = reason_value if isinstance(reason_value, str) else None
 
     if should_remove_shorter(
         match_direction,
+        typo1,
+        typo2,
         word1,
         word2,
         boundary1,
         boundary2,
+        validation_index,
+        source_index,
+        debug_words,
+        debug_typo_matcher,
     ):
         # Remove the shorter formatted one (formatted1)
         reason = (
@@ -191,13 +313,58 @@ def process_conflict_pair(
             f"'{shorter_formatted_typo}' is substring of "
             f"'{formatted_typo}'"
         )
+
+        # Log resolution decision if debugging
+        if debug_words is not None or debug_typo_matcher is not None:
+            from entroppy.resolution.platform_substring_conflict_debug import (
+                log_resolution_decision,
+            )
+
+            log_resolution_decision(
+                typo1,
+                word1,
+                boundary1,
+                typo2,
+                word2,
+                boundary2,
+                less_restrictive_typo,
+                less_restrictive_boundary,
+                checked_false_triggers,
+                would_cause_false_triggers,
+                false_trigger_reason,
+                debug_words or set(),
+                debug_typo_matcher,
+            )
+
         return (correction1, reason), (correction1, correction2)
+
     # Remove the longer formatted one (formatted2)
     reason = (
         f"Cross-boundary substring conflict: "
         f"'{formatted_typo}' contains substring "
         f"'{shorter_formatted_typo}'"
     )
+
+    # Log resolution decision if debugging
+    if debug_words is not None or debug_typo_matcher is not None:
+        from entroppy.resolution.platform_substring_conflict_debug import log_resolution_decision
+
+        log_resolution_decision(
+            typo2,
+            word2,
+            boundary2,
+            typo1,
+            word1,
+            boundary1,
+            less_restrictive_typo,
+            less_restrictive_boundary,
+            checked_false_triggers,
+            would_cause_false_triggers,
+            false_trigger_reason,
+            debug_words or set(),
+            debug_typo_matcher,
+        )
+
     return (correction2, reason), (correction2, correction1)
 
 
@@ -211,6 +378,10 @@ def check_bucket_conflicts(
     processed_pairs: set[frozenset[tuple[str, str, BoundaryType]]],
     corrections_to_remove_set: set[tuple[str, str, BoundaryType]],
     progress_bar: "tqdm | None" = None,
+    validation_index: BoundaryIndex | None = None,
+    source_index: BoundaryIndex | None = None,
+    debug_words: set[str] | None = None,
+    debug_typo_matcher: "DebugTypoMatcher | None" = None,
 ) -> tuple[
     list[tuple[tuple[str, str, BoundaryType], str]],
     dict[tuple[str, str, BoundaryType], tuple[str, str, BoundaryType]],
@@ -224,6 +395,10 @@ def check_bucket_conflicts(
         processed_pairs: Set of already processed correction pairs
         corrections_to_remove_set: Set of corrections already marked for removal
         progress_bar: Optional progress bar to update as typos are processed
+        validation_index: Optional boundary index for validation set (for false trigger checks)
+        source_index: Optional boundary index for source words (for false trigger checks)
+        debug_words: Optional set of words to debug
+        debug_typo_matcher: Optional matcher for debug typos
 
     Returns:
         Tuple of:
@@ -267,6 +442,10 @@ def check_bucket_conflicts(
                                 match_direction,
                                 processed_pairs,
                                 corrections_to_remove_set,
+                                validation_index,
+                                source_index,
+                                debug_words,
+                                debug_typo_matcher,
                             )
 
                             if result is not None:

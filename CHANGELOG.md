@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
-- **Platform substring conflicts prefer less restrictive boundaries**: Fixed logic to prefer less restrictive boundaries (NONE > LEFT/RIGHT > BOTH) when resolving cross-boundary substring conflicts. Previously kept more restrictive boundaries even when less restrictive ones didn't cause false triggers, reducing correction usefulness.
+- **Platform substring conflicts prefer less restrictive boundaries**: Fixed logic to prefer less restrictive boundaries (NONE > LEFT/RIGHT > BOTH) when resolving cross-boundary substring conflicts. Now checks if the less restrictive boundary would cause false triggers before making a decision - if it doesn't trigger garbage corrections, the less restrictive boundary is preferred and the more restrictive one is removed (e.g., removes `:aemr` with LEFT boundary in favor of `aemr` with NONE boundary when NONE is safe). Added debug logging in `platform_substring_conflict_debug.py` to show boundary comparisons, false trigger checks, and resolution decisions when using `--debug-words` or `--debug-typos`.
 - **Removed verbose debug logging for non-debug typos**: Removed `[CACHE MISS]` and `[CACHE HIT]` debug log messages that were being logged for all typos when `--verbose` was enabled. These messages are now only logged for debug typos/words (when `--debug-typo` or `--debug-word` is specified).
 
 ### Changed

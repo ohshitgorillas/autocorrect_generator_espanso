@@ -1,6 +1,8 @@
 """Platform Constraints Pass - enforces platform-specific limits."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from tqdm import tqdm
 
 from entroppy.resolution.solver import Pass
 from entroppy.resolution.state import RejectionReason
@@ -41,7 +43,17 @@ class PlatformConstraintsPass(Pass):
 
         # Check each active correction
         corrections_to_remove = []
-        for correction in state.active_corrections:
+        if self.context.verbose:
+            corrections_iter: Any = tqdm(
+                state.active_corrections,
+                desc=f"    {self.name} (corrections)",
+                unit="correction",
+                leave=False,
+            )
+        else:
+            corrections_iter = state.active_corrections
+
+        for correction in corrections_iter:
             typo, word, boundary = correction
 
             # Check character constraints
@@ -82,7 +94,17 @@ class PlatformConstraintsPass(Pass):
 
         # Also check patterns
         patterns_to_remove = []
-        for pattern in state.active_patterns:
+        if self.context.verbose:
+            patterns_iter: Any = tqdm(
+                state.active_patterns,
+                desc=f"    {self.name} (patterns)",
+                unit="pattern",
+                leave=False,
+            )
+        else:
+            patterns_iter = state.active_patterns
+
+        for pattern in patterns_iter:
             typo, word, boundary = pattern
 
             # Check character constraints

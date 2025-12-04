@@ -68,9 +68,12 @@ class PlatformSubstringConflictPass(Pass):
 
     For QMK (RTL):
     - Formats typos with boundary markers (e.g., "aemr" -> "aemr", ":aemr" -> ":aemr")
-    - Checks if formatted strings are substrings
-    - With RTL matching, the longer formatted string would match first
-    - Removes the shorter one to prevent compiler errors
+    - Checks if formatted strings are substrings (QMK compiler rejects substring
+      relationships)
+    - Prefers less restrictive boundaries (NONE > LEFT/RIGHT > BOTH) when both
+      passed false trigger checks
+    - Removes the more restrictive one to prevent compiler errors while keeping
+      the more useful correction
 
     For Espanso (LTR):
     - Checks if same typo text exists with different boundaries

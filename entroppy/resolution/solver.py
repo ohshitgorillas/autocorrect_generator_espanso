@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from tqdm import tqdm
@@ -44,6 +44,7 @@ class PassContext:
     min_typo_length: int
     collision_threshold: float
     jobs: int
+    verbose: bool
 
     @classmethod
     def from_dictionary_data(
@@ -53,6 +54,7 @@ class PassContext:
         min_typo_length: int,
         collision_threshold: float,
         jobs: int = 1,
+        verbose: bool = False,
     ) -> "PassContext":
         """Create context from dictionary data.
 
@@ -61,6 +63,8 @@ class PassContext:
             platform: Platform backend
             min_typo_length: Minimum typo length
             collision_threshold: Collision resolution threshold
+            jobs: Number of parallel jobs
+            verbose: Whether to show progress bars
 
         Returns:
             PassContext instance
@@ -82,6 +86,7 @@ class PassContext:
             min_typo_length=min_typo_length,
             collision_threshold=collision_threshold,
             jobs=jobs,
+            verbose=verbose,
         )
 
 
@@ -192,21 +197,8 @@ class IterativeSolver:
                     f"Graveyard: {len(state.graveyard)}"
                 )
 
-                # Run all passes in sequence with progress bar
-                if verbose:
-                    passes_iter: Any = tqdm(
-                        self.passes,
-                        desc="  Running passes",
-                        unit="pass",
-                        leave=False,
-                    )
-                else:
-                    passes_iter = self.passes
-
-                for pass_instance in passes_iter:
-                    if verbose:
-                        passes_iter.set_description(f"  {pass_instance.name}")
-
+                # Run all passes in sequence
+                for pass_instance in self.passes:
                     corrections_before = len(state.active_corrections)
                     patterns_before = len(state.active_patterns)
                     graveyard_before = len(state.graveyard)

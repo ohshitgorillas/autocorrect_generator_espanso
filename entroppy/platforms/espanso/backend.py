@@ -47,10 +47,10 @@ class EspansoBackend(PlatformBackend):
     def rank_corrections(
         self,
         corrections: list[Correction],
-        patterns: list[Correction],
-        pattern_replacements: dict[Correction, list[Correction]],
-        user_words: set[str],
-        config: Config | None = None,
+        _patterns: list[Correction],
+        _pattern_replacements: dict[Correction, list[Correction]],
+        _user_words: set[str],
+        _config: Config | None = None,
     ) -> list[Correction]:
         """Espanso ranking (passthrough - no prioritization needed)."""
         return corrections
@@ -85,11 +85,11 @@ class EspansoBackend(PlatformBackend):
     def generate_platform_report(
         self,
         final_corrections: list[Correction],
-        ranked_corrections_before_limit: list[Correction],
-        all_corrections: list[Correction],
-        patterns: list[Correction],
-        pattern_replacements: dict[Correction, list[Correction]],
-        user_words: set[str],
+        _ranked_corrections_before_limit: list[Correction],
+        _all_corrections: list[Correction],
+        _patterns: list[Correction],
+        _pattern_replacements: dict[Correction, list[Correction]],
+        _user_words: set[str],
         report_dir: Path,
         config: Config,
     ) -> dict[str, Any]:

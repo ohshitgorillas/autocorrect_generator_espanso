@@ -123,9 +123,9 @@ class QMKBackend(PlatformBackend):
         all_corrections: list[Correction],
         patterns: list[Correction],
         pattern_replacements: dict[Correction, list[Correction]],
-        user_words: set[str],
+        _user_words: set[str],
         report_dir: Path,
-        config: Config,
+        _config: Config,
     ) -> dict[str, Any]:
         """Generate QMK ranking report."""
         return generate_qmk_ranking_report(

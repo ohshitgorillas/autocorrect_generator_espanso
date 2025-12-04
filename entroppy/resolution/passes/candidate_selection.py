@@ -141,7 +141,7 @@ class CandidateSelectionPass(Pass):
         exclusion_set = frozenset(self.context.exclusion_set)
 
         worker_context = CandidateSelectionContext(
-            validation_set=frozenset(self.context.validation_set),
+            validation_set=frozenset(self.context.filtered_validation_set),
             source_words=frozenset(self.context.source_words_set),
             min_typo_length=self.context.min_typo_length,
             collision_threshold=self.context.collision_threshold,
@@ -243,7 +243,7 @@ class CandidateSelectionPass(Pass):
             # Intentional duplication: Same false trigger check pattern used in multiple places
             # (worker functions, sequential functions, and boundary_selection.py) to ensure
             # consistent validation logic across all code paths where corrections are added.
-            would_cause, _ = _check_false_trigger_with_details(
+            would_cause, details = _check_false_trigger_with_details(
                 typo,
                 boundary,
                 self.context.validation_index,
@@ -251,7 +251,16 @@ class CandidateSelectionPass(Pass):
                 target_word=word,
             )
             if would_cause:
-                # This boundary would cause false triggers - try next boundary
+                # This boundary would cause false triggers - add to graveyard and try next boundary
+                reason_value = details.get("reason", "false trigger")
+                reason_str = reason_value if isinstance(reason_value, str) else "false trigger"
+                state.add_to_graveyard(
+                    typo,
+                    word,
+                    boundary,
+                    RejectionReason.FALSE_TRIGGER,
+                    blocker=reason_str,
+                )
                 continue
 
             # Add the correction

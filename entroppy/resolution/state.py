@@ -17,6 +17,7 @@ class RejectionReason(Enum):
     PLATFORM_CONSTRAINT = "platform_constraint"
     PATTERN_VALIDATION_FAILED = "pattern_validation_failed"
     EXCLUDED_BY_PATTERN = "excluded_by_pattern"
+    FALSE_TRIGGER = "false_trigger"
 
 
 @dataclass

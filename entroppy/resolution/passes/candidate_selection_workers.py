@@ -116,7 +116,7 @@ def _process_single_word_worker(
         # Intentional duplication: Same false trigger check pattern used in multiple places
         # (worker functions, sequential functions, and boundary_selection.py) to ensure
         # consistent validation logic across all code paths where corrections are added.
-        would_cause, _ = _check_false_trigger_with_details(
+        would_cause, details = _check_false_trigger_with_details(
             typo,
             boundary,
             validation_index,
@@ -124,7 +124,12 @@ def _process_single_word_worker(
             target_word=word,
         )
         if would_cause:
-            # This boundary would cause false triggers - try next boundary
+            # This boundary would cause false triggers - add to graveyard and try next boundary
+            reason_value = details.get("reason", "false trigger")
+            reason_str = reason_value if isinstance(reason_value, str) else "false trigger"
+            graveyard_entries.append(
+                (typo, word, boundary, RejectionReason.FALSE_TRIGGER, reason_str)
+            )
             continue
 
         # Add the correction

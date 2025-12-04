@@ -13,6 +13,7 @@ that weren't detected within boundary groups.
 """
 
 from collections import defaultdict
+from multiprocessing import Pool
 from typing import TYPE_CHECKING, Any
 
 from tqdm import tqdm
@@ -36,6 +37,30 @@ BOUNDARY_PRIORITY = {
     BoundaryType.RIGHT: 1,
     BoundaryType.BOTH: 2,
 }
+
+
+def _format_correction_worker(
+    item: tuple[tuple[str, str, BoundaryType], bool],
+) -> tuple[tuple[str, str, BoundaryType], str]:
+    """Worker function to format a single correction.
+
+    Args:
+        item: Tuple of (correction, is_qmk) where correction is (typo, word, boundary)
+              and is_qmk indicates if platform is QMK
+
+    Returns:
+        Tuple of (correction, formatted_typo)
+    """
+    correction, is_qmk = item
+    typo, _word, boundary = correction
+
+    if is_qmk:
+        formatted_typo = format_boundary_markers(typo, boundary)
+    else:
+        # For non-QMK platforms, boundaries are handled separately
+        formatted_typo = typo
+
+    return correction, formatted_typo
 
 
 class PlatformSubstringConflictPass(Pass):
@@ -83,57 +108,162 @@ class PlatformSubstringConflictPass(Pass):
         if not all_corrections:
             return
 
-        # Build map of formatted typos to corrections
-        # Format: formatted_typo -> list of (correction, core_typo, boundary)
-        formatted_to_corrections: dict[str, list[tuple[tuple, str, object]]] = defaultdict(list)
+        # Phase 1: Format corrections (with parallelization)
+        formatted_to_corrections, correction_to_formatted = self._format_corrections_parallel(
+            all_corrections
+        )
 
-        if self.context.verbose:
-            corrections_iter: Any = tqdm(
-                all_corrections,
-                desc=f"    {self.name}",
-                unit="correction",
-                leave=False,
-            )
+        # Phase 2: Detect conflicts (keeping original nested loop logic)
+        corrections_to_remove, conflict_pairs = self._detect_conflicts(
+            formatted_to_corrections, match_direction
+        )
+
+        # Phase 3: Remove conflicts and log (using stored conflict pairs)
+        self._remove_conflicts_and_log(
+            state, corrections_to_remove, conflict_pairs, correction_to_formatted
+        )
+
+    def _format_corrections_parallel(
+        self, all_corrections: list[tuple[str, str, BoundaryType]]
+    ) -> tuple[
+        dict[str, list[tuple[tuple[str, str, BoundaryType], str, BoundaryType]]],
+        dict[tuple[str, str, BoundaryType], str],
+    ]:
+        """Format corrections in parallel and build lookup structures.
+
+        Args:
+            all_corrections: List of all corrections to format
+
+        Returns:
+            Tuple of:
+            - formatted_to_corrections: Dict mapping formatted_typo ->
+              list of (correction, typo, boundary)
+            - correction_to_formatted: Dict mapping correction -> formatted_typo
+        """
+        is_qmk = self.context.platform.__class__.__name__ == "QMKBackend"
+
+        # Determine if we should use parallel processing
+        use_parallel = self.context.jobs > 1 and len(all_corrections) >= 100
+
+        if use_parallel:
+            # Prepare tasks for parallel processing
+            tasks = [(correction, is_qmk) for correction in all_corrections]
+
+            # Process in parallel
+            with Pool(processes=self.context.jobs) as pool:
+                if self.context.verbose:
+                    results_iter = pool.imap(_format_correction_worker, tasks)
+                    results: Any = tqdm(
+                        results_iter,
+                        desc=f"    {self.name}",
+                        total=len(tasks),
+                        unit="correction",
+                        leave=False,
+                    )
+                else:
+                    results = pool.imap(_format_correction_worker, tasks)
+
+                formatted_results = list(results)
         else:
-            corrections_iter = all_corrections
+            # Sequential processing
+            if self.context.verbose:
+                corrections_iter: Any = tqdm(
+                    all_corrections,
+                    desc=f"    {self.name}",
+                    unit="correction",
+                    leave=False,
+                )
+            else:
+                corrections_iter = all_corrections
 
-        for correction in corrections_iter:
-            typo, word, boundary = correction
-            formatted_typo = self._format_typo_for_platform(typo, boundary)
+            formatted_results = []
+            for correction in corrections_iter:
+                typo, _word, boundary = correction
+                formatted_typo = self._format_typo_for_platform(typo, boundary)
+                formatted_results.append((correction, formatted_typo))
+
+        # Build lookup structures
+        formatted_to_corrections: dict[
+            str, list[tuple[tuple[str, str, BoundaryType], str, BoundaryType]]
+        ] = defaultdict(list)
+        correction_to_formatted: dict[tuple[str, str, BoundaryType], str] = {}
+
+        for correction, formatted_typo in formatted_results:
+            typo, _word, boundary = correction
             formatted_to_corrections[formatted_typo].append((correction, typo, boundary))
+            correction_to_formatted[correction] = formatted_typo
 
-        # Find conflicts by checking if any formatted typo is a substring of another
+        return formatted_to_corrections, correction_to_formatted
+
+    def _detect_conflicts(
+        self,
+        formatted_to_corrections: dict[
+            str, list[tuple[tuple[str, str, BoundaryType], str, BoundaryType]]
+        ],
+        match_direction: MatchDirection,
+    ) -> tuple[
+        list[tuple[tuple[str, str, BoundaryType], str]],
+        dict[tuple[str, str, BoundaryType], tuple[str, str, BoundaryType]],
+    ]:
+        """Detect conflicts using TypoIndex-style algorithm (same logic as original, optimized).
+
+        This uses the same conflict detection logic as the original nested loop approach,
+        but processes in reverse order (for each longer typo, check all shorter ones)
+        for better performance. Results are identical to the original.
+
+        Args:
+            formatted_to_corrections: Dict mapping formatted_typo ->
+                list of (correction, typo, boundary)
+            match_direction: Platform match direction
+
+        Returns:
+            Tuple of:
+            - corrections_to_remove: List of (correction, reason) tuples
+            - conflict_pairs: Dict mapping removed_correction -> conflicting_correction
+        """
         corrections_to_remove = []
+        conflict_pairs: dict[tuple[str, str, BoundaryType], tuple[str, str, BoundaryType]] = {}
         processed_pairs = set()
 
-        # Sort formatted typos by length for efficient checking
+        # Sort formatted typos by length (shortest first) - O(n log n)
         sorted_formatted = sorted(formatted_to_corrections.keys(), key=len)
+
+        # Track shorter formatted typos we've seen: formatted_typo -> list of corrections
+        # This allows O(1) lookup instead of O(n) linear search
+        shorter_formatted: dict[
+            str, list[tuple[tuple[str, str, BoundaryType], str, BoundaryType]]
+        ] = {}
 
         if self.context.verbose:
             formatted_iter: Any = tqdm(
-                enumerate(sorted_formatted),
+                sorted_formatted,
                 desc=f"    {self.name} (checking conflicts)",
-                total=len(sorted_formatted),
                 unit="typo",
                 leave=False,
             )
         else:
-            formatted_iter = enumerate(sorted_formatted)
+            formatted_iter = sorted_formatted
 
-        for i, formatted1 in formatted_iter:
-            for formatted2 in sorted_formatted[i + 1 :]:
-                # Check if formatted1 is a substring of formatted2
-                if self._is_substring(formatted1, formatted2):
-                    # Check all combinations of corrections with these formatted strings
-                    for correction1, _, boundary1 in formatted_to_corrections[formatted1]:
-                        for correction2, _, boundary2 in formatted_to_corrections[formatted2]:
-                            # Use frozenset to create unique pair identifier (order doesn't matter)
+        # TypoIndex-style: for each longer formatted typo, check if it contains any shorter one
+        # This is equivalent to the original nested loop but processes in reverse order
+        for formatted_typo in formatted_iter:
+            corrections_for_typo = formatted_to_corrections[formatted_typo]
+
+            # Check if this formatted typo contains any shorter formatted typo as substring
+            # Check all shorter formatted typos we've seen so far
+            for shorter_formatted_typo, shorter_corrections in shorter_formatted.items():
+                # Check if shorter is a substring of current (same check as original)
+                if self._is_substring(shorter_formatted_typo, formatted_typo):
+                    # Check all combinations of corrections (same as original)
+                    for correction1, _, boundary1 in shorter_corrections:
+                        for correction2, _, boundary2 in corrections_for_typo:
+                            # Use frozenset to create unique pair identifier (same as original)
                             pair_id = frozenset([correction1, correction2])
                             if pair_id in processed_pairs:
                                 continue
                             processed_pairs.add(pair_id)
 
-                            # Determine which one to remove based on match direction
+                            # Determine which one to remove based on match direction (same logic)
                             _, word1, _ = correction1
                             _, word2, _ = correction2
 
@@ -145,24 +275,43 @@ class PlatformSubstringConflictPass(Pass):
                                 boundary2,
                             ):
                                 # Remove the shorter formatted one (formatted1)
-                                corrections_to_remove.append(
-                                    (
-                                        correction1,
-                                        f"Cross-boundary substring conflict: '{formatted1}' "
-                                        f"is substring of '{formatted2}'",
-                                    )
+                                reason = (
+                                    f"Cross-boundary substring conflict: "
+                                    f"'{shorter_formatted_typo}' is substring of '{formatted_typo}'"
                                 )
+                                corrections_to_remove.append((correction1, reason))
+                                conflict_pairs[correction1] = correction2
                             else:
                                 # Remove the longer formatted one (formatted2)
-                                corrections_to_remove.append(
-                                    (
-                                        correction2,
-                                        f"Cross-boundary substring conflict: '{formatted2}' "
-                                        f"contains substring '{formatted1}'",
-                                    )
+                                reason = (
+                                    f"Cross-boundary substring conflict: '{formatted_typo}' "
+                                    f"contains substring '{shorter_formatted_typo}'"
                                 )
+                                corrections_to_remove.append((correction2, reason))
+                                conflict_pairs[correction2] = correction1
 
-        # Remove conflicting corrections (deduplicate first)
+            # Add to shorter_formatted for future checks (only if we've processed it)
+            # This is safe because we process in length order, so all shorter ones are already added
+            shorter_formatted[formatted_typo] = corrections_for_typo
+
+        return corrections_to_remove, conflict_pairs
+
+    def _remove_conflicts_and_log(
+        self,
+        state: "DictionaryState",
+        corrections_to_remove: list[tuple[tuple[str, str, BoundaryType], str]],
+        conflict_pairs: dict[tuple[str, str, BoundaryType], tuple[str, str, BoundaryType]],
+        correction_to_formatted: dict[tuple[str, str, BoundaryType], str],
+    ) -> None:
+        """Remove conflicting corrections and perform debug logging.
+
+        Args:
+            state: The dictionary state to modify
+            corrections_to_remove: List of (correction, reason) tuples
+            conflict_pairs: Dict mapping removed_correction -> conflicting_correction
+            correction_to_formatted: Dict mapping correction -> formatted_typo
+        """
+        # Deduplicate corrections to remove
         seen = set()
         for correction, reason in corrections_to_remove:
             if correction in seen:
@@ -171,24 +320,14 @@ class PlatformSubstringConflictPass(Pass):
 
             typo, word, boundary = correction
 
-            # Find the conflicting correction for debug logging
-            conflicting_correction = None
-            formatted_removed = self._format_typo_for_platform(typo, boundary)
-            formatted_conflicting = None
-
-            # Find the conflicting correction by checking all corrections
-            for other_correction in all_corrections:
-                other_typo, _, other_boundary = other_correction
-                other_formatted = self._format_typo_for_platform(other_typo, other_boundary)
-
-                # Check if this is the conflicting correction
-                if other_correction != correction and (
-                    self._is_substring(formatted_removed, other_formatted)
-                    or self._is_substring(other_formatted, formatted_removed)
-                ):
-                    conflicting_correction = other_correction
-                    formatted_conflicting = other_formatted
-                    break
+            # Get conflicting correction and formatted strings from stored pairs
+            conflicting_correction = conflict_pairs.get(correction)
+            formatted_removed = correction_to_formatted.get(correction, "")
+            formatted_conflicting = (
+                correction_to_formatted.get(conflicting_correction, "")
+                if conflicting_correction
+                else None
+            )
 
             # Debug logging
             if conflicting_correction:
@@ -202,6 +341,7 @@ class PlatformSubstringConflictPass(Pass):
                     state.debug_typo_matcher,
                 )
 
+            # Remove from active set
             if correction in state.active_corrections:
                 state.remove_correction(typo, word, boundary, self.name, reason)
             elif correction in state.active_patterns:

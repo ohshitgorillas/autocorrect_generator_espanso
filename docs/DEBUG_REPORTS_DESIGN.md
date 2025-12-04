@@ -11,7 +11,7 @@ This document outlines the design for implementing three debug report flags:
 
 ### Existing Tracking Mechanisms
 
-1. **Graveyard Tracking** (`DictionaryState.graveyard`):
+1. **Graveyard Tracking** (`DictionaryState.graveyard` in `entroppy/resolution/state.py`):
    - Already stores `GraveyardEntry` objects with:
      - `typo`, `word`, `boundary`
      - `reason` (RejectionReason enum)
@@ -19,24 +19,24 @@ This document outlines the design for implementing three debug report flags:
      - `iteration` (already tracked!)
    - Key limitation: Only tracks final state, not the pass that added it
 
-2. **Pattern Tracking** (`DictionaryState.active_patterns`):
+2. **Pattern Tracking** (`DictionaryState.active_patterns` in `entroppy/resolution/state.py`):
    - Simple set of `(typo, word, boundary)` tuples
    - No history tracking
-   - Methods: `add_pattern()`, `remove_pattern()`
+   - Methods: `DictionaryState.add_pattern()`, `DictionaryState.remove_pattern()`
 
-3. **Correction Tracking** (`DictionaryState.active_corrections`):
+3. **Correction Tracking** (`DictionaryState.active_corrections` in `entroppy/resolution/state.py`):
    - Simple set of `(typo, word, boundary)` tuples
    - No history tracking
-   - Methods: `add_correction()`, `remove_correction()`
+   - Methods: `DictionaryState.add_correction()`, `DictionaryState.remove_correction()`
 
-4. **Debug Trace** (`DictionaryState.debug_trace`):
+4. **Debug Trace** (`DictionaryState.debug_trace` in `entroppy/resolution/state.py`):
    - Only tracks changes for specific debug targets (words/typos)
    - Uses `DebugTraceEntry` with iteration, pass_name, action, reason
    - Not comprehensive - only for selected items
 
 ### Pass Structure
 
-The solver runs passes in this order:
+The solver runs passes in this order (in `entroppy/resolution/passes/`):
 1. `CandidateSelectionPass` - Adds corrections from raw typo map
 2. `PatternGeneralizationPass` - Creates patterns, removes covered corrections
 3. `ConflictRemovalPass` - Removes conflicting corrections
@@ -58,6 +58,9 @@ Instead of only tracking debug targets, we'll track **all** changes to graveyard
 
 #### 1. Enhanced History Tracking in DictionaryState
 
+**File**: `entroppy/resolution/state.py`
+**Class**: `DictionaryState`
+
 Add three new attributes to `DictionaryState`:
 
 ```python
@@ -68,6 +71,8 @@ self.correction_history: list[CorrectionHistoryEntry] = []
 ```
 
 #### 2. History Entry Data Classes
+
+**File**: `entroppy/resolution/state.py`
 
 ```python
 @dataclass
@@ -111,6 +116,9 @@ class CorrectionHistoryEntry:
 
 #### Phase 1: Add History Tracking to DictionaryState
 
+**File**: `entroppy/resolution/state.py`
+**Class**: `DictionaryState`
+
 Modify `DictionaryState` methods to append to history lists when debug flags are enabled:
 
 ```python
@@ -121,7 +129,7 @@ def __init__(self, ..., debug_graveyard=False, debug_patterns=False, debug_corre
     self.debug_corrections = debug_corrections
     # Initialize history lists
 
-def add_to_graveyard(self, ...):
+def add_to_graveyard(self, ..., pass_name: str):
     # ... existing logic ...
     if self.debug_graveyard:
         self.graveyard_history.append(
@@ -134,11 +142,13 @@ def add_to_graveyard(self, ...):
         )
 ```
 
-**Challenge**: `add_to_graveyard()` doesn't currently receive `pass_name`. Need to:
-- Add `pass_name` parameter to `add_to_graveyard()`
+**Challenge**: `DictionaryState.add_to_graveyard()` doesn't currently receive `pass_name`. Need to:
+- Add `pass_name` parameter to `DictionaryState.add_to_graveyard()`
 - Update all call sites (about 10-15 locations)
 
 #### Phase 2: Update All State Method Calls
+
+**Files**: All files in `entroppy/resolution/passes/`
 
 All passes call state methods. We need to ensure they pass `pass_name`:
 
@@ -149,13 +159,27 @@ state.add_correction(typo, word, boundary, pass_name=self.name)
 state.remove_correction(typo, word, boundary, pass_name=self.name, reason=reason)
 ```
 
+**Methods to update**:
+- `DictionaryState.add_to_graveyard()` - add `pass_name` parameter
+- `DictionaryState.add_correction()` - add `pass_name` parameter
+- `DictionaryState.remove_correction()` - add `pass_name` parameter
+- `DictionaryState.add_pattern()` - add `pass_name` parameter
+- `DictionaryState.remove_pattern()` - add `pass_name` parameter
+
 #### Phase 3: Report Generation
 
-Create three new report generators in `entroppy/reports/`:
+**Directory**: `entroppy/reports/`
 
-1. `debug_graveyard.py` - `generate_graveyard_debug_report()`
-2. `debug_patterns.py` - `generate_patterns_debug_report()`
-3. `debug_corrections.py` - `generate_corrections_debug_report()`
+Create three new report generators:
+
+1. **File**: `entroppy/reports/debug_graveyard.py`
+   **Function**: `generate_graveyard_debug_report(state: DictionaryState) -> str`
+
+2. **File**: `entroppy/reports/debug_patterns.py`
+   **Function**: `generate_patterns_debug_report(state: DictionaryState) -> str`
+
+3. **File**: `entroppy/reports/debug_corrections.py`
+   **Function**: `generate_corrections_debug_report(state: DictionaryState) -> str`
 
 Each report should:
 - Group by iteration
@@ -165,7 +189,10 @@ Each report should:
 
 #### Phase 4: CLI Integration
 
-Add flags to `parser.py`:
+**File**: `entroppy/cli/parser.py`
+
+Add flags to CLI parser:
+
 ```python
 parser.add_argument(
     "--debug-graveyard",
@@ -184,14 +211,20 @@ parser.add_argument(
 )
 ```
 
+**File**: `entroppy/core/config.py`
+**Class**: `Config`
+
 Add to `Config` class:
+
 ```python
 debug_graveyard: bool = False
 debug_patterns: bool = False
 debug_corrections: bool = False
 ```
 
-Pass flags to `DictionaryState.__init__()` in `pipeline.py`.
+**File**: `entroppy/processing/pipeline.py`
+
+Pass flags to `DictionaryState.__init__()` in pipeline.
 
 ### Report Format Design
 
@@ -303,23 +336,54 @@ Total correction events: 45,234
 ### Implementation Steps
 
 1. **Add history data classes** to `entroppy/resolution/state.py`
-2. **Add debug flags** to `Config` and CLI parser
-3. **Modify DictionaryState** to accept flags and track history
-4. **Update `add_to_graveyard()` signature** to accept `pass_name`
+   - `GraveyardHistoryEntry`
+   - `PatternHistoryEntry`
+   - `CorrectionHistoryEntry`
+
+2. **Add debug flags** to `Config` (`entroppy/core/config.py`) and CLI parser (`entroppy/cli/parser.py`)
+   - `debug_graveyard: bool`
+   - `debug_patterns: bool`
+   - `debug_corrections: bool`
+
+3. **Modify DictionaryState** (`entroppy/resolution/state.py`) to accept flags and track history
+   - Add `graveyard_history`, `pattern_history`, `correction_history` attributes
+   - Update `DictionaryState.__init__()` to accept debug flags
+
+4. **Update `DictionaryState.add_to_graveyard()` signature** to accept `pass_name`
+   - Add `pass_name: str` parameter
+
 5. **Update all call sites** of state methods to pass `pass_name`
+   - Search for: `state.add_to_graveyard(`
+   - Search for: `state.add_correction(`
+   - Search for: `state.remove_correction(`
+   - Search for: `state.add_pattern(`
+   - Search for: `state.remove_pattern(`
+
 6. **Create report generators** in `entroppy/reports/`
+   - `debug_graveyard.py` with `generate_graveyard_debug_report()`
+   - `debug_patterns.py` with `generate_patterns_debug_report()`
+   - `debug_corrections.py` with `generate_corrections_debug_report()`
+
 7. **Integrate report generation** into `generate_reports()` function
+   - **File**: `entroppy/platforms/espanso/reports.py` or similar
+   - Call report generators when flags are enabled
+
 8. **Test with sample runs** to verify completeness
 
 ### Edge Cases
 
 1. **Parallel workers**: Some passes use parallel workers that call state methods indirectly. Need to ensure `pass_name` propagates correctly.
+   - **Files to check**: `entroppy/resolution/pattern_validation_worker.py`, `entroppy/resolution/worker_context.py`
 
 2. **Pattern replacements**: When patterns replace corrections, we should show which corrections were replaced in the pattern report.
+   - **File**: `entroppy/reports/debug_patterns.py`
+   - **Function**: `generate_patterns_debug_report()`
 
 3. **Graveyard duplicates**: If same correction is added to graveyard multiple times (shouldn't happen, but defensive), show all attempts.
+   - **File**: `entroppy/reports/debug_graveyard.py`
 
 4. **Empty reports**: If no changes occurred, still generate report with header explaining no changes.
+   - **Files**: All three debug report generators
 
 ### Testing Strategy
 
@@ -349,10 +413,10 @@ Total correction events: 45,234
 
 ### Alternative 3: Use Existing Debug Trace
 
-**Approach**: Extend `debug_trace` to track all items, not just debug targets.
+**Approach**: Extend `DictionaryState.debug_trace` to track all items, not just debug targets.
 
 **Rejected because**:
-- `debug_trace` is specifically for selected debug targets
+- `DictionaryState.debug_trace` is specifically for selected debug targets
 - Mixing concerns would make code less clear
 - Separate history lists are cleaner
 

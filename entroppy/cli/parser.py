@@ -138,6 +138,15 @@ Example config.json:
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging")
     parser.add_argument(
+        "--hurtmycpu",
+        "--overnight",
+        "--takeforever",
+        action="store_true",
+        help="Generate typos for ALL words in english-words dictionary. "
+        "This will take a very long time but finds all patterns. "
+        "--top-n still controls final dictionary selection.",
+    )
+    parser.add_argument(
         "-j",
         "--jobs",
         type=int,

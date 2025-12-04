@@ -223,3 +223,63 @@ def load_source_words(config: Config, verbose: bool = False) -> list[str]:
 
     # Take the top N valid words
     return list(itertools.islice(valid_words, config.top_n))
+
+
+def load_all_source_words(
+    config: Config,
+    exclude_filepath: str | None,
+    verbose: bool = False,
+) -> list[str]:
+    """Get ALL words from english-words dictionary (minus exclusions).
+
+    This function loads the full english-words dictionary and applies
+    exclusions and length filters. Used when --hurtmycpu flag is enabled.
+
+    Args:
+        config: Configuration object with length constraints
+        exclude_filepath: Path to exclusion patterns file
+        verbose: Whether to print verbose output
+
+    Returns:
+        Sorted list of valid words from english-words dictionary
+    """
+    if verbose:
+        logger.info("  Loading ALL words from english-words dictionary...")
+        logger.warning("  ⚠️  This will take a very long time!")
+
+    try:
+        # type: ignore[no-any-return]
+        words: set[str] = get_english_words_set(["web2", "gcide"], lower=True)
+    except Exception as e:
+        logger.error(f"✗ Failed to load English words dictionary: {e}")
+        logger.error("  This may indicate a problem with the 'english-words' package")
+        logger.error("  Try reinstalling: pip install english-words")
+        raise RuntimeError("Failed to load english-words dictionary") from e
+
+    original_word_count = len(words)
+
+    # Apply exclusions
+    exclusion_patterns = load_exclusions(exclude_filepath, verbose=False)
+    word_exclusion_patterns = {
+        p for p in exclusion_patterns if Constants.EXCLUSION_SEPARATOR not in p
+    }
+    if word_exclusion_patterns:
+        pattern_matcher = PatternMatcher(word_exclusion_patterns)
+        words = pattern_matcher.filter_set(words)
+
+    # Filter by length constraints
+    max_len = config.max_word_length or float("inf")
+    valid_words = [
+        word
+        for word in words
+        if config.min_word_length <= len(word) <= max_len and not any(c in word for c in "\n\r\t\\")
+    ]
+
+    removed_count = original_word_count - len(valid_words)
+    if verbose:
+        logger.info(f"  Loaded {len(valid_words)} words from english-words dictionary")
+        if removed_count > 0:
+            logger.info(f"  Removed {removed_count} words based on exclusions and length filters")
+
+    # Sort for deterministic output
+    return sorted(valid_words)

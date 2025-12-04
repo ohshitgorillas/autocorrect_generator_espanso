@@ -7,6 +7,7 @@ from loguru import logger
 from entroppy.core import Config
 from entroppy.data import (
     load_adjacent_letters_map,
+    load_all_source_words,
     load_exclusions,
     load_source_words,
     load_validation_dictionary,
@@ -56,8 +57,16 @@ def load_dictionaries(config: Config, verbose: bool = False) -> DictionaryData:
         logger.info(f"  Loaded {len(user_words)} words from include file")
 
     user_words_set = set(user_words)
-    source_words = load_source_words(config, verbose)
-    source_words.extend(user_words)
+
+    if config.hurtmycpu:
+        if verbose:
+            logger.info("  🚀 HURTMYCPU MODE: Generating typos for ALL english-words...")
+            logger.warning("  ⚠️  This will take a very long time!")
+        source_words = load_all_source_words(config, config.exclude, verbose)
+        source_words.extend(user_words)
+    else:
+        source_words = load_source_words(config, verbose)
+        source_words.extend(user_words)
 
     if verbose and user_words:
         logger.info(f"  Included {len(user_words)} user words (bypassed filters)")

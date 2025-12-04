@@ -300,14 +300,19 @@ When QMK's compiler sees both `"aemr"` and `":aemr"`, it detects that `"aemr"` i
 
 ### Conflict Detection Algorithm
 
-1. **Format typos with platform-specific boundary markers**:
+1. **Format typos with platform-specific boundary markers** (parallelized for large datasets):
    - **QMK**: Uses colon notation (`:typo`, `typo:`, `:typo:`, or `typo`)
    - **Espanso**: Uses core typo text (boundaries are separate YAML fields)
+   - Results are cached to avoid redundant formatting
 
 2. **Build formatted typo index** - Map each formatted typo to its corrections
 
-3. **Check for substring relationships** - For each pair of formatted typos:
-   - If one is a substring of the other, mark as conflict
+3. **Check for substring relationships** using TypoIndex-style algorithm:
+   - Sort formatted typos by length (shortest first)
+   - For each longer formatted typo, check if it contains any shorter one we've seen
+   - Uses dict-based lookup (O(1)) instead of linear search (O(n))
+   - Still checks all pairs but in reverse order for better performance
+   - Uses `processed_pairs` set to avoid duplicate conflict processing
 
 4. **Determine which to remove** based on:
    - **Same word**: Prefer more restrictive boundary (BOTH > LEFT/RIGHT > NONE)
@@ -315,6 +320,7 @@ When QMK's compiler sees both `"aemr"` and `":aemr"`, it detects that `"aemr"` i
    - **Different words + LTR (Espanso)**: Remove longer formatted string (shorter matches first in LTR)
 
 5. **Remove conflicting correction** and add to graveyard with reason
+   - Conflict pairs are stored during detection to avoid redundant searching in debug logging
 
 ### Example
 

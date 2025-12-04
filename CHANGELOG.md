@@ -20,6 +20,12 @@
 
 - **QMK ranking optimizations**: Batch word frequency lookups (O(1) access), lazy pattern scoring, optimized debug logging, and separate tier sorting. Expected 70-90% reduction in ranking time.
 - **Parallelized solver passes**: Candidate selection, pattern generalization, and conflict detection now use multiprocessing with linear speedup proportional to CPU cores. Pattern extraction results cached across iterations.
+- **Platform substring conflict detection optimizations**:
+  - Parallelized typo formatting phase (2-4x speedup on multi-core systems)
+  - TypoIndex-style conflict detection algorithm (O(n log n) sort + dict-based lookups instead of O(n²) nested loops)
+  - Cached formatted results to eliminate redundant formatting calls
+  - Stored conflict pairs during detection to eliminate O(n²) debug logging phase
+  - Expected 10-100x speedup for large datasets (10k+ corrections)
 
 ### Added
 

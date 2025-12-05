@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Duplicate corrections in pipeline**: Fixed bug where the same correction (typo, word, boundary) could appear in both `solver_result.corrections` and `solver_result.patterns`, causing duplicates in the final output and QMK compiler errors like "Ignoring duplicate typo". The pipeline now deduplicates when combining corrections and patterns before ranking, preventing duplicates from propagating through the ranking and output generation process.
 - **NONE boundary false trigger check now includes prefix/suffix**: Fixed bug where NONE boundary false trigger check only checked for middle substrings, missing cases where the typo appears as a prefix or suffix of the target word or validation words. Now correctly detects false triggers when typo appears anywhere (prefix, suffix, or middle substring) for NONE boundary, ensuring corrections like `alway -> always` with NONE boundary are properly graveyarded when the typo is a prefix of the target word.
 - **Test convergence fix**: Updated `test_solver_handles_simple_case` to allow 5 iterations instead of 3, as some cases legitimately need more iterations to converge when corrections are being refined through the iterative solver passes.
 

@@ -246,7 +246,8 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
         logger.info("Stage 7: Applying platform-specific ranking...")
 
     # Combine corrections and patterns for ranking
-    all_corrections = solver_result.corrections + solver_result.patterns
+    # Deduplicate: same (typo, word, boundary) can appear in both corrections and patterns
+    all_corrections = list(dict.fromkeys(solver_result.corrections + solver_result.patterns))
 
     # Rank corrections
     # Use pattern_replacements from state

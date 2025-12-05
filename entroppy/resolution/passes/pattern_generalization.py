@@ -69,6 +69,7 @@ class PatternGeneralizationPass(Pass):
                     boundary,
                     RejectionReason.PATTERN_VALIDATION_FAILED,
                     blocker=reason,
+                    pass_name=self.name,
                 )
 
     def run(self, state: "DictionaryState") -> None:

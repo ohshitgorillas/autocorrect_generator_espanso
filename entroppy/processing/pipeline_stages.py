@@ -52,6 +52,9 @@ def run_iterative_solver(
         raw_typo_map=typo_result.typo_map,
         debug_words=config.debug_words,
         debug_typo_matcher=config.debug_typo_matcher,
+        debug_graveyard=config.debug_graveyard,
+        debug_patterns=config.debug_patterns,
+        debug_corrections=config.debug_corrections,
     )
 
     # Create pass context
@@ -383,6 +386,8 @@ def run_stage_9_reports(
     report_data: ReportData,
     config: Config,
     verbose: bool,
+    state: DictionaryState | None = None,
+    typo_result: "TypoGenerationResult | None" = None,
 ) -> None:
     """Run Stage 9: Generate reports.
 
@@ -398,6 +403,8 @@ def run_stage_9_reports(
         report_data: Report data
         config: Configuration object
         verbose: Whether to show verbose output
+        state: Optional dictionary state for debug reports
+        typo_result: Optional typo generation result for debug messages
     """
     if verbose:
         logger.info("Stage 9: Generating reports...")
@@ -406,7 +413,22 @@ def run_stage_9_reports(
     # config.reports is guaranteed to be non-None since we're in this function
     platform_name = platform.get_name()
     reports_path = config.reports if config.reports else ""
-    generate_reports(report_data, reports_path, platform_name, verbose, report_dir=report_dir)
+
+    # Extract debug data
+    debug_messages = typo_result.debug_messages if typo_result else None
+    debug_trace = state.debug_trace if state else None
+
+    generate_reports(
+        report_data,
+        reports_path,
+        platform_name,
+        verbose,
+        report_dir=report_dir,
+        state=state,
+        debug_messages=debug_messages,
+        debug_trace=debug_trace,
+        config=config,
+    )
 
     # Generate platform-specific reports
     generate_platform_reports(

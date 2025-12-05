@@ -31,6 +31,7 @@ However, different platforms have different constraints. Keyboard firmware like 
 * **Pattern Generalization**: Reduces dictionary size by detecting repeated patterns
 * **Platform-Specific Optimization**: Tailored output for each platform's constraints
 * **Comprehensive Reports**: Detailed analysis of decisions and optimizations
+* **Debug Reports**: Complete lifecycle tracking for corrections, patterns, and graveyard entries with iteration/pass context
 
 ## Documentation
 
@@ -213,6 +214,45 @@ Debug typos show ranking and selection:
 - **Position**: Overall rank (e.g., `220/23648`)
 - **Made the cut**: Included in final output (within `--max-corrections` limit)
 
+### Comprehensive Debug Reports
+
+Generate comprehensive lifecycle reports for debugging the solver's decision-making process. These reports track every change to corrections, patterns, and graveyard entries with full iteration and pass context:
+
+```bash
+# Generate all debug reports
+entroppy \
+    --platform espanso \
+    --top-n 5000 \
+    --output corrections \
+    --reports reports \
+    --debug-graveyard \
+    --debug-patterns \
+    --debug-corrections \
+    --debug-words "there,other" \
+    --debug-typos "teh,*tion" \
+    --verbose
+```
+
+**Debug Report Flags:**
+- `--debug-graveyard`: Comprehensive report of all graveyard entries with iteration/pass context, timestamps, reasons, and blockers
+- `--debug-patterns`: Comprehensive report of all pattern lifecycle events (additions/removals) with iteration/pass context and replacement information
+- `--debug-corrections`: Comprehensive report of all correction lifecycle events (additions/removals) with iteration/pass context and reasons
+- `--debug-words`: Generates one lifecycle report per debug word (e.g., `debug_word_there.txt`, `debug_word_other.txt`) combining Stage 2 typo generation events with solver lifecycle events
+- `--debug-typos`: Generates one lifecycle report per debug typo (e.g., `debug_typo_teh.txt`, `debug_typo_*tion.txt`) combining Stage 2 typo generation events with solver lifecycle events
+
+**Report Format:**
+- **Graveyard/Patterns/Corrections reports**: Organized by iteration and pass, showing chronological order of events
+  - **Iteration grouping**: Events grouped by solver iteration
+  - **Pass grouping**: Within each iteration, events grouped by pass name
+  - **Chronological ordering**: Events sorted by timestamp within each pass
+  - **Complete context**: Includes reasons, blockers, and all relevant metadata
+- **Word/Typo reports**: One file per debug word/typo showing complete lifecycle from Stage 2 through all solver iterations
+  - **Stage 2 events**: Typo generation and filtering events
+  - **Solver lifecycle**: All corrections/patterns added/removed for that word/typo across all iterations
+  - **Chronological ordering**: Events sorted by iteration and pass
+
+These reports are written to the report directory when `--reports` is enabled, providing a complete audit trail of the solver's decision-making process.
+
 ### Reports
 
 Generate detailed reports:
@@ -224,6 +264,7 @@ entroppy --platform espanso --top-n 5000 --output corrections --reports reports 
 Creates timestamped directory with:
 - **Universal**: `summary.txt`, `collisions.txt`, `patterns.txt`, `conflicts_*.txt`, `statistics.csv`
 - **Platform-Specific**: RAM estimates (Espanso), cutoff analysis (QMK), filtering details
+- **Debug Reports** (when flags enabled): `debug_graveyard.txt`, `debug_patterns.txt`, `debug_corrections.txt`, `debug_words.txt`, `debug_typos.txt`
 
 ---
 
@@ -249,6 +290,11 @@ Creates timestamped directory with:
 | `--hurtmycpu` | `False` | Alises `--overnight` and `--takeforever`; generate typos for ALL english-words (not just top-n) |
 | `--verbose`, `-v` | `False` | Verbose output |
 | `--debug`, `-d` | `False` | Debug logging |
+| `--debug-words` | `None` | Comma-separated list of words to trace (requires `--debug --verbose`) |
+| `--debug-typos` | `None` | Comma-separated list of typo patterns to trace (supports wildcards and boundaries, requires `--debug --verbose`) |
+| `--debug-graveyard` | `False` | Generate comprehensive graveyard debug report (requires `--reports`) |
+| `--debug-patterns` | `False` | Generate comprehensive patterns debug report (requires `--reports`) |
+| `--debug-corrections` | `False` | Generate comprehensive corrections debug report (requires `--reports`) |
 
 ### JSON Configuration
 

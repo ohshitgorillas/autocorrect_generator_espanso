@@ -50,6 +50,15 @@ class Config(BaseModel):
         default=None, exclude=True, description="Created after parsing"
     )
 
+    # Comprehensive debug reports
+    debug_graveyard: bool = Field(
+        False, description="Generate comprehensive graveyard debug report"
+    )
+    debug_patterns: bool = Field(False, description="Generate comprehensive patterns debug report")
+    debug_corrections: bool = Field(
+        False, description="Generate comprehensive corrections debug report"
+    )
+
     @field_validator("debug_words", "debug_typos", mode="before")
     @classmethod
     def parse_string_set(cls, v):
@@ -142,6 +151,10 @@ def _build_config_dict(cli_args, parser: ArgumentParser, json_config: dict) -> d
         "hurtmycpu": cli_args.hurtmycpu or json_config.get("hurtmycpu", False),
         "debug_words": get_value("debug_words", None),
         "debug_typos": get_value("debug_typos", None),
+        "debug_graveyard": cli_args.debug_graveyard or json_config.get("debug_graveyard", False),
+        "debug_patterns": cli_args.debug_patterns or json_config.get("debug_patterns", False),
+        "debug_corrections": cli_args.debug_corrections
+        or json_config.get("debug_corrections", False),
     }
 
 

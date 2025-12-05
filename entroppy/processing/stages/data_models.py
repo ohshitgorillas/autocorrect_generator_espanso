@@ -32,3 +32,4 @@ class TypoGenerationResult(StageResult):
     """Output from typo generation stage."""
 
     typo_map: dict[str, list[str]] = Field(default_factory=dict)
+    debug_messages: list[str] = Field(default_factory=list)

@@ -86,6 +86,7 @@ class PlatformConstraintsPass(Pass):
                 boundary,
                 RejectionReason.PLATFORM_CONSTRAINT,
                 reason,
+                pass_name=self.name,
             )
 
     def _check_items(

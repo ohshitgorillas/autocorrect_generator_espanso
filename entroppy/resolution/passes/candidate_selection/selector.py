@@ -168,7 +168,9 @@ class CandidateSelectionPass(Pass):
 
                 # Add graveyard entries
                 for typo, word, boundary, reason, blocker in graveyard_entries:
-                    state.add_to_graveyard(typo, word, boundary, reason, blocker)
+                    state.add_to_graveyard(
+                        typo, word, boundary, reason, blocker, pass_name=self.name
+                    )
 
     def _process_single_word(
         self,
@@ -206,6 +208,7 @@ class CandidateSelectionPass(Pass):
                     word,
                     boundary,
                     RejectionReason.TOO_SHORT,
+                    pass_name=self.name,
                 )
                 continue
 
@@ -216,6 +219,7 @@ class CandidateSelectionPass(Pass):
                     word,
                     boundary,
                     RejectionReason.EXCLUDED_BY_PATTERN,
+                    pass_name=self.name,
                 )
                 continue
 
@@ -241,6 +245,7 @@ class CandidateSelectionPass(Pass):
                     boundary,
                     RejectionReason.FALSE_TRIGGER,
                     blocker=reason_str,
+                    pass_name=self.name,
                 )
                 continue
 
@@ -316,6 +321,7 @@ class CandidateSelectionPass(Pass):
                     word,
                     bound,
                     RejectionReason.TOO_SHORT,
+                    pass_name=self.name,
                 )
                 continue
 
@@ -326,6 +332,7 @@ class CandidateSelectionPass(Pass):
                     word,
                     bound,
                     RejectionReason.EXCLUDED_BY_PATTERN,
+                    pass_name=self.name,
                 )
                 continue
 
@@ -398,7 +405,8 @@ class CandidateSelectionPass(Pass):
                 word,
                 boundary,
                 RejectionReason.COLLISION_AMBIGUOUS,
-                f"ratio={ratio:.2f}",
+                blocker=f"ratio={ratio:.2f}",
+                pass_name=self.name,
             )
 
     def _try_boundaries_sequential(
@@ -423,6 +431,7 @@ class CandidateSelectionPass(Pass):
                     word,
                     bound,
                     RejectionReason.TOO_SHORT,
+                    pass_name=self.name,
                 )
                 continue
 
@@ -433,6 +442,7 @@ class CandidateSelectionPass(Pass):
                     word,
                     bound,
                     RejectionReason.EXCLUDED_BY_PATTERN,
+                    pass_name=self.name,
                 )
                 continue
 

@@ -130,6 +130,8 @@ def _process_single_threaded(
         )
         for typo, correction_word in corrections:
             typo_map[typo].append(correction_word)
+        # Collect debug messages (still log them, but also store for reports)
+        all_debug_messages.extend(debug_messages)
         # In single-threaded mode, log immediately
         for message in debug_messages:
             logger.debug(message)
@@ -158,13 +160,14 @@ def generate_typos(
         logger.info(f"  Processing {len(dict_data.source_words)} words...")
 
     if config.jobs > 1:
-        typo_map, _ = _process_multiprocessing(dict_data, config, verbose)
+        typo_map, debug_messages = _process_multiprocessing(dict_data, config, verbose)
     else:
-        typo_map, _ = _process_single_threaded(dict_data, config, verbose)
+        typo_map, debug_messages = _process_single_threaded(dict_data, config, verbose)
 
     elapsed_time = time.time() - start_time
 
     return TypoGenerationResult(
         typo_map=typo_map,
         elapsed_time=elapsed_time,
+        debug_messages=debug_messages,
     )

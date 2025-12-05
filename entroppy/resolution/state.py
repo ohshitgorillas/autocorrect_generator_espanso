@@ -2,22 +2,19 @@
 
 from collections import defaultdict
 from dataclasses import dataclass
-from enum import Enum
+import time
 
 from entroppy.core import BoundaryType, Correction
+from entroppy.resolution.history import (
+    CorrectionHistoryEntry,
+    GraveyardHistoryEntry,
+    PatternHistoryEntry,
+    RejectionReason,
+)
+
+# Re-export RejectionReason for backward compatibility
+__all__ = ["DictionaryState", "DebugTraceEntry", "GraveyardEntry", "RejectionReason"]
 from entroppy.utils.debug import DebugTypoMatcher
-
-
-class RejectionReason(Enum):
-    """Reasons why a correction was rejected."""
-
-    COLLISION_AMBIGUOUS = "ambiguous_collision"
-    TOO_SHORT = "too_short"
-    BLOCKED_BY_CONFLICT = "blocked_by_conflict"
-    PLATFORM_CONSTRAINT = "platform_constraint"
-    PATTERN_VALIDATION_FAILED = "pattern_validation_failed"
-    EXCLUDED_BY_PATTERN = "excluded_by_pattern"
-    FALSE_TRIGGER = "false_trigger"
 
 
 @dataclass
@@ -72,6 +69,9 @@ class DictionaryState:
         raw_typo_map: dict[str, list[str]],
         debug_words: set[str] | None = None,
         debug_typo_matcher: DebugTypoMatcher | None = None,
+        debug_graveyard: bool = False,
+        debug_patterns: bool = False,
+        debug_corrections: bool = False,
     ) -> None:
         """Initialize the dictionary state.
 
@@ -79,6 +79,9 @@ class DictionaryState:
             raw_typo_map: The typo map from Stage 2
             debug_words: Optional set of words to track
             debug_typo_matcher: Optional matcher for debug typos
+            debug_graveyard: Whether to track comprehensive graveyard history
+            debug_patterns: Whether to track comprehensive pattern history
+            debug_corrections: Whether to track comprehensive correction history
         """
         self.raw_typo_map = raw_typo_map
         self.active_corrections: set[Correction] = set()
@@ -89,6 +92,16 @@ class DictionaryState:
         self.debug_trace: list[DebugTraceEntry] = []
         self.is_dirty = True  # Start dirty to trigger first iteration
         self.current_iteration = 0
+
+        # Debug flags for comprehensive history tracking
+        self.debug_graveyard = debug_graveyard
+        self.debug_patterns = debug_patterns
+        self.debug_corrections = debug_corrections
+
+        # History tracking (only populated if debug flags enabled)
+        self.graveyard_history: list[GraveyardHistoryEntry] = []
+        self.pattern_history: list[PatternHistoryEntry] = []
+        self.correction_history: list[CorrectionHistoryEntry] = []
 
         # Track what corrections cover which raw typos
         self._coverage_map: dict[str, set[Correction]] = defaultdict(set)
@@ -121,6 +134,7 @@ class DictionaryState:
         boundary: BoundaryType,
         reason: RejectionReason,
         blocker: str | None = None,
+        pass_name: str = "unknown",
     ) -> None:
         """Add a correction to the graveyard.
 
@@ -130,6 +144,7 @@ class DictionaryState:
             boundary: The boundary type
             reason: Why this was rejected
             blocker: Optional identifier of what blocked this
+            pass_name: Name of the pass adding this to graveyard
         """
         entry = GraveyardEntry(
             typo=typo,
@@ -141,12 +156,27 @@ class DictionaryState:
         )
         self.graveyard[(typo, word, boundary)] = entry
 
+        # Track comprehensive history if enabled
+        if self.debug_graveyard:
+            self.graveyard_history.append(
+                GraveyardHistoryEntry(
+                    iteration=self.current_iteration,
+                    pass_name=pass_name,
+                    typo=typo,
+                    word=word,
+                    boundary=boundary,
+                    reason=reason,
+                    blocker=blocker,
+                    timestamp=time.time(),
+                )
+            )
+
         # Log if this is a debug target
         if self._is_debug_target(typo, word, boundary):
             self.debug_trace.append(
                 DebugTraceEntry(
                     iteration=self.current_iteration,
-                    pass_name="graveyard",
+                    pass_name=pass_name,
                     action="rejected",
                     typo=typo,
                     word=word,
@@ -181,6 +211,21 @@ class DictionaryState:
         self.active_corrections.add(correction)
         self._coverage_map[typo].add(correction)
         self.is_dirty = True
+
+        # Track comprehensive history if enabled
+        if self.debug_corrections:
+            self.correction_history.append(
+                CorrectionHistoryEntry(
+                    iteration=self.current_iteration,
+                    pass_name=pass_name,
+                    action="added",
+                    typo=typo,
+                    word=word,
+                    boundary=boundary,
+                    reason=None,
+                    timestamp=time.time(),
+                )
+            )
 
         # Log if this is a debug target
         if self._is_debug_target(typo, word, boundary):
@@ -226,6 +271,21 @@ class DictionaryState:
         self._coverage_map[typo].discard(correction)
         self.is_dirty = True
 
+        # Track comprehensive history if enabled
+        if self.debug_corrections:
+            self.correction_history.append(
+                CorrectionHistoryEntry(
+                    iteration=self.current_iteration,
+                    pass_name=pass_name,
+                    action="removed",
+                    typo=typo,
+                    word=word,
+                    boundary=boundary,
+                    reason=reason,
+                    timestamp=time.time(),
+                )
+            )
+
         # Log if this is a debug target
         if self._is_debug_target(typo, word, boundary):
             self.debug_trace.append(
@@ -267,6 +327,21 @@ class DictionaryState:
 
         self.active_patterns.add(pattern)
         self.is_dirty = True
+
+        # Track comprehensive history if enabled
+        if self.debug_patterns:
+            self.pattern_history.append(
+                PatternHistoryEntry(
+                    iteration=self.current_iteration,
+                    pass_name=pass_name,
+                    action="added",
+                    typo=typo,
+                    word=word,
+                    boundary=boundary,
+                    reason=None,
+                    timestamp=time.time(),
+                )
+            )
 
         # Log if this is a debug target
         if self._is_debug_target(typo, word, boundary):
@@ -310,6 +385,21 @@ class DictionaryState:
 
         self.active_patterns.remove(pattern)
         self.is_dirty = True
+
+        # Track comprehensive history if enabled
+        if self.debug_patterns:
+            self.pattern_history.append(
+                PatternHistoryEntry(
+                    iteration=self.current_iteration,
+                    pass_name=pass_name,
+                    action="removed",
+                    typo=typo,
+                    word=word,
+                    boundary=boundary,
+                    reason=reason,
+                    timestamp=time.time(),
+                )
+            )
 
         # Log if this is a debug target
         if self._is_debug_target(typo, word, boundary):

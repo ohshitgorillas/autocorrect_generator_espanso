@@ -396,6 +396,7 @@ class PlatformSubstringConflictPass(Pass):
                 boundary,
                 RejectionReason.PLATFORM_CONSTRAINT,
                 reason,
+                pass_name=self.name,
             )
 
     def _format_typo_for_platform(self, typo: str, boundary) -> str:

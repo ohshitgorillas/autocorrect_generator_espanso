@@ -240,6 +240,7 @@ class ConflictRemovalPass(Pass):
                 boundary_type,
                 RejectionReason.BLOCKED_BY_CONFLICT,
                 blocker_typo,
+                pass_name=self.name,
             )
 
     def _check_typo_against_candidates(
@@ -393,6 +394,7 @@ class ConflictRemovalPass(Pass):
             boundary,
             RejectionReason.BLOCKED_BY_CONFLICT,
             short_typo,
+            pass_name=self.name,
         )
 
         return short_correction

@@ -46,6 +46,8 @@ def _generate_reports(
     report_dir: Path | None,
     report_data,
     verbose: bool,
+    state=None,
+    typo_result=None,
 ) -> None:
     """Generate reports if enabled."""
     if config.reports and report_data is not None and report_dir is not None:
@@ -61,6 +63,8 @@ def _generate_reports(
             report_data,
             config,
             verbose,
+            state=state,
+            typo_result=typo_result,
         )
 
 
@@ -132,6 +136,8 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
         report_dir,
         report_data,
         verbose,
+        state=state,
+        typo_result=typo_result,
     )
 
     # Print total time

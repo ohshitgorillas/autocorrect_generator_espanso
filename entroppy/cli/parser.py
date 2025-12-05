@@ -169,4 +169,21 @@ Example config.json:
         "Exact matches only (case-insensitive).",
     )
 
+    # Comprehensive debug reports
+    parser.add_argument(
+        "--debug-graveyard",
+        action="store_true",
+        help="Generate comprehensive graveyard debug report",
+    )
+    parser.add_argument(
+        "--debug-patterns",
+        action="store_true",
+        help="Generate comprehensive patterns debug report",
+    )
+    parser.add_argument(
+        "--debug-corrections",
+        action="store_true",
+        help="Generate comprehensive corrections debug report",
+    )
+
     return parser

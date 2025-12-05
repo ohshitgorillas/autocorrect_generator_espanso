@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Comprehensive debug reports**: Added three new debug report flags for tracking complete lifecycle of corrections, patterns, and graveyard entries:
+  - `--debug-graveyard`: Generates comprehensive report of all graveyard entries with iteration/pass context, timestamps, reasons, and blockers
+  - `--debug-patterns`: Generates comprehensive report of all pattern lifecycle events (additions/removals) with iteration/pass context and replacement information
+  - `--debug-corrections`: Generates comprehensive report of all correction lifecycle events (additions/removals) with iteration/pass context and reasons
+  - Debug word and typo reports: Enhanced existing `--debug-words` and `--debug-typos` flags to generate lifecycle reports combining Stage 2 typo generation events with solver lifecycle events
+  - All debug reports include chronological ordering by iteration, pass, and timestamp
+  - Reports are written to the report directory when `--reports` is enabled
+  - History tracking uses Pydantic models for type validation
+  - Moved history entry classes to `resolution/history.py` to keep `state.py` under 500 lines
+
 ### Changed
 
 - **Complexity threshold increased from C to B**: Updated xenon complexity threshold from C to B (stricter), requiring refactoring of C-rank functions to meet the new standard. Successfully refactored all C-rank functions to meet B-rank threshold, reducing complexity errors from ~30+ to 0. All functions now meet the B-rank complexity requirement:

@@ -11,6 +11,121 @@ from entroppy.core.boundaries import (
 from .boundary_utils import _check_typo_in_target_word
 
 
+def _collect_trigger_checks(
+    typo: str,
+    validation_index: BoundaryIndex,
+    source_index: BoundaryIndex,
+    target_word: str | None,
+) -> tuple[bool, bool, bool, bool, bool, bool, bool, bool, bool]:
+    """Collect all trigger checks for a typo.
+
+    Args:
+        typo: The typo string
+        validation_index: Boundary index for validation set
+        source_index: Boundary index for source words
+        target_word: Optional target word to check against
+
+    Returns:
+        Tuple of (would_trigger_start_target, would_trigger_end_target, is_substring_target,
+                 would_trigger_start_val, would_trigger_end_val, is_substring_val,
+                 would_trigger_start_src, would_trigger_end_src, is_substring_src)
+    """
+    # FIRST: Check target word (highest priority - most critical check)
+    would_trigger_start_target, would_trigger_end_target, is_substring_target = (
+        _check_typo_in_target_word(typo, target_word)
+    )
+
+    # Check validation and source words
+    would_trigger_start_val = would_trigger_at_start(typo, validation_index)
+    would_trigger_end_val = would_trigger_at_end(typo, validation_index)
+    is_substring_val = is_substring_of_any(typo, validation_index)
+
+    would_trigger_start_src = would_trigger_at_start(typo, source_index)
+    would_trigger_end_src = would_trigger_at_end(typo, source_index)
+    is_substring_src = is_substring_of_any(typo, source_index)
+
+    return (
+        would_trigger_start_target,
+        would_trigger_end_target,
+        is_substring_target,
+        would_trigger_start_val,
+        would_trigger_end_val,
+        is_substring_val,
+        would_trigger_start_src,
+        would_trigger_end_src,
+        is_substring_src,
+    )
+
+
+def _determine_false_trigger_for_boundary(
+    boundary: BoundaryType,
+    would_trigger_start: bool,
+    would_trigger_end: bool,
+    is_substring: bool,
+    would_trigger_start_target: bool,
+    would_trigger_end_target: bool,
+    is_substring_target: bool,
+    would_trigger_start_val: bool,
+    would_trigger_end_val: bool,
+    is_substring_val: bool,
+    would_trigger_start_src: bool,
+    would_trigger_end_src: bool,
+    is_substring_src: bool,
+) -> tuple[bool, str | None]:
+    """Determine if boundary would cause false triggers and the reason.
+
+    Args:
+        boundary: The boundary type to check
+        would_trigger_start: Combined start trigger check
+        would_trigger_end: Combined end trigger check
+        is_substring: Combined substring check
+        would_trigger_start_target: Target word start trigger
+        would_trigger_end_target: Target word end trigger
+        is_substring_target: Target word substring
+        would_trigger_start_val: Validation start trigger
+        would_trigger_end_val: Validation end trigger
+        is_substring_val: Validation substring
+        would_trigger_start_src: Source start trigger
+        would_trigger_end_src: Source end trigger
+        is_substring_src: Source substring
+
+    Returns:
+        Tuple of (would_cause, reason)
+    """
+    if boundary == BoundaryType.NONE:
+        # NONE matches anywhere, so false trigger if typo appears anywhere
+        would_cause = would_trigger_start or would_trigger_end or is_substring
+        if would_cause:
+            if would_trigger_start_target or would_trigger_end_target or is_substring_target:
+                reason = "typo appears in target word"
+            elif would_trigger_start_val or would_trigger_end_val or is_substring_val:
+                reason = "typo appears as substring in validation words"
+            elif would_trigger_start_src or would_trigger_end_src or is_substring_src:
+                reason = "typo appears as substring in source words"
+            else:
+                reason = "typo appears as substring"
+        else:
+            reason = None
+    elif boundary == BoundaryType.LEFT:
+        # LEFT matches at word start, so false trigger if typo appears as prefix
+        would_cause = would_trigger_start
+        reason = "typo appears as prefix" if would_cause else None
+    elif boundary == BoundaryType.RIGHT:
+        # RIGHT matches at word end, so false trigger if typo appears as suffix
+        would_cause = would_trigger_end
+        reason = "typo appears as suffix" if would_cause else None
+    elif boundary == BoundaryType.BOTH:
+        # BOTH matches as standalone word only, so it would NOT cause false triggers
+        would_cause = False
+        reason = None
+    else:
+        # Unknown boundary type, be conservative
+        would_cause = True
+        reason = "unknown boundary type"
+
+    return would_cause, reason
+
+
 def _would_cause_false_trigger(
     typo: str,
     boundary: BoundaryType,
@@ -37,20 +152,18 @@ def _would_cause_false_trigger(
         If return_details is True: Tuple of (would_cause_false_trigger, details_dict) where
             details_dict contains breakdown of checks performed
     """
-    # FIRST: Check target word (highest priority - most critical check)
-    # This prevents predictive corrections where typo is prefix/suffix/substring of target
-    would_trigger_start_target, would_trigger_end_target, is_substring_target = (
-        _check_typo_in_target_word(typo, target_word)
-    )
-
-    # Check validation and source words
-    would_trigger_start_val = would_trigger_at_start(typo, validation_index)
-    would_trigger_end_val = would_trigger_at_end(typo, validation_index)
-    is_substring_val = is_substring_of_any(typo, validation_index)
-
-    would_trigger_start_src = would_trigger_at_start(typo, source_index)
-    would_trigger_end_src = would_trigger_at_end(typo, source_index)
-    is_substring_src = is_substring_of_any(typo, source_index)
+    # Collect all trigger checks
+    (
+        would_trigger_start_target,
+        would_trigger_end_target,
+        is_substring_target,
+        would_trigger_start_val,
+        would_trigger_end_val,
+        is_substring_val,
+        would_trigger_start_src,
+        would_trigger_end_src,
+        is_substring_src,
+    ) = _collect_trigger_checks(typo, validation_index, source_index, target_word)
 
     # Combine checks: target word check takes precedence
     would_trigger_start = (
@@ -60,51 +173,21 @@ def _would_cause_false_trigger(
     is_substring = is_substring_target or is_substring_val or is_substring_src
 
     # Determine if boundary would cause false triggers
-    # Logic: A boundary causes false triggers if it would allow the typo to match
-    # validation/source words in positions where it appears.
-    #
-    # The inverse of determine_boundaries() logic:
-    # - If typo appears as prefix only → need RIGHT (not NONE/LEFT)
-    # - If typo appears as suffix only → need LEFT (not NONE/RIGHT)
-    # - If typo appears in middle only → need BOTH (not NONE/LEFT/RIGHT)
-    # - If typo appears as both prefix and suffix → need BOTH
-    #
-    # So a boundary causes false triggers if it would match where the typo appears:
-    if boundary == BoundaryType.NONE:
-        # NONE matches anywhere, so false trigger if typo appears anywhere
-        # (as prefix, suffix, or middle substring)
-        would_cause = would_trigger_start or would_trigger_end or is_substring
-        if would_cause:
-            if would_trigger_start_target or would_trigger_end_target or is_substring_target:
-                reason = "typo appears in target word"
-            elif would_trigger_start_val or would_trigger_end_val or is_substring_val:
-                reason = "typo appears as substring in validation words"
-            elif would_trigger_start_src or would_trigger_end_src or is_substring_src:
-                reason = "typo appears as substring in source words"
-            else:
-                reason = "typo appears as substring"
-        else:
-            reason = None
-    elif boundary == BoundaryType.LEFT:
-        # LEFT matches at word start, so false trigger if typo appears as prefix
-        # (LEFT would match words starting with typo, which is incorrect)
-        would_cause = would_trigger_start
-        reason = "typo appears as prefix" if would_cause else None
-    elif boundary == BoundaryType.RIGHT:
-        # RIGHT matches at word end, so false trigger if typo appears as suffix
-        # (RIGHT would match words ending with typo, which is incorrect)
-        would_cause = would_trigger_end
-        reason = "typo appears as suffix" if would_cause else None
-    elif boundary == BoundaryType.BOTH:
-        # BOTH matches as standalone word only, so it would NOT cause false triggers
-        # for substrings (because BOTH only matches exact words, not words containing the typo)
-        # BOTH is always safe for substring checks (it prevents all substring matches)
-        would_cause = False
-        reason = None
-    else:
-        # Unknown boundary type, be conservative
-        would_cause = True
-        reason = "unknown boundary type"
+    would_cause, reason = _determine_false_trigger_for_boundary(
+        boundary,
+        would_trigger_start,
+        would_trigger_end,
+        is_substring,
+        would_trigger_start_target,
+        would_trigger_end_target,
+        is_substring_target,
+        would_trigger_start_val,
+        would_trigger_end_val,
+        is_substring_val,
+        would_trigger_start_src,
+        would_trigger_end_src,
+        is_substring_src,
+    )
 
     if return_details:
         details = {

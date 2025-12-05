@@ -269,6 +269,118 @@ def _collect_all_words(
     return all_words
 
 
+def _log_ranking_debug(
+    ranked: list[Correction],
+    user_corrections: list[Correction],
+    pattern_scores: list[tuple[float, str, str, BoundaryType]],
+    direct_scores: list[tuple[float, str, str, BoundaryType]],
+    debug_words: set[str],
+    debug_typo_matcher: "DebugTypoMatcher | None",
+) -> None:
+    """Log ranking debug information for debug corrections.
+
+    Args:
+        ranked: Ranked list of corrections
+        user_corrections: User corrections list
+        pattern_scores: Pattern scores list
+        direct_scores: Direct correction scores list
+        debug_words: Set of words to debug
+        debug_typo_matcher: Matcher for debug typos
+    """
+    # Build lookup dictionaries once instead of searching lists
+    pattern_score_dict = {(t, w, b): score for score, t, w, b in pattern_scores}
+    direct_score_dict = {(t, w, b): score for score, t, w, b in direct_scores}
+
+    # Build tier boundaries for context
+    user_count = len(user_corrections)
+    pattern_count = len(pattern_scores)
+    direct_count = len(direct_scores)
+
+    for i, correction in enumerate(ranked):
+        if is_debug_correction(correction, debug_words, debug_typo_matcher):
+            # Determine tier and position within tier
+            if i < user_count:
+                tier = 0
+                tier_pos = i + 1
+                tier_name = "user words"
+                tier_total = user_count
+                score_info = "infinite priority"
+            elif i < user_count + pattern_count:
+                tier = 1
+                tier_pos = i - user_count + 1
+                tier_name = "patterns"
+                tier_total = pattern_count
+                # O(1) lookup instead of O(n) search
+                pattern_score = pattern_score_dict.get(correction)
+                score_info = (
+                    f"score: {pattern_score:.2e}" if pattern_score is not None else "score: unknown"
+                )
+            else:
+                tier = 2
+                tier_pos = i - user_count - pattern_count + 1
+                tier_name = "direct corrections"
+                tier_total = direct_count
+                # O(1) lookup instead of O(n) search
+                direct_score = direct_score_dict.get(correction)
+                score_info = (
+                    f"score: {direct_score:.2e}" if direct_score is not None else "score: unknown"
+                )
+
+            # Find nearby corrections for context
+            nearby = []
+            for j in range(max(0, i - 2), min(len(ranked), i + 3)):
+                if j != i:
+                    nearby_typo, nearby_word, _ = ranked[j]
+                    nearby.append(f"{nearby_typo}->{nearby_word}")
+
+            nearby_str = ", ".join(nearby[:3])
+            if len(nearby) > 3:
+                nearby_str += "..."
+
+            nearby_info = f" [nearby: {nearby_str}]" if nearby_str else ""
+            log_ranking_position(
+                correction,
+                i + 1,
+                len(ranked),
+                tier,
+                tier_name,
+                tier_pos,
+                tier_total,
+                score_info,
+                nearby_info,
+                debug_words,
+                debug_typo_matcher,
+            )
+
+
+def _log_max_corrections_debug(
+    ranked: list[Correction],
+    max_corrections: int,
+    debug_words: set[str],
+    debug_typo_matcher: "DebugTypoMatcher | None",
+) -> None:
+    """Log max corrections limit debug information.
+
+    Args:
+        ranked: Ranked list of corrections
+        max_corrections: Maximum number of corrections
+        debug_words: Set of words to debug
+        debug_typo_matcher: Matcher for debug typos
+    """
+    # Log if any debug corrections are cut off by the limit
+    for i, correction in enumerate(ranked):
+        if is_debug_correction(correction, debug_words, debug_typo_matcher):
+            log_max_corrections_limit(
+                correction,
+                i + 1,
+                max_corrections,
+                len(ranked),
+                i < max_corrections,
+                debug_words,
+                debug_typo_matcher,
+            )
+
+
 def _build_word_frequency_cache(all_words: set[str], verbose: bool = False) -> dict[str, float]:
     """Pre-compute word frequencies for all unique words.
 
@@ -392,90 +504,21 @@ def rank_corrections(
 
     # Priority 4: Optimize debug logging with O(1) lookup dictionaries
     if debug_words or debug_typo_matcher:
-        # Build lookup dictionaries once instead of searching lists
-        pattern_score_dict = {(t, w, b): score for score, t, w, b in pattern_scores}
-        direct_score_dict = {(t, w, b): score for score, t, w, b in direct_scores}
-
-        # Build tier boundaries for context
-        user_count = len(user_corrections)
-        pattern_count = len(pattern_scores)
-        direct_count = len(direct_scores)
-
-        for i, correction in enumerate(ranked):
-            if is_debug_correction(correction, debug_words or set(), debug_typo_matcher):
-                # Determine tier and position within tier
-                if i < user_count:
-                    tier = 0
-                    tier_pos = i + 1
-                    tier_name = "user words"
-                    tier_total = user_count
-                    score_info = "infinite priority"
-                elif i < user_count + pattern_count:
-                    tier = 1
-                    tier_pos = i - user_count + 1
-                    tier_name = "patterns"
-                    tier_total = pattern_count
-                    # O(1) lookup instead of O(n) search
-                    pattern_score = pattern_score_dict.get(correction)
-                    score_info = (
-                        f"score: {pattern_score:.2e}"
-                        if pattern_score is not None
-                        else "score: unknown"
-                    )
-                else:
-                    tier = 2
-                    tier_pos = i - user_count - pattern_count + 1
-                    tier_name = "direct corrections"
-                    tier_total = direct_count
-                    # O(1) lookup instead of O(n) search
-                    direct_score = direct_score_dict.get(correction)
-                    score_info = (
-                        f"score: {direct_score:.2e}"
-                        if direct_score is not None
-                        else "score: unknown"
-                    )
-
-                # Find nearby corrections for context
-                nearby = []
-                for j in range(max(0, i - 2), min(len(ranked), i + 3)):
-                    if j != i:
-                        nearby_typo, nearby_word, _ = ranked[j]
-                        nearby.append(f"{nearby_typo}->{nearby_word}")
-
-                nearby_str = ", ".join(nearby[:3])
-                if len(nearby) > 3:
-                    nearby_str += "..."
-
-                nearby_info = f" [nearby: {nearby_str}]" if nearby_str else ""
-                log_ranking_position(
-                    correction,
-                    i + 1,
-                    len(ranked),
-                    tier,
-                    tier_name,
-                    tier_pos,
-                    tier_total,
-                    score_info,
-                    nearby_info,
-                    debug_words or set(),
-                    debug_typo_matcher,
-                )
+        _log_ranking_debug(
+            ranked,
+            user_corrections,
+            pattern_scores,
+            direct_scores,
+            debug_words or set(),
+            debug_typo_matcher,
+        )
 
     # Apply max_corrections limit if specified
     if max_corrections:
         if debug_words or debug_typo_matcher:
-            # Log if any debug corrections are cut off by the limit
-            for i, correction in enumerate(ranked):
-                if is_debug_correction(correction, debug_words or set(), debug_typo_matcher):
-                    log_max_corrections_limit(
-                        correction,
-                        i + 1,
-                        max_corrections,
-                        len(ranked),
-                        i < max_corrections,
-                        debug_words or set(),
-                        debug_typo_matcher,
-                    )
+            _log_max_corrections_debug(
+                ranked, max_corrections, debug_words or set(), debug_typo_matcher
+            )
         ranked = ranked[:max_corrections]
 
     # Build all_scored for backward compatibility (combines patterns and direct)

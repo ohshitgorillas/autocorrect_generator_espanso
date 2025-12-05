@@ -133,6 +133,143 @@ def _log_boundary_order_selection(
     )
 
 
+def _log_none_boundary_rejection(
+    typo: str,
+    word: str | None,
+    details: dict[str, bool | str | None],
+    validation_index: BoundaryIndex,
+    source_index: BoundaryIndex,
+) -> list[str]:
+    """Log NONE boundary rejection with examples.
+
+    Args:
+        typo: The typo string
+        word: Optional word associated with this typo
+        details: Details dictionary from false trigger check
+        validation_index: Boundary index for validation set
+        source_index: Boundary index for source words
+
+    Returns:
+        List of example lines
+    """
+    example_lines = []
+    if details["is_substring"]:
+        examples = _get_example_words_with_substring(typo, validation_index, source_index)
+        if not examples:
+            # Fallback: check if it's a prefix or suffix
+            if details["would_trigger_start"]:
+                examples = _get_example_words_with_prefix(typo, validation_index, source_index)
+            elif details["would_trigger_end"]:
+                examples = _get_example_words_with_suffix(typo, validation_index, source_index)
+
+        if examples:
+            example_word = examples[0]
+            example_lines.append(
+                f'"{typo}" -> "{word}" with NONE boundary would conflict '
+                f'with source word "{example_word}"'
+            )
+            example_lines.append(_format_incorrect_transformation(example_word, typo, word or ""))
+            example_lines.append("NONE BOUNDARY REJECTED")
+    return example_lines
+
+
+def _log_left_boundary_rejection(
+    typo: str,
+    word: str | None,
+    details: dict[str, bool | str | None],
+    validation_index: BoundaryIndex,
+    source_index: BoundaryIndex,
+) -> list[str]:
+    """Log LEFT boundary rejection with examples.
+
+    Args:
+        typo: The typo string
+        word: Optional word associated with this typo
+        details: Details dictionary from false trigger check
+        validation_index: Boundary index for validation set
+        source_index: Boundary index for source words
+
+    Returns:
+        List of example lines
+    """
+    example_lines = []
+    if details["would_trigger_start"]:
+        examples = _get_example_words_with_prefix(typo, validation_index, source_index)
+        if examples:
+            example_word = examples[0]
+            example_lines.append(
+                f'"{typo}" -> "{word}" with LEFT boundary would conflict '
+                f'with source word "{example_word}"'
+            )
+            example_lines.append(_format_incorrect_transformation(example_word, typo, word or ""))
+            example_lines.append("LEFT BOUNDARY REJECTED")
+    return example_lines
+
+
+def _log_right_boundary_rejection(
+    typo: str,
+    word: str | None,
+    details: dict[str, bool | str | None],
+    validation_index: BoundaryIndex,
+    source_index: BoundaryIndex,
+) -> list[str]:
+    """Log RIGHT boundary rejection with examples.
+
+    Args:
+        typo: The typo string
+        word: Optional word associated with this typo
+        details: Details dictionary from false trigger check
+        validation_index: Boundary index for validation set
+        source_index: Boundary index for source words
+
+    Returns:
+        List of example lines
+    """
+    example_lines = []
+    if details["would_trigger_end"]:
+        examples = _get_example_words_with_suffix(typo, validation_index, source_index)
+        if examples:
+            example_word = examples[0]
+            example_lines.append(
+                f'"{typo}" -> "{word}" with RIGHT boundary would conflict '
+                f'with source word "{example_word}"'
+            )
+            example_lines.append(_format_incorrect_transformation(example_word, typo, word or ""))
+            example_lines.append("RIGHT BOUNDARY REJECTED")
+    return example_lines
+
+
+def _build_fallback_rejection_message(
+    boundary: BoundaryType,
+    word_info: str,
+    details: dict[str, bool | str | None],
+) -> str:
+    """Build fallback rejection message when no examples found.
+
+    Args:
+        boundary: The boundary that was rejected
+        word_info: Word info string
+        details: Details dictionary from false trigger check
+
+    Returns:
+        Fallback message string
+    """
+    reason_parts = []
+    if details["would_trigger_start"]:
+        reason_parts.append("appears as prefix")
+    if details["would_trigger_end"]:
+        reason_parts.append("appears as suffix")
+    if details["is_substring"] and not (
+        details["would_trigger_start"] or details["would_trigger_end"]
+    ):
+        reason_parts.append("appears as substring")
+    reason_str = ", ".join(reason_parts) if reason_parts else "unknown reason"
+    return (
+        f"Rejected boundary '{boundary.value}'{word_info} - "
+        f"would cause false triggers: {reason_str}"
+    )
+
+
 def _log_boundary_rejection(
     typo: str,
     word: str | None,
@@ -157,63 +294,20 @@ def _log_boundary_rejection(
     example_lines = []
 
     # Get example words for each type of conflict
-    # Priority: validation words > source words (exclude target word from examples)
     if boundary == BoundaryType.NONE:
-        # NONE boundary would match anywhere, so show substring examples
-        if details["is_substring"]:
-            # Get examples from validation/source indexes
-            examples = _get_example_words_with_substring(typo, validation_index, source_index)
-            if not examples:
-                # Fallback: check if it's a prefix or suffix
-                if details["would_trigger_start"]:
-                    examples = _get_example_words_with_prefix(typo, validation_index, source_index)
-                elif details["would_trigger_end"]:
-                    examples = _get_example_words_with_suffix(typo, validation_index, source_index)
-
-            if examples:
-                example_word = examples[0]
-                example_lines.append(
-                    f'"{typo}" -> "{word}" with NONE boundary would conflict '
-                    f'with source word "{example_word}"'
-                )
-                example_lines.append(
-                    _format_incorrect_transformation(example_word, typo, word or "")
-                )
-                example_lines.append("NONE BOUNDARY REJECTED")
-
+        example_lines = _log_none_boundary_rejection(
+            typo, word, details, validation_index, source_index
+        )
     elif boundary == BoundaryType.LEFT:
-        # LEFT boundary matches at word start, so show prefix examples
-        if details["would_trigger_start"]:
-            examples = _get_example_words_with_prefix(typo, validation_index, source_index)
-            if examples:
-                example_word = examples[0]
-                example_lines.append(
-                    f'"{typo}" -> "{word}" with LEFT boundary would conflict '
-                    f'with source word "{example_word}"'
-                )
-                example_lines.append(
-                    _format_incorrect_transformation(example_word, typo, word or "")
-                )
-                example_lines.append("LEFT BOUNDARY REJECTED")
-
+        example_lines = _log_left_boundary_rejection(
+            typo, word, details, validation_index, source_index
+        )
     elif boundary == BoundaryType.RIGHT:
-        # RIGHT boundary matches at word end, so show suffix examples
-        if details["would_trigger_end"]:
-            examples = _get_example_words_with_suffix(typo, validation_index, source_index)
-            if examples:
-                example_word = examples[0]
-                example_lines.append(
-                    f'"{typo}" -> "{word}" with RIGHT boundary would conflict '
-                    f'with source word "{example_word}"'
-                )
-                example_lines.append(
-                    _format_incorrect_transformation(example_word, typo, word or "")
-                )
-                example_lines.append("RIGHT BOUNDARY REJECTED")
-
+        example_lines = _log_right_boundary_rejection(
+            typo, word, details, validation_index, source_index
+        )
     elif boundary == BoundaryType.BOTH:
         # BOTH boundary is always safe (prevents all substring matches)
-        # This shouldn't be rejected, but if it is, log it
         example_lines.append(
             "BOTH boundary requires standalone word, prevents all substring matches"
         )
@@ -222,21 +316,7 @@ def _log_boundary_rejection(
     if example_lines:
         message = "\n".join(example_lines)
     else:
-        # Fallback if no examples found
-        reason_parts = []
-        if details["would_trigger_start"]:
-            reason_parts.append("appears as prefix")
-        if details["would_trigger_end"]:
-            reason_parts.append("appears as suffix")
-        if details["is_substring"] and not (
-            details["would_trigger_start"] or details["would_trigger_end"]
-        ):
-            reason_parts.append("appears as substring")
-        reason_str = ", ".join(reason_parts) if reason_parts else "unknown reason"
-        message = (
-            f"Rejected boundary '{boundary.value}'{word_info} - "
-            f"would cause false triggers: {reason_str}"
-        )
+        message = _build_fallback_rejection_message(boundary, word_info, details)
 
     log_debug_typo(
         typo,

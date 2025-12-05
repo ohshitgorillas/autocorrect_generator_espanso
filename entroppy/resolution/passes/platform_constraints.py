@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, Any
 
 from tqdm import tqdm
 
+from entroppy.core import BoundaryType
+from entroppy.platforms import PlatformConstraints
 from entroppy.resolution.solver import Pass
 from entroppy.resolution.state import RejectionReason
 
@@ -27,6 +29,99 @@ class PlatformConstraintsPass(Pass):
         """Return the name of this pass."""
         return "PlatformConstraints"
 
+    def _check_correction_constraints(
+        self, correction: tuple[str, str, BoundaryType], constraints: PlatformConstraints
+    ) -> str | None:
+        """Check if a correction violates platform constraints.
+
+        Args:
+            correction: The correction to check
+            constraints: Platform constraints
+
+        Returns:
+            Reason string if constraint violated, None otherwise
+        """
+        typo, word, boundary = correction
+
+        # Check character constraints
+        if constraints.allowed_chars:
+            if not self._check_allowed_chars(typo, word, constraints.allowed_chars):
+                return "Invalid characters"
+
+        # Check length constraints
+        if constraints.max_typo_length and len(typo) > constraints.max_typo_length:
+            return f"Typo too long (>{constraints.max_typo_length})"
+
+        if constraints.max_word_length and len(word) > constraints.max_word_length:
+            return f"Word too long (>{constraints.max_word_length})"
+
+        # Check boundary support
+        if not constraints.supports_boundaries and boundary.value != "none":
+            return "Platform doesn't support boundaries"
+
+        return None
+
+    def _remove_invalid_items(
+        self,
+        state: "DictionaryState",
+        items_to_remove: list[tuple[tuple[str, str, BoundaryType], str]],
+        is_pattern: bool,
+    ) -> None:
+        """Remove invalid corrections or patterns from state.
+
+        Args:
+            state: The dictionary state to modify
+            items_to_remove: List of (item, reason) tuples
+            is_pattern: True if removing patterns, False if removing corrections
+        """
+        for item, reason in items_to_remove:
+            typo, word, boundary = item
+            if is_pattern:
+                state.remove_pattern(typo, word, boundary, self.name, reason)
+            else:
+                state.remove_correction(typo, word, boundary, self.name, reason)
+            state.add_to_graveyard(
+                typo,
+                word,
+                boundary,
+                RejectionReason.PLATFORM_CONSTRAINT,
+                reason,
+            )
+
+    def _check_items(
+        self,
+        items: list[tuple[str, str, BoundaryType]],
+        constraints: PlatformConstraints,
+        item_type: str,
+    ) -> list[tuple[tuple[str, str, BoundaryType], str]]:
+        """Check items against platform constraints.
+
+        Args:
+            items: List of corrections or patterns to check
+            constraints: Platform constraints
+            item_type: Type of items ("corrections" or "patterns")
+
+        Returns:
+            List of (item, reason) tuples for items that violate constraints
+        """
+        items_to_remove = []
+        if self.context.verbose:
+            items_iter: Any = tqdm(
+                items,
+                desc=f"    {self.name} ({item_type})",
+                unit=item_type[:-1],  # Remove 's' from end
+                leave=False,
+            )
+        else:
+            items_iter = items
+
+        for item in items_iter:
+            reason = self._check_correction_constraints(item, constraints)
+            if reason:
+                items_to_remove.append((item, reason))
+
+        return items_to_remove
+
     def run(self, state: "DictionaryState") -> None:
         """Run the platform constraints pass.
 
@@ -40,107 +135,15 @@ class PlatformConstraintsPass(Pass):
         # Get platform constraints
         constraints = self.context.platform.get_constraints()
 
-        # Check each active correction
-        corrections_to_remove = []
-        if self.context.verbose:
-            corrections_iter: Any = tqdm(
-                state.active_corrections,
-                desc=f"    {self.name} (corrections)",
-                unit="correction",
-                leave=False,
-            )
-        else:
-            corrections_iter = state.active_corrections
+        # Check corrections
+        corrections_to_remove = self._check_items(
+            list(state.active_corrections), constraints, "corrections"
+        )
+        self._remove_invalid_items(state, corrections_to_remove, is_pattern=False)
 
-        for correction in corrections_iter:
-            typo, word, boundary = correction
-
-            # Check character constraints
-            if constraints.allowed_chars:
-                if not self._check_allowed_chars(typo, word, constraints.allowed_chars):
-                    corrections_to_remove.append((correction, "Invalid characters"))
-                    continue
-
-            # Check length constraints
-            if constraints.max_typo_length and len(typo) > constraints.max_typo_length:
-                corrections_to_remove.append(
-                    (correction, f"Typo too long (>{constraints.max_typo_length})")
-                )
-                continue
-
-            if constraints.max_word_length and len(word) > constraints.max_word_length:
-                corrections_to_remove.append(
-                    (correction, f"Word too long (>{constraints.max_word_length})")
-                )
-                continue
-
-            # Check boundary support
-            if not constraints.supports_boundaries and boundary.value != "none":
-                corrections_to_remove.append((correction, "Platform doesn't support boundaries"))
-                continue
-
-        # Remove invalid corrections
-        for correction, reason in corrections_to_remove:
-            typo, word, boundary = correction
-            state.remove_correction(typo, word, boundary, self.name, reason)
-            state.add_to_graveyard(
-                typo,
-                word,
-                boundary,
-                RejectionReason.PLATFORM_CONSTRAINT,
-                reason,
-            )
-
-        # Also check patterns
-        patterns_to_remove = []
-        if self.context.verbose:
-            patterns_iter: Any = tqdm(
-                state.active_patterns,
-                desc=f"    {self.name} (patterns)",
-                unit="pattern",
-                leave=False,
-            )
-        else:
-            patterns_iter = state.active_patterns
-
-        for pattern in patterns_iter:
-            typo, word, boundary = pattern
-
-            # Check character constraints
-            if constraints.allowed_chars:
-                if not self._check_allowed_chars(typo, word, constraints.allowed_chars):
-                    patterns_to_remove.append((pattern, "Invalid characters"))
-                    continue
-
-            # Check length constraints
-            if constraints.max_typo_length and len(typo) > constraints.max_typo_length:
-                patterns_to_remove.append(
-                    (pattern, f"Typo too long (>{constraints.max_typo_length})")
-                )
-                continue
-
-            if constraints.max_word_length and len(word) > constraints.max_word_length:
-                patterns_to_remove.append(
-                    (pattern, f"Word too long (>{constraints.max_word_length})")
-                )
-                continue
-
-            # Check boundary support
-            if not constraints.supports_boundaries and boundary.value != "none":
-                patterns_to_remove.append((pattern, "Platform doesn't support boundaries"))
-                continue
-
-        # Remove invalid patterns
-        for pattern, reason in patterns_to_remove:
-            typo, word, boundary = pattern
-            state.remove_pattern(typo, word, boundary, self.name, reason)
-            state.add_to_graveyard(
-                typo,
-                word,
-                boundary,
-                RejectionReason.PLATFORM_CONSTRAINT,
-                reason,
-            )
+        # Check patterns
+        patterns_to_remove = self._check_items(list(state.active_patterns), constraints, "patterns")
+        self._remove_invalid_items(state, patterns_to_remove, is_pattern=True)
 
     @staticmethod
     def _check_allowed_chars(typo: str, word: str, allowed_chars: set[str]) -> bool:

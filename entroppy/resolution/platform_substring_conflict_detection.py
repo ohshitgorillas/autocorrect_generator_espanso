@@ -204,6 +204,144 @@ def build_length_buckets(
     return length_buckets
 
 
+def _determine_less_restrictive_boundary(
+    boundary1: BoundaryType,
+    boundary2: BoundaryType,
+    typo1: str,
+    typo2: str,
+    match_direction: MatchDirection,
+) -> tuple[str, BoundaryType]:
+    """Determine which boundary is less restrictive.
+
+    Args:
+        boundary1: First boundary type
+        boundary2: Second boundary type
+        typo1: First typo
+        typo2: Second typo
+        match_direction: Platform match direction
+
+    Returns:
+        Tuple of (less_restrictive_typo, less_restrictive_boundary)
+    """
+    shorter_priority = BOUNDARY_PRIORITY.get(boundary1, 0)
+    longer_priority = BOUNDARY_PRIORITY.get(boundary2, 0)
+    if shorter_priority < longer_priority:
+        return typo1, boundary1
+    if longer_priority < shorter_priority:
+        return typo2, boundary2
+    # Same priority - determine based on match direction
+    if match_direction == MatchDirection.RIGHT_TO_LEFT:
+        return typo1, boundary1
+    return typo2, boundary2
+
+
+def _check_false_triggers_for_conflict(
+    less_restrictive_typo: str,
+    less_restrictive_boundary: BoundaryType,
+    word1: str,
+    word2: str,
+    typo1: str,
+    validation_index: BoundaryIndex | None,
+    source_index: BoundaryIndex | None,
+) -> tuple[bool | None, str | None]:
+    """Check false triggers for the less restrictive boundary.
+
+    Args:
+        less_restrictive_typo: The less restrictive typo
+        less_restrictive_boundary: The less restrictive boundary
+        word1: First word
+        word2: Second word
+        typo1: First typo
+        validation_index: Optional boundary index for validation set
+        source_index: Optional boundary index for source words
+
+    Returns:
+        Tuple of (would_cause_false_triggers, false_trigger_reason)
+    """
+    if validation_index is None or source_index is None:
+        return None, None
+
+    would_cause, details = _check_false_trigger_with_details(
+        less_restrictive_typo,
+        less_restrictive_boundary,
+        validation_index,
+        source_index,
+        target_word=word1 if less_restrictive_typo == typo1 else word2,
+    )
+    reason_value = details.get("reason") if details else None
+    false_trigger_reason = reason_value if isinstance(reason_value, str) else None
+    return would_cause, false_trigger_reason
+
+
+def _log_conflict_resolution(
+    typo1: str,
+    word1: str,
+    boundary1: BoundaryType,
+    typo2: str,
+    word2: str,
+    boundary2: BoundaryType,
+    less_restrictive_typo: str,
+    less_restrictive_boundary: BoundaryType,
+    checked_false_triggers: bool,
+    would_cause_false_triggers: bool | None,
+    false_trigger_reason: str | None,
+    debug_words: set[str],
+    debug_typo_matcher: "DebugTypoMatcher | None",
+    remove_first: bool,
+) -> None:
+    """Log conflict resolution decision.
+
+    Args:
+        typo1: First typo
+        word1: First word
+        boundary1: First boundary
+        typo2: Second typo
+        word2: Second word
+        boundary2: Second boundary
+        less_restrictive_typo: Less restrictive typo
+        less_restrictive_boundary: Less restrictive boundary
+        checked_false_triggers: Whether false triggers were checked
+        would_cause_false_triggers: Whether false triggers would occur
+        false_trigger_reason: Reason for false triggers
+        debug_words: Set of words to debug
+        debug_typo_matcher: Matcher for debug typos
+        remove_first: Whether removing first correction
+    """
+    if debug_words or debug_typo_matcher:
+        if remove_first:
+            log_resolution_decision(
+                typo1,
+                word1,
+                boundary1,
+                typo2,
+                word2,
+                boundary2,
+                less_restrictive_typo,
+                less_restrictive_boundary,
+                checked_false_triggers,
+                would_cause_false_triggers,
+                false_trigger_reason,
+                debug_words,
+                debug_typo_matcher,
+            )
+        else:
+            log_resolution_decision(
+                typo2,
+                word2,
+                boundary2,
+                typo1,
+                word1,
+                boundary1,
+                less_restrictive_typo,
+                less_restrictive_boundary,
+                checked_false_triggers,
+                would_cause_false_triggers,
+                false_trigger_reason,
+                debug_words,
+                debug_typo_matcher,
+            )
+
+
 def process_conflict_pair(
     correction1: tuple[str, str, BoundaryType],
     correction2: tuple[str, str, BoundaryType],
@@ -258,40 +396,22 @@ def process_conflict_pair(
     typo1, word1, _ = correction1
     typo2, word2, _ = correction2
 
-    # Determine which boundary is less restrictive for logging
-    shorter_priority = BOUNDARY_PRIORITY.get(boundary1, 0)
-    longer_priority = BOUNDARY_PRIORITY.get(boundary2, 0)
-    if shorter_priority < longer_priority:
-        less_restrictive_typo = typo1
-        less_restrictive_boundary = boundary1
-    elif longer_priority < shorter_priority:
-        less_restrictive_typo = typo2
-        less_restrictive_boundary = boundary2
-    else:
-        # Same priority - determine based on match direction
-        if match_direction == MatchDirection.RIGHT_TO_LEFT:
-            less_restrictive_typo = typo1
-            less_restrictive_boundary = boundary1
-        else:
-            less_restrictive_typo = typo2
-            less_restrictive_boundary = boundary2
+    # Determine which boundary is less restrictive
+    less_restrictive_typo, less_restrictive_boundary = _determine_less_restrictive_boundary(
+        boundary1, boundary2, typo1, typo2, match_direction
+    )
 
     # Check false triggers to determine decision
     checked_false_triggers = validation_index is not None and source_index is not None
-    would_cause_false_triggers: bool | None = None
-    false_trigger_reason: str | None = None
-
-    if checked_false_triggers and validation_index is not None and source_index is not None:
-        would_cause, details = _check_false_trigger_with_details(
-            less_restrictive_typo,
-            less_restrictive_boundary,
-            validation_index,
-            source_index,
-            target_word=word1 if less_restrictive_typo == typo1 else word2,
-        )
-        would_cause_false_triggers = would_cause
-        reason_value = details.get("reason") if details else None
-        false_trigger_reason = reason_value if isinstance(reason_value, str) else None
+    would_cause_false_triggers, false_trigger_reason = _check_false_triggers_for_conflict(
+        less_restrictive_typo,
+        less_restrictive_boundary,
+        word1,
+        word2,
+        typo1,
+        validation_index,
+        source_index,
+    )
 
     if should_remove_shorter(
         match_direction,
@@ -313,23 +433,22 @@ def process_conflict_pair(
             f"'{formatted_typo}'"
         )
 
-        # Log resolution decision if debugging
-        if debug_words is not None or debug_typo_matcher is not None:
-            log_resolution_decision(
-                typo1,
-                word1,
-                boundary1,
-                typo2,
-                word2,
-                boundary2,
-                less_restrictive_typo,
-                less_restrictive_boundary,
-                checked_false_triggers,
-                would_cause_false_triggers,
-                false_trigger_reason,
-                debug_words or set(),
-                debug_typo_matcher,
-            )
+        _log_conflict_resolution(
+            typo1,
+            word1,
+            boundary1,
+            typo2,
+            word2,
+            boundary2,
+            less_restrictive_typo,
+            less_restrictive_boundary,
+            checked_false_triggers,
+            would_cause_false_triggers,
+            false_trigger_reason,
+            debug_words or set(),
+            debug_typo_matcher,
+            remove_first=True,
+        )
 
         return (correction1, reason), (correction1, correction2)
 
@@ -340,25 +459,146 @@ def process_conflict_pair(
         f"'{shorter_formatted_typo}'"
     )
 
-    # Log resolution decision if debugging
-    if debug_words is not None or debug_typo_matcher is not None:
-        log_resolution_decision(
-            typo2,
-            word2,
-            boundary2,
-            typo1,
-            word1,
-            boundary1,
-            less_restrictive_typo,
-            less_restrictive_boundary,
-            checked_false_triggers,
-            would_cause_false_triggers,
-            false_trigger_reason,
-            debug_words or set(),
-            debug_typo_matcher,
-        )
+    _log_conflict_resolution(
+        typo2,
+        word2,
+        boundary2,
+        typo1,
+        word1,
+        boundary1,
+        less_restrictive_typo,
+        less_restrictive_boundary,
+        checked_false_triggers,
+        would_cause_false_triggers,
+        false_trigger_reason,
+        debug_words or set(),
+        debug_typo_matcher,
+        remove_first=False,
+    )
 
     return (correction2, reason), (correction2, correction1)
+
+
+def _build_index_keys_to_check(formatted_typo: str) -> list[str]:
+    """Build list of index keys to check for substring conflicts.
+
+    Args:
+        formatted_typo: The formatted typo string
+
+    Returns:
+        List of index keys to check
+    """
+    index_key = formatted_typo[0] if formatted_typo else ""
+    index_keys_to_check = [index_key]
+
+    # For QMK boundary prefixes (starts with ':'), also check against the core typo
+    if formatted_typo.startswith(":") and len(formatted_typo) > 1:
+        core_typo_key = formatted_typo[1] if len(formatted_typo) > 1 else ""
+        if core_typo_key:
+            index_keys_to_check.append(core_typo_key)
+    elif not formatted_typo.startswith(":") and formatted_typo:
+        # For core typos, also check against colon-prefixed versions
+        index_keys_to_check.append(":")
+
+    # Also check all characters in the formatted typo to catch middle/end substrings
+    for char in formatted_typo:
+        if char not in index_keys_to_check:
+            index_keys_to_check.append(char)
+
+    return index_keys_to_check
+
+
+def _process_typo_conflicts(
+    formatted_typo: str,
+    corrections_for_typo: list[tuple[tuple[str, str, BoundaryType], str, BoundaryType]],
+    index_keys_to_check: list[str],
+    candidates_by_char: dict[
+        str,
+        list[tuple[str, list[tuple[tuple[str, str, BoundaryType], str, BoundaryType]]]],
+    ],
+    match_direction: MatchDirection,
+    processed_pairs: set[frozenset[tuple[str, str, BoundaryType]]],
+    corrections_to_remove_set: set[tuple[str, str, BoundaryType]],
+    validation_index: BoundaryIndex | None,
+    source_index: BoundaryIndex | None,
+    debug_words: set[str] | None,
+    debug_typo_matcher: "DebugTypoMatcher | None",
+) -> tuple[
+    list[tuple[tuple[str, str, BoundaryType], str]],
+    dict[tuple[str, str, BoundaryType], tuple[str, str, BoundaryType]],
+]:
+    """Process conflicts for a single formatted typo.
+
+    Args:
+        formatted_typo: The formatted typo string
+        corrections_for_typo: List of corrections for this typo
+        index_keys_to_check: List of index keys to check
+        candidates_by_char: Character-based index of shorter typos
+        match_direction: Platform match direction
+        processed_pairs: Set of already processed correction pairs
+        corrections_to_remove_set: Set of corrections already marked for removal
+        validation_index: Optional boundary index for validation set
+        source_index: Optional boundary index for source words
+        debug_words: Optional set of words to debug
+        debug_typo_matcher: Optional matcher for debug typos
+
+    Returns:
+        Tuple of (corrections_to_remove, conflict_pairs)
+    """
+    corrections_to_remove = []
+    conflict_pairs: dict[tuple[str, str, BoundaryType], tuple[str, str, BoundaryType]] = {}
+
+    checked_shorter_typos: set[str] = set()
+    for key_to_check in index_keys_to_check:
+        if key_to_check in candidates_by_char:
+            for shorter_formatted_typo, shorter_corrections in candidates_by_char[key_to_check]:
+                if shorter_formatted_typo in checked_shorter_typos:
+                    continue
+                checked_shorter_typos.add(shorter_formatted_typo)
+
+                # Check if shorter is a substring of current
+                if is_substring(shorter_formatted_typo, formatted_typo):
+                    # Check all combinations of corrections with early termination
+                    for correction1, _, boundary1 in shorter_corrections:
+                        if correction1 in corrections_to_remove_set:
+                            continue
+
+                        for correction2, _, boundary2 in corrections_for_typo:
+                            if correction2 in corrections_to_remove_set:
+                                continue
+
+                            # Process conflict pair
+                            result, conflict_pair = process_conflict_pair(
+                                correction1,
+                                correction2,
+                                shorter_formatted_typo,
+                                formatted_typo,
+                                boundary1,
+                                boundary2,
+                                match_direction,
+                                processed_pairs,
+                                corrections_to_remove_set,
+                                validation_index,
+                                source_index,
+                                debug_words,
+                                debug_typo_matcher,
+                            )
+
+                            if result is not None:
+                                correction_to_remove, reason = result
+                                corrections_to_remove.append((correction_to_remove, reason))
+                                if conflict_pair is not None:
+                                    removed_correction, conflicting_correction = conflict_pair
+                                    conflict_pairs[removed_correction] = conflicting_correction
+                                    corrections_to_remove_set.add(removed_correction)
+
+                            # Break early if all corrections for this formatted typo are marked
+                            if all(
+                                c in corrections_to_remove_set for c, _, _ in corrections_for_typo
+                            ):
+                                break
+
+    return corrections_to_remove, conflict_pairs
 
 
 def check_bucket_conflicts(
@@ -405,87 +645,31 @@ def check_bucket_conflicts(
         # Update progress bar for each formatted typo processed
         if progress_bar is not None:
             progress_bar.update(1)
-        # Get index key (first character for general substring conflicts)
-        # For QMK, also check against typos that start with the core typo
-        # (e.g., ":aemr" should be checked against "aemr")
-        index_key = formatted_typo[0] if formatted_typo else ""
 
-        # For QMK boundary prefixes (starts with ':'), also check against the core typo
-        # This handles cases like ":aemr" vs "aemr" where they're in different char buckets
-        index_keys_to_check = [index_key]
-        if formatted_typo.startswith(":") and len(formatted_typo) > 1:
-            # Also check against the core typo (without the leading colon)
-            core_typo_key = formatted_typo[1] if len(formatted_typo) > 1 else ""
-            if core_typo_key:
-                index_keys_to_check.append(core_typo_key)
-        elif not formatted_typo.startswith(":") and formatted_typo:
-            # For core typos, also check against colon-prefixed versions
-            # (they would be indexed under ':')
-            index_keys_to_check.append(":")
+        # Build index keys to check
+        index_keys_to_check = _build_index_keys_to_check(formatted_typo)
 
-        # Also check all characters in the formatted typo to catch middle/end substrings
-        # (e.g., "cnt" in "ocnt" - they start with different chars but one is substring of other)
-        for char in formatted_typo:
-            if char not in index_keys_to_check:
-                index_keys_to_check.append(char)
+        # Process conflicts for this typo
+        typo_corrections_to_remove, typo_conflict_pairs = _process_typo_conflicts(
+            formatted_typo,
+            corrections_for_typo,
+            index_keys_to_check,
+            candidates_by_char,
+            match_direction,
+            processed_pairs,
+            corrections_to_remove_set,
+            validation_index,
+            source_index,
+            debug_words,
+            debug_typo_matcher,
+        )
 
-        # Check against shorter typos with matching index keys
-        # By checking all characters in the longer typo, we ensure we catch any substring
-        # relationships (e.g., "cnt" in "ocnt" - "cnt" starts with 'c' which is in "ocnt")
-        checked_shorter_typos: set[str] = set()
-        for key_to_check in index_keys_to_check:
-            if key_to_check in candidates_by_char:
-                for shorter_formatted_typo, shorter_corrections in candidates_by_char[key_to_check]:
-                    if shorter_formatted_typo in checked_shorter_typos:
-                        continue
-                    checked_shorter_typos.add(shorter_formatted_typo)
-                    # Check if shorter is a substring of current
-                    if is_substring(shorter_formatted_typo, formatted_typo):
-                        # Check all combinations of corrections with early termination
-                        for correction1, _, boundary1 in shorter_corrections:
-                            # Skip if already marked for removal (early termination)
-                            if correction1 in corrections_to_remove_set:
-                                continue
-
-                            for correction2, _, boundary2 in corrections_for_typo:
-                                # Skip if already marked for removal (early termination)
-                                if correction2 in corrections_to_remove_set:
-                                    continue
-
-                                # Process conflict pair
-                                result, conflict_pair = process_conflict_pair(
-                                    correction1,
-                                    correction2,
-                                    shorter_formatted_typo,
-                                    formatted_typo,
-                                    boundary1,
-                                    boundary2,
-                                    match_direction,
-                                    processed_pairs,
-                                    corrections_to_remove_set,
-                                    validation_index,
-                                    source_index,
-                                    debug_words,
-                                    debug_typo_matcher,
-                                )
-
-                                if result is not None:
-                                    correction_to_remove, reason = result
-                                    corrections_to_remove.append((correction_to_remove, reason))
-                                    if conflict_pair is not None:
-                                        removed_correction, conflicting_correction = conflict_pair
-                                        conflict_pairs[removed_correction] = conflicting_correction
-                                        corrections_to_remove_set.add(removed_correction)
-
-                                # Break early if all corrections for this formatted typo are marked
-                                if all(
-                                    c in corrections_to_remove_set
-                                    for c, _, _ in corrections_for_typo
-                                ):
-                                    break
+        corrections_to_remove.extend(typo_corrections_to_remove)
+        conflict_pairs.update(typo_conflict_pairs)
 
         # Add to index for future checks (only shorter typos are added since we
         # process in length order)
+        index_key = formatted_typo[0] if formatted_typo else ""
         candidates_by_char[index_key].append((formatted_typo, corrections_for_typo))
 
     return corrections_to_remove, conflict_pairs

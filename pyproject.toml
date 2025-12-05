@@ -138,3 +138,14 @@ exclude = [
     "examples/",
     "vulture_whitelist.py",
 ]
+
+[tool.xenon]
+max_absolute = "B"  # Allow up to C complexity for individual functions
+max_modules = "B"   # Allow up to B complexity for modules
+max_average = "B"   # Allow up to B average complexity
+exclude = [
+    "tests/",
+    "examples/",
+    "docs/",
+    "build/",
+]

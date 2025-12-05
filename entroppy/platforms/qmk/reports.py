@@ -87,49 +87,73 @@ def _write_overview_statistics(
     f.write(f"Selection rate:                    {selection_rate:.1f}%\n\n")
 
 
-def _write_summary_by_type(
-    f: TextIO,
+def _count_corrections_by_type(
     final_corrections: list[Correction],
-    user_corrections: list[Correction],
-    pattern_scores: list[tuple[float, str, str, BoundaryType]],
-    direct_scores: list[tuple[float, str, str, BoundaryType]],
-    pattern_replacements: dict[Correction, list[Correction]],
-) -> None:
-    """Write summary statistics by correction type."""
-    write_section_header(f, "SUMMARY BY TYPE")
+    user_set: set[Correction],
+    pattern_set: set[tuple[str, str]],
+) -> tuple[int, int, int]:
+    """Count corrections by type in final list.
 
-    total = len(final_corrections)
-    final_set = set(final_corrections)
-    user_set = set(user_corrections)
-    pattern_set = {(p_typo, p_word) for _, p_typo, p_word, _ in pattern_scores}
+    Args:
+        final_corrections: Final list of corrections
+        user_set: Set of user corrections
+        pattern_set: Set of (typo, word) tuples for patterns
 
-    # Count corrections by type in final list
+    Returns:
+        Tuple of (user_count, pattern_count, direct_count)
+    """
     user_count = sum(1 for c in final_corrections if c in user_set)
     pattern_count = sum(
         1 for c in final_corrections if (c[0], c[1]) in pattern_set and c not in user_set
     )
-    direct_count = total - user_count - pattern_count
+    direct_count = len(final_corrections) - user_count - pattern_count
+    return user_count, pattern_count, direct_count
 
-    # Count total replacements for patterns in final list
+
+def _count_pattern_replacements(
+    final_corrections: list[Correction],
+    pattern_set: set[tuple[str, str]],
+    user_set: set[Correction],
+    pattern_replacements: dict[Correction, list[Correction]],
+) -> int:
+    """Count total replacements for patterns in final list.
+
+    Args:
+        final_corrections: Final list of corrections
+        pattern_set: Set of (typo, word) tuples for patterns
+        user_set: Set of user corrections
+        pattern_replacements: Dictionary mapping patterns to replacements
+
+    Returns:
+        Total number of replacements
+    """
     total_replacements = 0
     for typo, word, boundary in final_corrections:
         if (typo, word) in pattern_set and (typo, word, boundary) not in user_set:
             pattern_key = (typo, word, boundary)
             if pattern_key in pattern_replacements:
                 total_replacements += len(pattern_replacements[pattern_key])
+    return total_replacements
 
-    user_pct = (user_count / total * 100) if total > 0 else 0.0
-    pattern_pct = (pattern_count / total * 100) if total > 0 else 0.0
-    direct_pct = (direct_count / total * 100) if total > 0 else 0.0
 
-    f.write(f"User words:                        {user_count:,} ({user_pct:.1f}%)\n")
-    f.write(f"Patterns:                         {pattern_count:,} ({pattern_pct:.1f}%)")
-    if pattern_count > 0:
-        f.write(f" - replaced {total_replacements:,} corrections total")
-    f.write("\n")
-    f.write(f"Direct corrections:                {direct_count:,} ({direct_pct:.1f}%)\n")
+def _write_score_ranges(
+    f: TextIO,
+    final_set: set[Correction],
+    user_set: set[Correction],
+    pattern_set: set[tuple[str, str]],
+    pattern_scores: list[tuple[float, str, str, BoundaryType]],
+    direct_scores: list[tuple[float, str, str, BoundaryType]],
+) -> None:
+    """Write score ranges for patterns and direct corrections.
 
-    # Score ranges
+    Args:
+        f: File to write to
+        final_set: Set of final corrections
+        user_set: Set of user corrections
+        pattern_set: Set of (typo, word) tuples for patterns
+        pattern_scores: Pattern scores list
+        direct_scores: Direct correction scores list
+    """
     if pattern_scores:
         pattern_scores_in_final = [
             s[0]
@@ -151,6 +175,47 @@ def _write_summary_by_type(
             min_score = min(direct_scores_in_final)
             max_score = max(direct_scores_in_final)
             f.write(f"Score range (direct):                {min_score:.6f} - {max_score:.6f}\n")
+
+
+def _write_summary_by_type(
+    f: TextIO,
+    final_corrections: list[Correction],
+    user_corrections: list[Correction],
+    pattern_scores: list[tuple[float, str, str, BoundaryType]],
+    direct_scores: list[tuple[float, str, str, BoundaryType]],
+    pattern_replacements: dict[Correction, list[Correction]],
+) -> None:
+    """Write summary statistics by correction type."""
+    write_section_header(f, "SUMMARY BY TYPE")
+
+    total = len(final_corrections)
+    final_set = set(final_corrections)
+    user_set = set(user_corrections)
+    pattern_set = {(p_typo, p_word) for _, p_typo, p_word, _ in pattern_scores}
+
+    # Count corrections by type in final list
+    user_count, pattern_count, direct_count = _count_corrections_by_type(
+        final_corrections, user_set, pattern_set
+    )
+
+    # Count total replacements for patterns in final list
+    total_replacements = _count_pattern_replacements(
+        final_corrections, pattern_set, user_set, pattern_replacements
+    )
+
+    user_pct = (user_count / total * 100) if total > 0 else 0.0
+    pattern_pct = (pattern_count / total * 100) if total > 0 else 0.0
+    direct_pct = (direct_count / total * 100) if total > 0 else 0.0
+
+    f.write(f"User words:                        {user_count:,} ({user_pct:.1f}%)\n")
+    f.write(f"Patterns:                         {pattern_count:,} ({pattern_pct:.1f}%)")
+    if pattern_count > 0:
+        f.write(f" - replaced {total_replacements:,} corrections total")
+    f.write("\n")
+    f.write(f"Direct corrections:                {direct_count:,} ({direct_pct:.1f}%)\n")
+
+    # Score ranges
+    _write_score_ranges(f, final_set, user_set, pattern_set, pattern_scores, direct_scores)
 
     f.write("\n")
 

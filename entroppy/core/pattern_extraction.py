@@ -275,6 +275,79 @@ def _process_cached_patterns(
             )
 
 
+def _should_log_pattern(
+    typo_pattern: str,
+    unique_matches: list[tuple[str, str, BoundaryType]],
+    debug_typos: set[str] | None,
+    debug_typos_exact: set[str] | None,
+    debug_typos_wildcard: set[str] | None,
+) -> bool:
+    """Determine if a pattern should be logged for debugging.
+
+    Args:
+        typo_pattern: The typo pattern
+        unique_matches: List of unique matches for this pattern
+        debug_typos: Optional set of typo strings to debug (backward compatibility)
+        debug_typos_exact: Optional set of exact debug typo patterns
+        debug_typos_wildcard: Optional set of wildcard debug typo pattern cores
+
+    Returns:
+        True if pattern should be logged
+    """
+    # Use new parameters if provided
+    if debug_typos_exact is not None or debug_typos_wildcard is not None:
+        exact_patterns = debug_typos_exact or set()
+        wildcard_patterns = debug_typos_wildcard or set()
+        typo_pattern_lower = typo_pattern.lower()
+
+        # Check exact patterns (exact match)
+        if any(
+            typo_pattern_lower == pattern.lower()
+            or any(pattern.lower() == m[0].lower() for m in unique_matches)
+            for pattern in exact_patterns
+        ):
+            return True
+        # Check wildcard patterns (substring match)
+        if any(
+            pattern.lower() in typo_pattern_lower
+            or any(pattern.lower() in m[0].lower() for m in unique_matches)
+            for pattern in wildcard_patterns
+        ):
+            return True
+    # Backward compatibility: use substring matching for all patterns
+    elif debug_typos is not None:
+        if any(
+            debug_typo.lower() in typo_pattern.lower()
+            or any(debug_typo.lower() in m[0].lower() for m in unique_matches)
+            for debug_typo in debug_typos
+        ):
+            return True
+    return False
+
+
+def _log_pattern_found(
+    typo_pattern: str,
+    word_pattern: str,
+    boundary: BoundaryType,
+    unique_matches: list[tuple[str, str, BoundaryType]],
+) -> None:
+    """Log a found pattern for debugging.
+
+    Args:
+        typo_pattern: The typo pattern
+        word_pattern: The word pattern
+        boundary: The boundary type
+        unique_matches: List of unique matches for this pattern
+    """
+    logger.debug(
+        f"[PATTERN EXTRACTION] ✓ PATTERN FOUND: "
+        f"'{typo_pattern}' → '{word_pattern}' "
+        f"(boundary={boundary.value}, {len(unique_matches)} occurrences)"
+    )
+    for typo, word, orig_boundary in unique_matches:
+        logger.debug(f"  - '{typo}' → '{word}' (boundary={orig_boundary.value})")
+
+
 def _find_common_patterns(
     pattern_candidates: dict[tuple[str, str, BoundaryType], list[tuple[str, str, BoundaryType]]],
     debug_typos: set[str] | None,
@@ -311,47 +384,14 @@ def _find_common_patterns(
                 patterns[pattern_key].extend(unique_matches)
                 typo_pattern, word_pattern, boundary = pattern_key
                 if debug_enabled:
-                    should_log = False
-
-                    # Use new parameters if provided
-                    if debug_typos_exact is not None or debug_typos_wildcard is not None:
-                        exact_patterns = debug_typos_exact or set()
-                        wildcard_patterns = debug_typos_wildcard or set()
-                        typo_pattern_lower = typo_pattern.lower()
-
-                        # Check exact patterns (exact match)
-                        if any(
-                            typo_pattern_lower == pattern.lower()
-                            or any(pattern.lower() == m[0].lower() for m in unique_matches)
-                            for pattern in exact_patterns
-                        ):
-                            should_log = True
-                        # Check wildcard patterns (substring match)
-                        elif any(
-                            pattern.lower() in typo_pattern_lower
-                            or any(pattern.lower() in m[0].lower() for m in unique_matches)
-                            for pattern in wildcard_patterns
-                        ):
-                            should_log = True
-                    # Backward compatibility: use substring matching for all patterns
-                    elif debug_typos is not None:
-                        if any(
-                            debug_typo.lower() in typo_pattern.lower()
-                            or any(debug_typo.lower() in m[0].lower() for m in unique_matches)
-                            for debug_typo in debug_typos
-                        ):
-                            should_log = True
-
-                    if should_log:
-                        logger.debug(
-                            f"[PATTERN EXTRACTION] ✓ PATTERN FOUND: "
-                            f"'{typo_pattern}' → '{word_pattern}' "
-                            f"(boundary={boundary.value}, {len(unique_matches)} occurrences)"
-                        )
-                        for typo, word, orig_boundary in unique_matches:
-                            logger.debug(
-                                f"  - '{typo}' → '{word}' (boundary={orig_boundary.value})"
-                            )
+                    if _should_log_pattern(
+                        typo_pattern,
+                        unique_matches,
+                        debug_typos,
+                        debug_typos_exact,
+                        debug_typos_wildcard,
+                    ):
+                        _log_pattern_found(typo_pattern, word_pattern, boundary, unique_matches)
 
     return patterns
 

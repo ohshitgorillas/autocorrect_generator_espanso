@@ -120,6 +120,190 @@ def _process_typo_worker(
     return corrections, excluded_list, skipped_collisions, [], boundary_details_list
 
 
+def _process_parallel_collisions(
+    typo_map: dict[str, list[str]],
+    context: CollisionResolutionContext,
+    jobs: int,
+    verbose: bool,
+    debug_typo_matcher: DebugTypoMatcher | None,
+) -> tuple[list[Correction], list, list, list]:
+    """Process collisions in parallel mode.
+
+    Args:
+        typo_map: Map of typos to word lists
+        context: Worker context
+        jobs: Number of parallel workers
+        verbose: Whether to show progress bar
+        debug_typo_matcher: Matcher for debug typos
+
+    Returns:
+        Tuple of (final_corrections, skipped_collisions, skipped_short, excluded_corrections)
+    """
+    if verbose:
+        logger.info(f"  Using {jobs} parallel workers")
+        logger.info("  Preparing worker context...")
+        logger.info("  Initializing workers and building boundary indexes...")
+
+    final_corrections = []
+    skipped_collisions = []
+    skipped_short = []
+    excluded_corrections = []
+    all_boundary_details = []
+
+    with Pool(processes=jobs, initializer=init_collision_worker, initargs=(context,)) as pool:
+        items = list(typo_map.items())
+        results = pool.imap_unordered(_process_typo_worker, items)
+
+        # Wrap with progress bar if verbose
+        if verbose:
+            results_wrapped_iter: Any = tqdm(
+                results, total=len(items), desc="Resolving collisions", unit="typo"
+            )
+        else:
+            results_wrapped_iter = results
+
+        for (
+            corrections_list,
+            excluded_list,
+            skipped_collisions_list,
+            skipped_short_list,
+            boundary_details_list,
+        ) in results_wrapped_iter:
+            # Accumulate all results
+            final_corrections.extend(corrections_list)
+            excluded_corrections.extend(excluded_list)
+            skipped_collisions.extend(skipped_collisions_list)
+            skipped_short.extend(skipped_short_list)
+            all_boundary_details.extend(boundary_details_list)
+
+        # Log boundary selection details AFTER processing completes
+        if all_boundary_details and debug_typo_matcher:
+            for bd in all_boundary_details:
+                log_boundary_selection_details(
+                    bd["typo"],
+                    bd["word"],
+                    BoundaryType(bd["boundary"]),
+                    bd["details"],
+                    debug_typo_matcher,
+                )
+
+    return final_corrections, skipped_collisions, skipped_short, excluded_corrections
+
+
+def _process_single_threaded_collisions(
+    typo_map: dict[str, list[str]],
+    validation_set: set[str],
+    source_words: set[str],
+    freq_ratio: float,
+    min_typo_length: int,
+    min_word_length: int,
+    user_words: set[str],
+    exclusion_matcher: ExclusionMatcher | None,
+    debug_words: set[str],
+    debug_typo_matcher: DebugTypoMatcher | None,
+    verbose: bool,
+) -> tuple[list[Correction], list, list, list]:
+    """Process collisions in single-threaded mode.
+
+    Args:
+        typo_map: Map of typos to word lists
+        validation_set: Set of validation words
+        source_words: Set of source words
+        freq_ratio: Minimum frequency ratio for collision resolution
+        min_typo_length: Minimum typo length
+        min_word_length: Minimum word length
+        user_words: Set of user-provided words
+        exclusion_matcher: Matcher for exclusion rules
+        debug_words: Set of words to debug
+        debug_typo_matcher: Matcher for debug typos
+        verbose: Whether to show progress bar
+
+    Returns:
+        Tuple of (final_corrections, skipped_collisions, skipped_short, excluded_corrections)
+    """
+    if verbose:
+        logger.info("  Building boundary indexes...")
+    validation_index = BoundaryIndex(validation_set)
+    source_index = BoundaryIndex(source_words)
+
+    # Wrap with progress bar if verbose
+    if verbose:
+        items_iter: list[tuple[str, list[str]]] = list(
+            tqdm(typo_map.items(), total=len(typo_map), desc="Resolving collisions", unit="typo")
+        )
+    else:
+        items_iter = list(typo_map.items())
+
+    final_corrections = []
+    skipped_collisions = []
+    skipped_short = []
+    excluded_corrections = []
+
+    if exclusion_matcher is None:
+        exclusion_matcher = ExclusionMatcher(set())
+
+    for typo, word_list in items_iter:
+        unique_words = list(set(word_list))
+
+        if len(unique_words) == 1:
+            # Single word case: no collision
+            word = unique_words[0]
+            correction, was_skipped_short, excluded_info, _ = process_single_word_correction(
+                typo,
+                word,
+                min_typo_length,
+                min_word_length,
+                user_words,
+                exclusion_matcher,
+                debug_words,
+                debug_typo_matcher,
+                validation_index,
+                source_index,
+            )
+
+            if was_skipped_short:
+                skipped_short.append((typo, word, len(typo)))
+            elif excluded_info:
+                excluded_corrections.append(excluded_info)
+            elif correction:
+                final_corrections.append(correction)
+        else:
+            # Collision case: multiple words compete for same typo
+            corrections_list, excluded_list, skipped_collisions_list, boundary_details_list = (
+                process_collision_case(
+                    typo,
+                    unique_words,
+                    freq_ratio,
+                    min_typo_length,
+                    min_word_length,
+                    user_words,
+                    exclusion_matcher,
+                    debug_words,
+                    debug_typo_matcher,
+                    validation_index,
+                    source_index,
+                )
+            )
+
+            # Accumulate all results
+            final_corrections.extend(corrections_list)
+            excluded_corrections.extend(excluded_list)
+            skipped_collisions.extend(skipped_collisions_list)
+
+            # Log boundary selection details for accepted corrections
+            if boundary_details_list and debug_typo_matcher:
+                for bd in boundary_details_list:
+                    log_boundary_selection_details(
+                        bd["typo"],
+                        bd["word"],
+                        BoundaryType(bd["boundary"]),
+                        bd["details"],
+                        debug_typo_matcher,
+                    )
+
+    return final_corrections, skipped_collisions, skipped_short, excluded_corrections
+
+
 def resolve_collisions(
     typo_map: dict[str, list[str]],
     validation_set: set[str],
@@ -168,20 +352,18 @@ def resolve_collisions(
         # This should only happen in single-threaded mode
         exclusion_set = set()
 
-    final_corrections = []
-    skipped_collisions = []
-    skipped_short = []
-    excluded_corrections = []
+    if debug_words is None:
+        debug_words = set()
+
+    if debug_typo_patterns is None:
+        debug_typo_patterns = set()
+
+    if exclusion_set is None:
+        exclusion_set = set()
 
     if jobs > 1 and len(typo_map) > 1:
         # Parallel processing mode
-        if verbose:
-            logger.info(f"  Using {jobs} parallel workers")
-            logger.info("  Preparing worker context...")
-
         # Create context for workers
-        # Note: validation_set parameter should be filtered_validation_set (words matching
-        # exclusion patterns removed) for boundary detection
         context = CollisionResolutionContext(
             validation_set=frozenset(validation_set),
             source_words=frozenset(source_words),
@@ -193,159 +375,19 @@ def resolve_collisions(
             debug_words=frozenset(debug_words),
             debug_typo_patterns=frozenset(debug_typo_patterns),
         )
+        return _process_parallel_collisions(typo_map, context, jobs, verbose, debug_typo_matcher)
 
-        if verbose:
-            logger.info("  Initializing workers and building boundary indexes...")
-
-        with Pool(
-            processes=jobs,
-            initializer=init_collision_worker,
-            initargs=(context,),
-        ) as pool:
-            items = list(typo_map.items())
-            results = pool.imap_unordered(_process_typo_worker, items)
-
-            # Wrap with progress bar if verbose
-            if verbose:
-                results_wrapped_iter: Any = tqdm(
-                    results,
-                    total=len(items),
-                    desc="Resolving collisions",
-                    unit="typo",
-                )
-            else:
-                results_wrapped_iter = results
-
-            all_boundary_details = []
-            for (
-                corrections_list,
-                excluded_list,
-                skipped_collisions_list,
-                skipped_short_list,
-                boundary_details_list,
-            ) in results_wrapped_iter:
-                # Accumulate all corrections
-                final_corrections.extend(corrections_list)
-
-                # Accumulate all excluded
-                excluded_corrections.extend(excluded_list)
-
-                # Accumulate all skipped collisions
-                skipped_collisions.extend(skipped_collisions_list)
-
-                # Accumulate all skipped short
-                skipped_short.extend(skipped_short_list)
-
-                # Accumulate all boundary details
-                all_boundary_details.extend(boundary_details_list)
-
-            # Log boundary selection details AFTER processing completes
-            if all_boundary_details and debug_typo_matcher:
-                for bd in all_boundary_details:
-                    log_boundary_selection_details(
-                        bd["typo"],
-                        bd["word"],
-                        BoundaryType(bd["boundary"]),
-                        bd["details"],
-                        debug_typo_matcher,
-                    )
-    else:
-        # Single-threaded mode (original implementation)
-        # Build boundary indexes for efficient lookups
-        # Use filtered validation set - words matching exclusion patterns
-        # should not block valid typos
-        if verbose:
-            logger.info("  Building boundary indexes...")
-        validation_index = BoundaryIndex(validation_set)
-        source_index = BoundaryIndex(source_words)
-
-        # Wrap with progress bar if verbose
-        if verbose:
-            items_iter: list[tuple[str, list[str]]] = list(
-                tqdm(
-                    typo_map.items(),
-                    total=len(typo_map),
-                    desc="Resolving collisions",
-                    unit="typo",
-                )
-            )
-        else:
-            items_iter = list(typo_map.items())
-
-        for typo, word_list in items_iter:
-            unique_words = list(set(word_list))
-
-            if len(unique_words) == 1:
-                # Single word case: no collision
-                word = unique_words[0]
-
-                # pylint: disable=duplicate-code
-                # False positive: Similar parameter lists are expected when calling the same
-                # function from different contexts (single-threaded vs parallel worker).
-                # This is not duplicate code that should be refactored - it's the same function
-                # call with the same parameters.
-                if exclusion_matcher is None:
-                    # Create a dummy ExclusionMatcher if None
-                    exclusion_matcher = ExclusionMatcher(set())
-                correction, was_skipped_short, excluded_info, _ = process_single_word_correction(
-                    typo,
-                    word,
-                    min_typo_length,
-                    min_word_length,
-                    user_words,
-                    exclusion_matcher,
-                    debug_words,
-                    debug_typo_matcher,
-                    validation_index,
-                    source_index,
-                )
-
-                if was_skipped_short:
-                    skipped_short.append((typo, word, len(typo)))
-                elif excluded_info:
-                    excluded_corrections.append(excluded_info)
-                elif correction:
-                    final_corrections.append(correction)
-            else:
-                # Collision case: multiple words compete for same typo
-                # pylint: disable=duplicate-code
-                # False positive: Similar parameter lists are expected when calling the same
-                # function from different contexts (single-threaded vs parallel worker).
-                # This is not duplicate code that should be refactored - it's the same function
-                # call with the same parameters.
-                if exclusion_matcher is None:
-                    # Create a dummy ExclusionMatcher if None
-                    exclusion_matcher = ExclusionMatcher(set())
-                corrections_list, excluded_list, skipped_collisions_list, boundary_details_list = (
-                    process_collision_case(
-                        typo,
-                        unique_words,
-                        freq_ratio,
-                        min_typo_length,
-                        min_word_length,
-                        user_words,
-                        exclusion_matcher,
-                        debug_words,
-                        debug_typo_matcher,
-                        validation_index,
-                        source_index,
-                    )
-                )
-
-                # Accumulate all results
-                final_corrections.extend(corrections_list)
-                excluded_corrections.extend(excluded_list)
-                skipped_collisions.extend(skipped_collisions_list)
-
-                # Log boundary selection details for accepted corrections
-                if boundary_details_list and debug_typo_matcher:
-                    for bd in boundary_details_list:
-                        log_boundary_selection_details(
-                            bd["typo"],
-                            bd["word"],
-                            BoundaryType(bd["boundary"]),
-                            bd["details"],
-                            debug_typo_matcher,
-                        )
-
-    return final_corrections, skipped_collisions, skipped_short, excluded_corrections
+    # Single-threaded mode
+    return _process_single_threaded_collisions(
+        typo_map,
+        validation_set,
+        source_words,
+        freq_ratio,
+        min_typo_length,
+        min_word_length,
+        user_words,
+        exclusion_matcher,
+        debug_words,
+        debug_typo_matcher,
+        verbose,
+    )

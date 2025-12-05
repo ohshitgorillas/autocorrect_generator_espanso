@@ -9,6 +9,72 @@ if TYPE_CHECKING:
     from entroppy.core.pattern_indexes import CorrectionIndex
 
 
+def _check_suffix_match(
+    typo_pattern: str,
+    word_pattern: str,
+    other_typo: str,
+    other_word: str,
+) -> tuple[bool, str | None]:
+    """Check if pattern would incorrectly match as suffix.
+
+    Args:
+        typo_pattern: The typo pattern
+        word_pattern: The word pattern
+        other_typo: Other correction's typo
+        other_word: Other correction's word
+
+    Returns:
+        Tuple of (is_unsafe, error_message)
+    """
+    remaining_typo = other_typo[: -len(typo_pattern)]
+    # Find what comes after the typo_pattern in the original word
+    typo_pattern_pos_in_word = other_word.rfind(typo_pattern)
+    if typo_pattern_pos_in_word != -1:
+        # Pattern found in word, get what comes after it
+        word_suffix = other_word[typo_pattern_pos_in_word + len(typo_pattern) :]
+        pattern_result = remaining_typo + word_pattern + word_suffix
+    else:
+        # Pattern not found in word, just do simple replacement
+        pattern_result = remaining_typo + word_pattern
+
+    # If pattern would produce different result, it's unsafe
+    if pattern_result != other_word:
+        return False, (
+            f"Would incorrectly match '{other_typo}' → '{other_word}' "
+            f"as suffix (would produce '{pattern_result}' instead)"
+        )
+    return True, None
+
+
+def _check_prefix_match(
+    typo_pattern: str,
+    word_pattern: str,
+    other_typo: str,
+    other_word: str,
+) -> tuple[bool, str | None]:
+    """Check if pattern would incorrectly match as prefix.
+
+    Args:
+        typo_pattern: The typo pattern
+        word_pattern: The word pattern
+        other_typo: Other correction's typo
+        other_word: Other correction's word
+
+    Returns:
+        Tuple of (is_unsafe, error_message)
+    """
+    remaining = other_typo[len(typo_pattern) :]
+    pattern_result = word_pattern + remaining
+
+    # If pattern would produce different result, it's unsafe
+    if pattern_result != other_word:
+        return False, (
+            f"Would incorrectly match '{other_typo}' → '{other_word}' "
+            f"as prefix (would produce '{pattern_result}' instead)"
+        )
+    return True, None
+
+
 def check_pattern_would_incorrectly_match_other_corrections(
     typo_pattern: str,
     word_pattern: str,
@@ -59,28 +125,12 @@ def check_pattern_would_incorrectly_match_other_corrections(
             if other_typo == typo_pattern:
                 continue
 
-            # Calculate what applying the pattern would produce
-            # For suffix matches, we need to preserve any suffix that comes after the pattern
-            # in the original word
-            remaining_typo = other_typo[: -len(typo_pattern)]
-            # Find what comes after the typo_pattern in the original word
-            # The typo_pattern appears at the end of other_typo, so find where it appears
-            # in other_word and get what comes after it
-            typo_pattern_pos_in_word = other_word.rfind(typo_pattern)
-            if typo_pattern_pos_in_word != -1:
-                # Pattern found in word, get what comes after it
-                word_suffix = other_word[typo_pattern_pos_in_word + len(typo_pattern) :]
-                pattern_result = remaining_typo + word_pattern + word_suffix
-            else:
-                # Pattern not found in word, just do simple replacement
-                pattern_result = remaining_typo + word_pattern
-
-            # If pattern would produce different result, it's unsafe
-            if pattern_result != other_word:
-                return False, (
-                    f"Would incorrectly match '{other_typo}' → '{other_word}' "
-                    f"as suffix (would produce '{pattern_result}' instead)"
-                )
+            # Check if pattern would incorrectly match as suffix
+            is_safe, error_msg = _check_suffix_match(
+                typo_pattern, word_pattern, other_typo, other_word
+            )
+            if not is_safe:
+                return False, error_msg
 
         # Check prefix matches (for LTR/Espanso)
         prefix_matches = correction_index.get_prefix_matches(typo_pattern)
@@ -92,16 +142,12 @@ def check_pattern_would_incorrectly_match_other_corrections(
             if other_typo == typo_pattern:
                 continue
 
-            # Calculate what applying the pattern would produce
-            remaining = other_typo[len(typo_pattern) :]
-            pattern_result = word_pattern + remaining
-
-            # If pattern would produce different result, it's unsafe
-            if pattern_result != other_word:
-                return False, (
-                    f"Would incorrectly match '{other_typo}' → '{other_word}' "
-                    f"as prefix (would produce '{pattern_result}' instead)"
-                )
+            # Check if pattern would incorrectly match as prefix
+            is_safe, error_msg = _check_prefix_match(
+                typo_pattern, word_pattern, other_typo, other_word
+            )
+            if not is_safe:
+                return False, error_msg
     else:
         # Fallback to original linear scan (for backward compatibility)
         for other_typo, other_word, _ in all_corrections:
@@ -111,41 +157,19 @@ def check_pattern_would_incorrectly_match_other_corrections(
 
             # Check if pattern appears as SUFFIX of other correction's typo
             if other_typo.endswith(typo_pattern) and other_typo != typo_pattern:
-                # Calculate what applying the pattern would produce
-                # For suffix matches, we need to preserve any suffix that comes after the pattern
-                # in the original word
-                remaining_typo = other_typo[: -len(typo_pattern)]
-                # Find what comes after the typo_pattern in the original word
-                # The typo_pattern appears at the end of other_typo, so find where it appears
-                # in other_word and get what comes after it
-                typo_pattern_pos_in_word = other_word.rfind(typo_pattern)
-                if typo_pattern_pos_in_word != -1:
-                    # Pattern found in word, get what comes after it
-                    word_suffix = other_word[typo_pattern_pos_in_word + len(typo_pattern) :]
-                    pattern_result = remaining_typo + word_pattern + word_suffix
-                else:
-                    # Pattern not found in word, just do simple replacement
-                    pattern_result = remaining_typo + word_pattern
-
-                # If pattern would produce different result, it's unsafe
-                if pattern_result != other_word:
-                    return False, (
-                        f"Would incorrectly match '{other_typo}' → '{other_word}' "
-                        f"as suffix (would produce '{pattern_result}' instead)"
-                    )
+                is_safe, error_msg = _check_suffix_match(
+                    typo_pattern, word_pattern, other_typo, other_word
+                )
+                if not is_safe:
+                    return False, error_msg
 
             # Check if pattern appears as PREFIX of other correction's typo
             if other_typo.startswith(typo_pattern) and other_typo != typo_pattern:
-                # Calculate what applying the pattern would produce
-                remaining = other_typo[len(typo_pattern) :]
-                pattern_result = word_pattern + remaining
-
-                # If pattern would produce different result, it's unsafe
-                if pattern_result != other_word:
-                    return False, (
-                        f"Would incorrectly match '{other_typo}' → '{other_word}' "
-                        f"as prefix (would produce '{pattern_result}' instead)"
-                    )
+                is_safe, error_msg = _check_prefix_match(
+                    typo_pattern, word_pattern, other_typo, other_word
+                )
+                if not is_safe:
+                    return False, error_msg
 
     return True, None
 

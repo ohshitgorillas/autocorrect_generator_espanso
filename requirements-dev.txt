@@ -3,3 +3,8 @@ ruff
 types-tqdm
 types-pyyaml
 pre-commit
+bumpver
+xenon
+sphinx
+sphinx-rtd-theme
+myst-parser

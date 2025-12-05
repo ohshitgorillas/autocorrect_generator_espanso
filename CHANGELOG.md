@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Refactored pipeline module**: Split `pipeline.py` (775 lines) into focused modules: `pipeline.py` (103 lines), `pipeline_helpers.py` (69 lines), `pipeline_reporting.py` (115 lines), and `pipeline_stages.py` (426 lines). Reduced `run_pipeline` complexity from F-rank to C-rank by extracting stage execution and reporting functions into separate modules.
+
 ## [0.7.0] - 2025-12-04
 
 ### Fixed

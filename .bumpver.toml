@@ -1,0 +1,19 @@
+[bumpver]
+current_version = "0.7.0"
+version_pattern = "MAJOR.MINOR.PATCH"
+commit_message = "Bump version {old_version} -> {new_version}"
+commit = true
+tag = true
+tag_message = "v{new_version}"
+
+[bumpver.file_patterns]
+"pyproject.toml" = [
+    'version = "{version}"',
+]
+"entroppy/__init__.py" = [
+    '__version__ = "{version}"',
+]
+"CHANGELOG.md" = [
+    '## [Unreleased]',
+    '## [{version}] - {utcnow:%Y-%m-%d}',
+]

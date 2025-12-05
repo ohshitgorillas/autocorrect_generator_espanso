@@ -47,3 +47,11 @@ repos:
         exclude: ^(tests/|examples/|venv/)
         pass_filenames: false
         stages: [pre-commit]
+      - id: xenon
+        name: xenon
+        entry: ./venv/bin/xenon
+        language: system
+        args: [--max-absolute=C, --max-modules=C, --max-average=C, entroppy]
+        exclude: ^(tests/|examples/|venv/|docs/)
+        pass_filenames: false
+        stages: [pre-commit]

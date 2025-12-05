@@ -54,6 +54,10 @@ def choose_boundary_for_typo(
 
     # Check each boundary from least to most restrictive
     for boundary in boundary_order:
+        # pylint: disable=duplicate-code
+        # Intentional duplication: Same false trigger check pattern used in multiple places
+        # (worker functions, sequential functions in candidate_selection.py) to ensure
+        # consistent validation logic across all code paths where corrections are added.
         would_cause, details = _check_false_trigger_with_details(
             typo,
             boundary,

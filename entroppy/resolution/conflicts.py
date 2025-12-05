@@ -12,7 +12,6 @@ When typing "wherre":
 
 from abc import ABC, abstractmethod
 from collections import defaultdict
-
 from typing import TYPE_CHECKING
 
 from entroppy.core import BoundaryType, Correction
@@ -93,13 +92,24 @@ class SuffixConflictDetector(ConflictDetector):
     """
 
     def contains_substring(self, long_typo: str, short_typo: str) -> bool:
-        """Check if long_typo ends with short_typo."""
-        return long_typo.endswith(short_typo)
+        """Check if long_typo contains short_typo as a substring (anywhere)."""
+        return short_typo in long_typo
 
     def calculate_result(self, long_typo: str, short_typo: str, short_word: str) -> str:
-        """Calculate what Espanso produces: remaining_prefix + short_word."""
-        remaining_prefix = long_typo[: -len(short_typo)]
-        return remaining_prefix + short_word
+        """Calculate what Espanso produces when matching short_typo in long_typo.
+
+        For RIGHT boundaries, Espanso matches right-to-left, so it finds the
+        last occurrence of short_typo in long_typo.
+        """
+        # Find the last occurrence (right-to-left matching)
+        pos = long_typo.rfind(short_typo)
+        if pos == -1:
+            # Should not happen if contains_substring returned True
+            return long_typo
+
+        remaining_prefix = long_typo[:pos]
+        remaining_suffix = long_typo[pos + len(short_typo) :]
+        return remaining_prefix + short_word + remaining_suffix
 
     def get_index_key(self, typo: str) -> str:
         """Get last character for suffix indexing."""
@@ -124,13 +134,24 @@ class PrefixConflictDetector(ConflictDetector):
     """
 
     def contains_substring(self, long_typo: str, short_typo: str) -> bool:
-        """Check if long_typo starts with short_typo."""
-        return long_typo.startswith(short_typo)
+        """Check if long_typo contains short_typo as a substring (anywhere)."""
+        return short_typo in long_typo
 
     def calculate_result(self, long_typo: str, short_typo: str, short_word: str) -> str:
-        """Calculate what Espanso produces: short_word + remaining_suffix."""
-        remaining_suffix = long_typo[len(short_typo) :]
-        return short_word + remaining_suffix
+        """Calculate what Espanso produces when matching short_typo in long_typo.
+
+        For LEFT/NONE/BOTH boundaries, Espanso matches left-to-right, so it finds
+        the first occurrence of short_typo in long_typo.
+        """
+        # Find the first occurrence (left-to-right matching)
+        pos = long_typo.find(short_typo)
+        if pos == -1:
+            # Should not happen if contains_substring returned True
+            return long_typo
+
+        remaining_prefix = long_typo[:pos]
+        remaining_suffix = long_typo[pos + len(short_typo) :]
+        return remaining_prefix + short_word + remaining_suffix
 
     def get_index_key(self, typo: str) -> str:
         """Get first character for prefix indexing."""
@@ -254,7 +275,7 @@ def _process_typo_for_conflicts(
     return False
 
 
-def _build_typo_index(
+def build_typo_index(
     corrections: list[Correction],
     detector: ConflictDetector,
     boundary: BoundaryType,
@@ -282,15 +303,15 @@ def _build_typo_index(
     # Sort typos by length for efficient checking (shorter first)
     sorted_typos = sorted(typo_to_correction.keys(), key=len)
 
-    # Track which typos are blocked
-    typos_to_remove = set()
+    # Track which typos are blocked (by typo string, not full correction)
+    typos_to_remove: set[str] = set()
 
     # Map from blocked correction to blocking correction
     blocking_map: dict[Correction, Correction] = {}
 
     # Build character-based index for efficient lookup
     # Maps character → list of typos with that character at the relevant position
-    candidates_by_char = defaultdict(list)
+    candidates_by_char: defaultdict[str, list[str]] = defaultdict(list)
 
     for typo in sorted_typos:
         if not typo:
@@ -346,7 +367,7 @@ def resolve_conflicts_for_group(
     detector = get_detector_for_boundary(boundary)
 
     # Build index and identify blocked typos
-    typos_to_remove, blocking_map = _build_typo_index(
+    typos_to_remove, blocking_map = build_typo_index(
         corrections, detector, boundary, debug_words, debug_typo_matcher, collect_blocking_map
     )
 

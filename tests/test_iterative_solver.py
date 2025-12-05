@@ -2,13 +2,11 @@
 
 import pytest
 
-from entroppy.core import BoundaryType
 from entroppy.core.boundaries import BoundaryIndex
 from entroppy.resolution.passes import (
     CandidateSelectionPass,
     ConflictRemovalPass,
     PatternGeneralizationPass,
-    PlatformConstraintsPass,
 )
 from entroppy.resolution.solver import IterativeSolver, PassContext
 from entroppy.resolution.state import DictionaryState
@@ -17,6 +15,7 @@ from entroppy.resolution.state import DictionaryState
 class TestIterativeSolver:
     """Test the iterative solver architecture."""
 
+    @pytest.mark.slow
     def test_basic_solver_convergence(self):
         """Test that the solver converges on a simple case."""
         # Create a simple typo map
@@ -42,11 +41,14 @@ class TestIterativeSolver:
             source_words_set=source_words_set,
             user_words_set=set(),
             exclusion_matcher=None,
+            exclusion_set=set(),
             validation_index=validation_index,
             source_index=source_index,
             platform=None,
             min_typo_length=2,
             collision_threshold=2.0,
+            jobs=1,
+            verbose=False,
         )
 
         # Create passes
@@ -64,6 +66,7 @@ class TestIterativeSolver:
         assert result.iterations > 0, "Should run at least one iteration"
         assert len(result.corrections) > 0, "Should have corrections"
 
+    @pytest.mark.slow
     def test_self_healing_conflict_resolution(self):
         """Test that conflicts trigger self-healing (retry with stricter boundaries).
 
@@ -98,11 +101,14 @@ class TestIterativeSolver:
             source_words_set=source_words_set,
             user_words_set=set(),
             exclusion_matcher=None,
+            exclusion_set=set(),
             validation_index=validation_index,
             source_index=source_index,
             platform=None,
             min_typo_length=2,
             collision_threshold=2.0,
+            jobs=1,
+            verbose=False,
         )
 
         # Create passes
@@ -127,6 +133,7 @@ class TestIterativeSolver:
         # Verify that graveyard has entries (from the conflict)
         assert result.graveyard_size > 0, "Graveyard should have rejected corrections"
 
+    @pytest.mark.slow
     def test_multiple_iterations_with_patterns(self):
         """Test that solver handles pattern generalization across iterations."""
         # Create typo map with pattern candidates
@@ -153,11 +160,14 @@ class TestIterativeSolver:
             source_words_set=source_words_set,
             user_words_set=set(),
             exclusion_matcher=None,
+            exclusion_set=set(),
             validation_index=validation_index,
             source_index=source_index,
             platform=None,
             min_typo_length=2,
             collision_threshold=2.0,
+            jobs=1,
+            verbose=False,
         )
 
         # Create passes (including pattern generalization)
@@ -183,7 +193,6 @@ class TestIterativeSolver:
         """Test that platform constraints are enforced by the solver."""
         # This test would need a mock platform with constraints
         # For now, just verify the structure is in place
-        pass
 
 
 if __name__ == "__main__":

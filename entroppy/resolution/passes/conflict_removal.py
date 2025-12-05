@@ -1,16 +1,74 @@
 """Conflict Removal Pass - removes substring conflicts."""
 
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from multiprocessing import Pool
+from typing import TYPE_CHECKING, Any
+
+from tqdm import tqdm
 
 from entroppy.core import BoundaryType
-from entroppy.resolution.conflicts import get_detector_for_boundary
-from entroppy.resolution.state import RejectionReason
+from entroppy.resolution.conflicts import build_typo_index, get_detector_for_boundary
 from entroppy.resolution.solver import Pass
+from entroppy.resolution.state import RejectionReason
 
 if TYPE_CHECKING:
     from entroppy.resolution.state import DictionaryState
-    from entroppy.resolution.solver import PassContext
+
+
+def _process_conflict_batch_worker(
+    boundary: BoundaryType,
+    corrections: list[tuple[str, str, BoundaryType]],
+) -> tuple[
+    list[tuple[str, str, BoundaryType]],  # blocked corrections
+    list[tuple[str, str, BoundaryType, str]],  # graveyard entries (typo, word, boundary, blocker)
+]:
+    """Worker function to process a batch of corrections for conflict detection.
+
+    Args:
+        boundary: The boundary type for this batch
+        corrections: List of corrections to process
+
+    Returns:
+        Tuple of (blocked_corrections, graveyard_entries)
+        - blocked_corrections: List of (typo, word, boundary) tuples to remove
+        - graveyard_entries: List of (typo, word, boundary, blocker_typo) tuples
+    """
+    if not corrections:
+        return [], []
+
+    # Get the appropriate conflict detector for this boundary
+    detector = get_detector_for_boundary(boundary)
+
+    # Use existing build_typo_index function to avoid code duplication
+    # Pass empty debug sets since we don't need debug logging in workers
+    typos_to_remove, blocking_map = build_typo_index(
+        corrections,
+        detector,
+        boundary,
+        debug_words=set(),
+        debug_typo_matcher=None,
+        collect_blocking_map=True,
+    )
+
+    # Build lookup map from typo to full correction
+    typo_to_correction = {c[0]: c for c in corrections}
+
+    # Build return lists
+    blocked_corrections = [typo_to_correction[typo] for typo in typos_to_remove]
+    graveyard_entries = [
+        (
+            typo,
+            typo_to_correction[typo][1],  # word
+            boundary,
+            blocking_map[typo_to_correction[typo]][
+                0
+            ],  # blocker_typo (first element of blocking correction)
+        )
+        for typo in typos_to_remove
+        if typo_to_correction[typo] in blocking_map
+    ]
+
+    return blocked_corrections, graveyard_entries
 
 
 class ConflictRemovalPass(Pass):
@@ -43,15 +101,134 @@ class ConflictRemovalPass(Pass):
         Args:
             state: The dictionary state to modify
         """
-        # Group active corrections by boundary type
+        # Combine active corrections and patterns - both can conflict with each other
+        all_corrections = list(state.active_corrections) + list(state.active_patterns)
+
+        if not all_corrections:
+            return
+
+        # Group by boundary type
         by_boundary = defaultdict(list)
-        for correction in state.active_corrections:
+        for correction in all_corrections:
             _, _, boundary = correction
             by_boundary[boundary].append(correction)
 
-        # Process each boundary group separately
+        # Determine if we should use parallel processing
+        use_parallel = self.context.jobs > 1 and len(all_corrections) >= 100
+
+        if use_parallel:
+            self._process_parallel(state, by_boundary)
+        else:
+            # Process each boundary group sequentially
+            if self.context.verbose:
+                boundary_items: Any = tqdm(
+                    by_boundary.items(),
+                    desc=f"    {self.name}",
+                    unit="boundary",
+                    leave=False,
+                )
+            else:
+                boundary_items = by_boundary.items()
+
+            for boundary, corrections in boundary_items:
+                self._process_boundary_group(state, corrections, boundary)
+
+    def _process_parallel(
+        self,
+        state: "DictionaryState",
+        by_boundary: dict[BoundaryType, list[tuple[str, str, BoundaryType]]],
+    ) -> None:
+        """Process boundary groups in parallel.
+
+        Args:
+            state: The dictionary state
+            by_boundary: Dictionary mapping boundary types to their corrections
+        """
+        # Prepare tasks: each boundary group, and sharded large groups
+        tasks = []
         for boundary, corrections in by_boundary.items():
-            self._process_boundary_group(state, corrections, boundary)
+            if not corrections:
+                continue
+
+            # For large groups (especially NONE), shard by first character
+            if len(corrections) > 1000:
+                # Shard by first character of typo
+                sharded = defaultdict(list)
+                for correction in corrections:
+                    typo = correction[0]
+                    if typo:
+                        first_char = typo[0].lower()
+                        sharded[first_char].append(correction)
+                    else:
+                        # Empty typos go to a special shard
+                        sharded[""].append(correction)
+
+                # Add each shard as a task
+                for shard_corrections in sharded.values():
+                    if shard_corrections:
+                        tasks.append((boundary, shard_corrections))
+            else:
+                # Small group, process as-is
+                tasks.append((boundary, corrections))
+
+        if not tasks:
+            return
+
+        # Process tasks in parallel
+        with Pool(processes=self.context.jobs) as pool:
+            if self.context.verbose:
+                # Use starmap_async for progress tracking
+                async_result = pool.starmap_async(_process_conflict_batch_worker, tasks)
+                # Show progress while waiting
+                with tqdm(
+                    total=len(tasks), desc=f"    {self.name}", unit="batch", leave=False
+                ) as pbar:
+                    while not async_result.ready():
+                        async_result.wait(timeout=0.1)
+                    results = async_result.get()
+                    pbar.update(len(tasks))
+            else:
+                results = pool.starmap(_process_conflict_batch_worker, tasks)
+
+        # Aggregate results and apply removals
+        blocked_corrections = []
+        graveyard_entries = []
+
+        for blocked, graveyard in results:
+            blocked_corrections.extend(blocked)
+            graveyard_entries.extend(graveyard)
+
+        # Apply removals in main thread
+        for correction in blocked_corrections:
+            typo_str, word, boundary_type = correction
+
+            # Remove from active set (check both corrections and patterns)
+            if correction in state.active_corrections:
+                state.remove_correction(
+                    typo_str,
+                    word,
+                    boundary_type,
+                    self.name,
+                    "Blocked by substring conflict",
+                )
+            elif correction in state.active_patterns:
+                state.remove_pattern(
+                    typo_str,
+                    word,
+                    boundary_type,
+                    self.name,
+                    "Blocked by substring conflict",
+                )
+
+        # Add to graveyard
+        for typo_str, word, boundary_type, blocker_typo in graveyard_entries:
+            state.add_to_graveyard(
+                typo_str,
+                word,
+                boundary_type,
+                RejectionReason.BLOCKED_BY_CONFLICT,
+                blocker_typo,
+            )
 
     def _process_boundary_group(
         self,
@@ -86,7 +263,7 @@ class ConflictRemovalPass(Pass):
         # pylint: disable=duplicate-code
         # Similar initialization pattern to conflicts.py, but logic diverges significantly
         # after this point (uses state and different conflict checking)
-        candidates_by_char = defaultdict(list)
+        candidates_by_char: dict[str, list[str]] = defaultdict(list)
 
         for typo in sorted_typos:
             if not typo:
@@ -113,19 +290,28 @@ class ConflictRemovalPass(Pass):
             if typo not in typos_to_remove:
                 candidates_by_char[index_key].append(typo)
 
-        # Remove all blocked corrections
+        # Remove all blocked corrections/patterns
         for typo in typos_to_remove:
             correction = typo_to_correction[typo]
             typo_str, word, boundary_type = correction
 
-            # Remove from active set
-            state.remove_correction(
-                typo_str,
-                word,
-                boundary_type,
-                self.name,
-                "Blocked by substring conflict",
-            )
+            # Remove from active set (check both corrections and patterns)
+            if correction in state.active_corrections:
+                state.remove_correction(
+                    typo_str,
+                    word,
+                    boundary_type,
+                    self.name,
+                    "Blocked by substring conflict",
+                )
+            elif correction in state.active_patterns:
+                state.remove_pattern(
+                    typo_str,
+                    word,
+                    boundary_type,
+                    self.name,
+                    "Blocked by substring conflict",
+                )
 
     def _check_if_blocked(
         self,

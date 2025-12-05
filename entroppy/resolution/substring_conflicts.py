@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 from tqdm import tqdm
 
 from entroppy.core import Correction
+from entroppy.core.boundaries import BoundaryType
+
 from .conflicts import resolve_conflicts_for_group
 
 if TYPE_CHECKING:
@@ -49,7 +51,7 @@ def remove_substring_conflicts(
         Tuple of (list of corrections with conflicts removed, blocking map)
     """
     # Group by boundary type - process each separately
-    by_boundary = {}
+    by_boundary: dict[BoundaryType, list[Correction]] = {}
     for correction in corrections:
         _, _, boundary = correction
         if boundary not in by_boundary:
@@ -61,14 +63,16 @@ def remove_substring_conflicts(
     blocking_map: dict[Correction, Correction] = {}
 
     if verbose and len(by_boundary) > 1:
-        groups_iter = tqdm(
-            by_boundary.items(),
-            desc="Removing conflicts",
-            unit="boundary",
-            total=len(by_boundary),
+        groups_iter: list[tuple[BoundaryType, list[Correction]]] = list(
+            tqdm(
+                by_boundary.items(),
+                desc="Removing conflicts",
+                unit="boundary",
+                total=len(by_boundary),
+            )
         )
     else:
-        groups_iter = by_boundary.items()
+        groups_iter = list(by_boundary.items())
 
     for boundary, group in groups_iter:
         group_final, group_blocking_map = resolve_conflicts_for_group(

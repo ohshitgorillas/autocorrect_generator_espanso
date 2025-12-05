@@ -9,7 +9,6 @@ from entroppy.utils.debug import log_debug_typo, log_debug_word
 
 if TYPE_CHECKING:
     from entroppy.matching import ExclusionMatcher
-    from entroppy.utils.debug import DebugTypoMatcher
 
 
 def log_word_loading(
@@ -30,7 +29,6 @@ def log_word_loading(
         config_max_word_length: Maximum word length
         config_min_word_length: Minimum word length
     """
-
     # Check if word is in user words
     if word in user_words_set:
         log_debug_word(word, "Found in user word list (include file)", "Stage 1")

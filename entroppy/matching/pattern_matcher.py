@@ -72,39 +72,3 @@ class PatternMatcher:
         """
         # Use generator expression for memory efficiency
         return {item for item in items if not self.matches(item)}
-
-    def get_matching_pattern(self, text: str) -> str | None:
-        """Get the pattern that matches the given text.
-
-        Useful for reporting which exclusion rule matched.
-
-        Args:
-            text: The string to find a matching pattern for.
-
-        Returns:
-            The matching pattern string, or None if no match.
-        """
-        if text in self.exact_patterns:
-            return text
-
-        for i, regex in enumerate(self.wildcard_regexes):
-            if regex.match(text):
-                return self._original_wildcards[i]
-
-        return None
-
-    def has_wildcards(self) -> bool:
-        """Check if this matcher contains any wildcard patterns.
-
-        Returns:
-            True if any wildcard patterns exist, False otherwise.
-        """
-        return len(self.wildcard_regexes) > 0
-
-    def has_exact(self) -> bool:
-        """Check if this matcher contains any exact patterns.
-
-        Returns:
-            True if any exact patterns exist, False otherwise.
-        """
-        return len(self.exact_patterns) > 0

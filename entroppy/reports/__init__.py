@@ -1,6 +1,6 @@
 """Report generation for EntropPy."""
 
-from .core import generate_reports, create_report_directory
+from .core import create_report_directory, generate_reports
 from .data import ReportData
 from .helpers import format_time, write_report_header
 

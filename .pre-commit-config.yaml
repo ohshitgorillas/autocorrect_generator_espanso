@@ -1,0 +1,49 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: debug-statements
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        exclude: ^(tests/|examples/|vulture_whitelist\.py)
+      - id: ruff-format
+        exclude: ^(tests/|examples/|vulture_whitelist\.py)
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.1
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-tqdm, types-pyyaml]
+        args: ['--show-error-codes', '--ignore-missing-imports']
+        exclude: ^(tests/|examples/|vulture_whitelist\.py)
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: ./venv/bin/pytest
+        language: system
+        args: ['-v', '-m', 'not slow']
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+      - id: vulture
+        name: vulture
+        entry: ./venv/bin/vulture
+        language: system
+        args: [entroppy, vulture_whitelist.py]
+        exclude: ^(tests/|examples/|venv/)
+        pass_filenames: false
+        stages: [pre-commit]

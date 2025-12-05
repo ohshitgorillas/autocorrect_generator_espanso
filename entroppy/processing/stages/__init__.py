@@ -5,10 +5,7 @@ have been replaced by the iterative solver architecture in entroppy/resolution/.
 Only stages 1-2 (dictionary loading, typo generation) remain here.
 """
 
-from .data_models import (
-    DictionaryData,
-    TypoGenerationResult,
-)
+from .data_models import DictionaryData, TypoGenerationResult
 from .dictionary_loading import load_dictionaries
 from .typo_generation import generate_typos
 

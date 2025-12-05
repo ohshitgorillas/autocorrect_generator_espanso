@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING
 
+from entroppy.core.boundaries import BoundaryType
 from entroppy.core.types import Correction
 
 if TYPE_CHECKING:
@@ -59,8 +60,20 @@ def check_pattern_would_incorrectly_match_other_corrections(
                 continue
 
             # Calculate what applying the pattern would produce
-            remaining = other_typo[: -len(typo_pattern)]
-            pattern_result = remaining + word_pattern
+            # For suffix matches, we need to preserve any suffix that comes after the pattern
+            # in the original word
+            remaining_typo = other_typo[: -len(typo_pattern)]
+            # Find what comes after the typo_pattern in the original word
+            # The typo_pattern appears at the end of other_typo, so find where it appears
+            # in other_word and get what comes after it
+            typo_pattern_pos_in_word = other_word.rfind(typo_pattern)
+            if typo_pattern_pos_in_word != -1:
+                # Pattern found in word, get what comes after it
+                word_suffix = other_word[typo_pattern_pos_in_word + len(typo_pattern) :]
+                pattern_result = remaining_typo + word_pattern + word_suffix
+            else:
+                # Pattern not found in word, just do simple replacement
+                pattern_result = remaining_typo + word_pattern
 
             # If pattern would produce different result, it's unsafe
             if pattern_result != other_word:
@@ -99,8 +112,20 @@ def check_pattern_would_incorrectly_match_other_corrections(
             # Check if pattern appears as SUFFIX of other correction's typo
             if other_typo.endswith(typo_pattern) and other_typo != typo_pattern:
                 # Calculate what applying the pattern would produce
-                remaining = other_typo[: -len(typo_pattern)]
-                pattern_result = remaining + word_pattern
+                # For suffix matches, we need to preserve any suffix that comes after the pattern
+                # in the original word
+                remaining_typo = other_typo[: -len(typo_pattern)]
+                # Find what comes after the typo_pattern in the original word
+                # The typo_pattern appears at the end of other_typo, so find where it appears
+                # in other_word and get what comes after it
+                typo_pattern_pos_in_word = other_word.rfind(typo_pattern)
+                if typo_pattern_pos_in_word != -1:
+                    # Pattern found in word, get what comes after it
+                    word_suffix = other_word[typo_pattern_pos_in_word + len(typo_pattern) :]
+                    pattern_result = remaining_typo + word_pattern + word_suffix
+                else:
+                    # Pattern not found in word, just do simple replacement
+                    pattern_result = remaining_typo + word_pattern
 
                 # If pattern would produce different result, it's unsafe
                 if pattern_result != other_word:
@@ -123,3 +148,72 @@ def check_pattern_would_incorrectly_match_other_corrections(
                     )
 
     return True, None
+
+
+def check_pattern_redundant_with_other_patterns(
+    typo_pattern: str,
+    word_pattern: str,
+    boundary: BoundaryType,
+    accepted_patterns: list[Correction],
+) -> tuple[bool, str | None, Correction | None]:
+    """Check if a pattern would be redundant given already-accepted patterns.
+
+    A pattern is redundant if a shorter pattern would produce the same result.
+    For example, if `tehr -> ther` is already accepted, then `otehr -> other`
+    is redundant because applying `tehr -> ther` to `otehr` produces `other`.
+
+    This check works regardless of matching direction because it checks if
+    applying the shorter pattern to the longer typo produces the same result.
+
+    Args:
+        typo_pattern: The typo pattern to check
+        word_pattern: The word pattern to check
+        boundary: The boundary type of the pattern
+        accepted_patterns: List of already-accepted patterns to check against
+
+    Returns:
+        Tuple of (is_redundant, error_message, blocking_pattern).
+        error_message and blocking_pattern are None if not redundant.
+    """
+    for other_typo, other_word, other_boundary in accepted_patterns:
+        # Only check patterns with the same boundary type
+        if other_boundary != boundary:
+            continue
+
+        # Skip if patterns are the same
+        if other_typo == typo_pattern and other_word == word_pattern:
+            continue
+
+        # Only check if shorter pattern is a substring of longer pattern
+        if len(other_typo) >= len(typo_pattern):
+            continue
+
+        # Check all positions where shorter pattern appears in longer pattern
+        start_pos = 0
+        while True:
+            pos = typo_pattern.find(other_typo, start_pos)
+            if pos == -1:
+                break
+
+            # Calculate what applying the shorter pattern would produce
+            # Replace other_typo with other_word at position pos in typo_pattern
+            remaining_prefix = typo_pattern[:pos]
+            remaining_suffix = typo_pattern[pos + len(other_typo) :]
+            result = remaining_prefix + other_word + remaining_suffix
+
+            # If applying shorter pattern produces same result, longer pattern is redundant
+            if result == word_pattern:
+                blocking_pattern = (other_typo, other_word, other_boundary)
+                return (
+                    True,
+                    (
+                        f"Redundant: shorter pattern '{other_typo}' → '{other_word}' "
+                        f"already produces '{word_pattern}' when applied to '{typo_pattern}' "
+                        f"(at position {pos})"
+                    ),
+                    blocking_pattern,
+                )
+
+            start_pos = pos + 1
+
+    return False, None, None

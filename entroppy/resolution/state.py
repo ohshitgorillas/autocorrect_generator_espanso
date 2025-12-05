@@ -17,6 +17,7 @@ class RejectionReason(Enum):
     PLATFORM_CONSTRAINT = "platform_constraint"
     PATTERN_VALIDATION_FAILED = "pattern_validation_failed"
     EXCLUDED_BY_PATTERN = "excluded_by_pattern"
+    FALSE_TRIGGER = "false_trigger"
 
 
 @dataclass
@@ -91,6 +92,9 @@ class DictionaryState:
 
         # Track what corrections cover which raw typos
         self._coverage_map: dict[str, set[Correction]] = defaultdict(set)
+
+        # Track pattern replacements for reporting
+        self.pattern_replacements: dict[Correction, list[Correction]] = {}
 
     def is_in_graveyard(
         self,
@@ -342,17 +346,6 @@ class DictionaryState:
                 return True
 
         return False
-
-    def get_corrections_for_typo(self, typo: str) -> set[Correction]:
-        """Get all active corrections for a given typo.
-
-        Args:
-            typo: The typo to look up
-
-        Returns:
-            Set of corrections for this typo
-        """
-        return self._coverage_map.get(typo, set()).copy()
 
     def clear_dirty_flag(self) -> None:
         """Mark the state as clean (no changes in this iteration)."""

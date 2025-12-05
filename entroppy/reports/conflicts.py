@@ -15,7 +15,7 @@ def generate_conflicts_report(data: ReportData, report_dir: Path) -> None:
         return
 
     # Group by boundary type
-    by_boundary = {}
+    by_boundary: dict[BoundaryType, list[tuple[str, str, str, str]]] = {}
     for (
         long_typo,
         long_word,
@@ -49,7 +49,7 @@ def generate_conflicts_report(data: ReportData, report_dir: Path) -> None:
             f.write("=" * 70 + "\n\n")
 
             # Group by correction word for compact display
-            by_word = {}
+            by_word: dict[str, list[tuple[str, str, str]]] = {}
             for long_typo, long_word, short_typo, short_word in conflicts:
                 if long_word not in by_word:
                     by_word[long_word] = []

@@ -1,9 +1,10 @@
 """Platform abstraction for EntropPy."""
 
-from .base import MatchDirection, PlatformBackend, PlatformConstraints
+from entroppy.core.types import MatchDirection
+
+from .base import PlatformBackend, PlatformConstraints
 from .espanso import EspansoBackend
 from .qmk import QMKBackend
-
 
 # Platform registry
 _PLATFORMS = {
@@ -13,8 +14,7 @@ _PLATFORMS = {
 
 
 def get_platform_backend(platform_name: str) -> PlatformBackend:
-    """
-    Factory function to get platform backend instance.
+    """Factory function to get platform backend instance.
 
     Args:
         platform_name: Name of platform ('espanso', 'qmk', etc.)

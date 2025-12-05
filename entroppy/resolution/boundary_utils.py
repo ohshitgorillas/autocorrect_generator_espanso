@@ -112,7 +112,7 @@ def _get_example_words_with_prefix(
     Returns:
         List of example words (up to 3 total, prioritizing validation words)
     """
-    examples = []
+    examples: list[str] = []
     # Check validation index first
     if typo in validation_index.prefix_index:
         for word in validation_index.prefix_index[typo]:
@@ -139,7 +139,7 @@ def _get_example_words_with_suffix(
     Returns:
         List of example words (up to 3 total, prioritizing validation words)
     """
-    examples = []
+    examples: list[str] = []
     # Check validation index first
     if typo in validation_index.suffix_index:
         for word in validation_index.suffix_index[typo]:
@@ -166,7 +166,7 @@ def _get_example_words_with_substring(
     Returns:
         List of example words (up to 3 total, prioritizing validation words)
     """
-    examples = []
+    examples: list[str] = []
     # Check validation index first
     for word in validation_index.word_set:
         if (
@@ -206,11 +206,11 @@ def _format_incorrect_transformation(conflict_word: str, typo_str: str, word_str
     if conflict_word.startswith(typo_str):
         # Prefix case
         replacement = conflict_word.replace(typo_str, word_str, 1)
-        return f'"{typo_str}" -> "{word_str}" in {conflict_word} -> ' f"{replacement}  xx INCORRECT"
+        return f'"{typo_str}" -> "{word_str}" in {conflict_word} -> {replacement}  xx INCORRECT'
     if conflict_word.endswith(typo_str):
         # Suffix case
         replacement = conflict_word.rsplit(typo_str, 1)[0] + word_str
-        return f'"{typo_str}" -> "{word_str}" in {conflict_word} -> ' f"{replacement}  xx INCORRECT"
+        return f'"{typo_str}" -> "{word_str}" in {conflict_word} -> {replacement}  xx INCORRECT'
     # Middle substring case
     replacement = conflict_word.replace(typo_str, word_str, 1)
-    return f'"{typo_str}" -> "{word_str}" in {conflict_word} -> ' f"{replacement}  xx INCORRECT"
+    return f'"{typo_str}" -> "{word_str}" in {conflict_word} -> {replacement}  xx INCORRECT'

@@ -2,14 +2,17 @@
 
 from collections import defaultdict
 from multiprocessing import Pool
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 from loguru import logger
 from tqdm import tqdm
 
 from entroppy.core.boundaries import BoundaryIndex, BoundaryType
+from entroppy.core.pattern_conflicts import (
+    check_pattern_redundant_with_other_patterns,
+    check_pattern_would_incorrectly_match_other_corrections,
+)
 from entroppy.core.pattern_extraction import find_prefix_patterns, find_suffix_patterns
-from entroppy.core.pattern_conflicts import check_pattern_would_incorrectly_match_other_corrections
 from entroppy.core.pattern_indexes import CorrectionIndex, SourceWordIndex, ValidationIndexes
 from entroppy.core.pattern_validation import (
     check_pattern_conflicts,
@@ -20,8 +23,7 @@ from entroppy.core.pattern_validation_worker import (
     _validate_single_pattern_worker,
     init_pattern_validation_worker,
 )
-from entroppy.core.types import Correction
-from entroppy.platforms.base import MatchDirection
+from entroppy.core.types import Correction, MatchDirection
 from entroppy.utils.debug import is_debug_correction
 
 from .pattern_logging import (
@@ -61,45 +63,91 @@ def _build_validation_indexes(
 
 def _extract_debug_typos(
     debug_typo_matcher: "DebugTypoMatcher | None",
-) -> set[str] | None:
-    """Extract debug typos set from debug typo matcher.
+) -> tuple[set[str], set[str]] | None:
+    """Extract debug typos sets from debug typo matcher.
 
     Args:
         debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
 
     Returns:
-        Set of debug typos or None if no matcher provided
+        Tuple of (exact_patterns, wildcard_patterns) or None if no matcher provided.
+        exact_patterns: Patterns to match exactly (no wildcards)
+        wildcard_patterns: Core patterns from wildcard patterns (for substring matching)
     """
     if debug_typo_matcher:
-        return set(debug_typo_matcher.exact_patterns)
+        # Extract exact patterns (for exact matching)
+        exact_patterns = set(debug_typo_matcher.exact_patterns)
+
+        # Extract wildcard pattern cores (for substring matching)
+        # Get cores from all wildcard patterns (remove * and boundary markers)
+        wildcard_patterns = set()
+        for pattern in (
+            debug_typo_matcher.wildcard_originals
+            + debug_typo_matcher.left_wildcard_originals
+            + debug_typo_matcher.right_wildcard_originals
+            + debug_typo_matcher.both_wildcard_originals
+        ):
+            # Remove boundary markers and wildcards to get core pattern
+            core = pattern.strip(":").replace("*", "")
+            if core:  # Only add non-empty cores
+                wildcard_patterns.add(core)
+
+        return (exact_patterns, wildcard_patterns)
     return None
 
 
 def _extract_and_merge_patterns(
     corrections: list[Correction],
-    debug_typos_set: set[str] | None,
+    debug_typos_exact: set[str],
+    debug_typos_wildcard: set[str],
     verbose: bool,
-    is_in_graveyard: callable | None = None,
+    is_in_graveyard: Callable[[str, str, BoundaryType], bool] | None = None,
+    pattern_cache: (
+        dict[tuple[str, str, BoundaryType, bool], list[tuple[str, str, BoundaryType, int]]] | None
+    ) = None,
 ) -> dict[tuple[str, str, BoundaryType], list[Correction]]:
     """Extract prefix and suffix patterns and merge them.
 
     Args:
         corrections: List of corrections to analyze
-        debug_typos_set: Set of debug typos for logging
+        debug_typos_exact: Set of exact debug typo patterns (for exact matching)
+        debug_typos_wildcard: Set of wildcard debug typo pattern cores (for substring matching)
         verbose: Whether to print verbose output
+        is_in_graveyard: Optional function to check if a pattern is in graveyard
+            (prevents infinite loops by skipping already-rejected patterns)
+        pattern_cache: Optional cache for pattern extraction results
 
     Returns:
         Dictionary mapping pattern keys to their occurrences
     """
+    # Combine for backward compatibility with existing pattern extraction functions
+    debug_typos_set = (
+        debug_typos_exact | debug_typos_wildcard
+        if (debug_typos_exact or debug_typos_wildcard)
+        else None
+    )
+
     # Extract BOTH prefix and suffix patterns
     # Both types are useful regardless of match direction:
     # - Prefix patterns: match at start of words (e.g., "teh" → "the")
     # - Suffix patterns: match at end of words (e.g., "toin" → "tion")
     prefix_patterns = find_prefix_patterns(
-        corrections, debug_typos=debug_typos_set, verbose=verbose, is_in_graveyard=is_in_graveyard
+        corrections,
+        debug_typos=debug_typos_set,
+        debug_typos_exact=debug_typos_exact,
+        debug_typos_wildcard=debug_typos_wildcard,
+        verbose=verbose,
+        is_in_graveyard=is_in_graveyard,
+        pattern_cache=pattern_cache,
     )
     suffix_patterns = find_suffix_patterns(
-        corrections, debug_typos=debug_typos_set, verbose=verbose, is_in_graveyard=is_in_graveyard
+        corrections,
+        debug_typos=debug_typos_set,
+        debug_typos_exact=debug_typos_exact,
+        debug_typos_wildcard=debug_typos_wildcard,
+        verbose=verbose,
+        is_in_graveyard=is_in_graveyard,
+        pattern_cache=pattern_cache,
     )
 
     # Combine both pattern types into single dict
@@ -194,6 +242,7 @@ def _validate_single_pattern_single_threaded(
         source_words,
         match_direction,
         indexes.validation_index,
+        boundary,
         indexes.source_word_index,
         target_words=target_words,
     )
@@ -212,6 +261,114 @@ def _validate_single_pattern_single_threaded(
         return False, incorrect_match_error or "Incorrect match"
 
     return True, None
+
+
+def _handle_pattern_rejection(
+    typo_pattern: str,
+    word_pattern: str,
+    boundary: BoundaryType,
+    occurrences: list[Correction],
+    error_message: str | None,
+    is_debug_pattern_flag: bool,
+    has_debug_occurrence: bool,
+    debug_words: set[str],
+    debug_typo_matcher: "DebugTypoMatcher | None",
+    rejected_patterns: list[tuple[str, str, BoundaryType, str]],
+) -> bool:
+    """Handle pattern rejection.
+
+    Args:
+        typo_pattern: The typo pattern
+        word_pattern: The word pattern
+        boundary: The boundary type
+        occurrences: List of occurrences
+        error_message: Error message for rejection
+        is_debug_pattern_flag: Whether this is a debug pattern
+        has_debug_occurrence: Whether any occurrence is being debugged
+        debug_words: Set of words to debug
+        debug_typo_matcher: Matcher for debug typos
+        rejected_patterns: List to append rejected patterns to
+
+    Returns:
+        True if pattern should be skipped (rejected), False otherwise
+    """
+    reason = error_message or "Unknown error"
+    if error_message == "Too few occurrences":
+        return True  # Skip silently if already filtered
+    process_rejected_pattern(
+        typo_pattern,
+        word_pattern,
+        boundary,
+        reason,
+        occurrences,
+        is_debug_pattern_flag,
+        has_debug_occurrence,
+        debug_words,
+        debug_typo_matcher,
+        rejected_patterns,
+    )
+    return True
+
+
+def _handle_redundant_pattern(
+    typo_pattern: str,
+    word_pattern: str,
+    boundary: BoundaryType,
+    occurrences: list[Correction],
+    patterns: list[Correction],
+    is_debug_pattern_flag: bool,
+    has_debug_occurrence: bool,
+    debug_words: set[str],
+    debug_typo_matcher: "DebugTypoMatcher | None",
+    rejected_patterns: list[tuple[str, str, BoundaryType, str]],
+) -> bool:
+    """Check and handle redundant pattern.
+
+    Args:
+        typo_pattern: The typo pattern
+        word_pattern: The word pattern
+        boundary: The boundary type
+        occurrences: List of occurrences
+        patterns: List of already-accepted patterns
+        is_debug_pattern_flag: Whether this is a debug pattern
+        has_debug_occurrence: Whether any occurrence is being debugged
+        debug_words: Set of words to debug
+        debug_typo_matcher: Matcher for debug typos
+        rejected_patterns: List to append rejected patterns to
+
+    Returns:
+        True if pattern is redundant (should be skipped), False otherwise
+    """
+    is_redundant, redundancy_error, blocking_pattern = check_pattern_redundant_with_other_patterns(
+        typo_pattern,
+        word_pattern,
+        boundary,
+        patterns,
+    )
+    if is_redundant:
+        reason = redundancy_error or "Redundant with shorter pattern"
+        # Enhanced debug logging for redundancy rejection
+        if is_debug_pattern_flag and blocking_pattern:
+            blocking_typo, blocking_word, _ = blocking_pattern
+            logger.debug(
+                f"[PATTERN GENERALIZATION] Pattern '{typo_pattern}' → '{word_pattern}' "
+                f"rejected as redundant: shorter pattern '{blocking_typo}' → '{blocking_word}' "
+                f"already handles this case"
+            )
+        process_rejected_pattern(
+            typo_pattern,
+            word_pattern,
+            boundary,
+            reason,
+            occurrences,
+            is_debug_pattern_flag,
+            has_debug_occurrence,
+            debug_words,
+            debug_typo_matcher,
+            rejected_patterns,
+        )
+        return True
+    return False
 
 
 def _run_single_threaded_validation(
@@ -248,20 +405,74 @@ def _run_single_threaded_validation(
     Returns:
         Tuple of (patterns, corrections_to_remove, pattern_replacements, rejected_patterns)
     """
-    patterns = []
-    corrections_to_remove = set()
-    pattern_replacements = {}
-    rejected_patterns = []
+    patterns: list[Correction] = []
+    corrections_to_remove: set[Correction] = set()
+    pattern_replacements: dict[Correction, list[Correction]] = {}
+    rejected_patterns: list[tuple[str, str, BoundaryType, str]] = []
 
-    patterns_iter = patterns_to_validate.items()
     if verbose:
-        patterns_iter = tqdm(
-            patterns_to_validate.items(),
-            desc="    Validating patterns",
-            unit="pattern",
-            leave=False,
+        patterns_iter: list[tuple[tuple[str, str, BoundaryType], list[Correction]]] = list(
+            tqdm(
+                patterns_to_validate.items(),
+                desc="    Validating patterns",
+                unit="pattern",
+                leave=False,
+            )
         )
+    else:
+        patterns_iter = list(patterns_to_validate.items())
 
+    _process_patterns_single_threaded(
+        patterns_iter,
+        min_typo_length,
+        validation_set,
+        source_words,
+        match_direction,
+        corrections,
+        indexes,
+        debug_words,
+        debug_typo_matcher,
+        patterns,
+        pattern_replacements,
+        corrections_to_remove,
+        rejected_patterns,
+    )
+
+    return patterns, corrections_to_remove, pattern_replacements, rejected_patterns
+
+
+def _process_patterns_single_threaded(
+    patterns_iter: list[tuple[tuple[str, str, BoundaryType], list[Correction]]],
+    min_typo_length: int,
+    validation_set: set[str],
+    source_words: set[str],
+    match_direction: MatchDirection,
+    corrections: list[Correction],
+    indexes: ValidationIndexes,
+    debug_words: set[str],
+    debug_typo_matcher: "DebugTypoMatcher | None",
+    patterns: list[Correction],
+    pattern_replacements: dict[Correction, list[Correction]],
+    corrections_to_remove: set[Correction],
+    rejected_patterns: list[tuple[str, str, BoundaryType, str]],
+) -> None:
+    """Process patterns in single-threaded validation loop.
+
+    Args:
+        patterns_iter: Iterator over patterns to validate
+        min_typo_length: Minimum typo length
+        validation_set: Set of valid words
+        source_words: Set of source words
+        match_direction: Platform match direction
+        corrections: All corrections to check against
+        indexes: Validation indexes
+        debug_words: Set of words to debug
+        debug_typo_matcher: Matcher for debug typos
+        patterns: List to append accepted patterns to
+        pattern_replacements: Dict to store pattern replacements
+        corrections_to_remove: Set to add corrections to remove to
+        rejected_patterns: List to append rejected patterns to
+    """
     for (typo_pattern, word_pattern, boundary), occurrences in patterns_iter:
         # Check if any of the occurrences involve debug items (for logging)
         has_debug_occurrence = any(
@@ -291,26 +502,37 @@ def _run_single_threaded_validation(
             corrections,
             indexes,
             debug_typo_matcher,
-            verbose,
+            False,  # verbose not needed in loop
         )
 
         if not is_valid:
-            # Handle rejection
-            reason = error_message or "Unknown error"
-            if error_message == "Too few occurrences":
-                continue  # Skip silently if already filtered
-            process_rejected_pattern(
+            if _handle_pattern_rejection(
                 typo_pattern,
                 word_pattern,
                 boundary,
-                reason,
                 occurrences,
+                error_message,
                 is_debug_pattern_flag,
                 has_debug_occurrence,
                 debug_words,
                 debug_typo_matcher,
                 rejected_patterns,
-            )
+            ):
+                continue
+
+        # Check if pattern is redundant with already-accepted patterns
+        if _handle_redundant_pattern(
+            typo_pattern,
+            word_pattern,
+            boundary,
+            occurrences,
+            patterns,
+            is_debug_pattern_flag,
+            has_debug_occurrence,
+            debug_words,
+            debug_typo_matcher,
+            rejected_patterns,
+        ):
             continue
 
         # Pattern passed all checks - accept it
@@ -330,8 +552,6 @@ def _run_single_threaded_validation(
             pattern_replacements,
             corrections_to_remove,
         )
-
-    return patterns, corrections_to_remove, pattern_replacements, rejected_patterns
 
 
 def _run_parallel_validation(
@@ -393,19 +613,26 @@ def _run_parallel_validation(
         initargs=(context,),
     ) as pool:
         pattern_items = list(patterns_to_validate.items())
-        results = pool.imap_unordered(_validate_single_pattern_worker, pattern_items)
+        results_iter = pool.imap_unordered(_validate_single_pattern_worker, pattern_items)
 
         # Wrap with progress bar if verbose
         if verbose:
-            results = tqdm(
-                results,
+            results_wrapped: Any = tqdm(
+                results_iter,
                 total=len(pattern_items),
                 desc="    Validating patterns",
                 unit="pattern",
                 leave=False,
             )
+        else:
+            results_wrapped = results_iter
 
-        for is_accepted, pattern, pattern_corrections_to_remove, rejected_pattern in results:
+        for (
+            is_accepted,
+            pattern,
+            pattern_corrections_to_remove,
+            rejected_pattern,
+        ) in results_wrapped:
             if is_accepted and pattern:
                 patterns.append(pattern)
                 pattern_key = pattern
@@ -415,4 +642,92 @@ def _run_parallel_validation(
             elif rejected_pattern:
                 rejected_patterns.append(rejected_pattern)
 
-    return patterns, corrections_to_remove, pattern_replacements, rejected_patterns
+    # Post-process to remove redundant patterns (parallel validation can't check during validation)
+    return _remove_redundant_patterns_post_process(
+        patterns, pattern_replacements, corrections_to_remove, rejected_patterns, debug_words
+    )
+
+
+def _remove_redundant_patterns_post_process(
+    patterns: list[Correction],
+    pattern_replacements: dict[Correction, list[Correction]],
+    corrections_to_remove: set[Correction],
+    rejected_patterns: list[tuple[str, str, BoundaryType, str]],
+    debug_words: set[str],
+) -> tuple[
+    list[Correction],
+    set[Correction],
+    dict[Correction, list[Correction]],
+    list[tuple[str, str, BoundaryType, str]],
+]:
+    """Post-process parallel validation results to remove redundant patterns.
+
+    Args:
+        patterns: List of accepted patterns from parallel validation
+        pattern_replacements: Dict mapping patterns to their replacement corrections
+        corrections_to_remove: Set of corrections to remove
+        rejected_patterns: List of rejected patterns
+        debug_words: Set of words to debug
+
+    Returns:
+        Tuple of (non_redundant_patterns, corrections_to_remove,
+        non_redundant_replacements, rejected_patterns)
+    """
+    # Sort patterns by length (shorter first) to ensure we check shorter patterns first
+    patterns_sorted = sorted(patterns, key=lambda p: len(p[0]))
+    non_redundant_patterns: list[Correction] = []
+    non_redundant_replacements: dict[Correction, list[Correction]] = {}
+    debug_typo_matcher = None  # Not available in parallel mode, but needed for logging
+
+    for pattern in patterns_sorted:
+        typo_pattern, word_pattern, boundary = pattern
+        occurrences = pattern_replacements.get(pattern, [])
+        has_debug_occurrence = any(
+            is_debug_correction(occ, debug_words, debug_typo_matcher) for occ in occurrences
+        )
+        is_debug_pattern_flag = is_debug_pattern(typo_pattern, occurrences, debug_typo_matcher)
+
+        # Check if this pattern is redundant with already-accepted patterns
+        is_redundant, redundancy_error, blocking_pattern = (
+            check_pattern_redundant_with_other_patterns(
+                typo_pattern,
+                word_pattern,
+                boundary,
+                non_redundant_patterns,
+            )
+        )
+        if is_redundant:
+            reason = redundancy_error or "Redundant with shorter pattern"
+            # Enhanced debug logging for redundancy rejection
+            if is_debug_pattern_flag and blocking_pattern:
+                blocking_typo, blocking_word, _ = blocking_pattern
+                logger.debug(
+                    f"[PATTERN GENERALIZATION] Pattern '{typo_pattern}' → '{word_pattern}' "
+                    f"rejected as redundant: shorter pattern '{blocking_typo}' → '{blocking_word}' "
+                    f"already handles this case"
+                )
+            process_rejected_pattern(
+                typo_pattern,
+                word_pattern,
+                boundary,
+                reason,
+                occurrences,
+                is_debug_pattern_flag,
+                has_debug_occurrence,
+                debug_words,
+                debug_typo_matcher,
+                rejected_patterns,
+            )
+            # Remove corrections that would have been replaced by this redundant pattern
+            for correction in occurrences:
+                corrections_to_remove.discard(correction)
+        else:
+            non_redundant_patterns.append(pattern)
+            non_redundant_replacements[pattern] = occurrences
+
+    return (
+        non_redundant_patterns,
+        corrections_to_remove,
+        non_redundant_replacements,
+        rejected_patterns,
+    )

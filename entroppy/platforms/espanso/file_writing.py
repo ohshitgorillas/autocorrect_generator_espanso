@@ -1,13 +1,13 @@
 """Espanso YAML file writing utilities."""
 
-import os
 from multiprocessing import Pool
+import os
 
 from loguru import logger
 
+from entroppy.platforms.espanso.yaml_helpers import write_yaml_to_stream
 from entroppy.utils import expand_file_path
 from entroppy.utils.helpers import ensure_directory_exists, write_file_safely
-from entroppy.platforms.espanso.yaml_helpers import write_yaml_to_stream
 
 
 def write_single_yaml_file(args: tuple) -> tuple[str, int]:

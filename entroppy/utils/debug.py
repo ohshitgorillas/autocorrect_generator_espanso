@@ -5,11 +5,10 @@ from re import Pattern
 
 from loguru import logger
 
-from entroppy.utils.helpers import compile_wildcard_regex
-
 # Import at module level - these are safe because they don't import from utils
 from entroppy.core.boundaries import BoundaryType
 from entroppy.core.types import Correction
+from entroppy.utils.helpers import compile_wildcard_regex
 
 
 @dataclass(frozen=True)
@@ -221,7 +220,7 @@ class DebugTypoMatcher:
 # Helper functions for checking debug status
 
 
-def is_debug_word(word: str, debug_words: set[str]) -> bool:
+def is_debug_word(word: str, debug_words: set[str] | frozenset[str]) -> bool:
     """Check if word is being debugged (exact match only).
 
     Args:

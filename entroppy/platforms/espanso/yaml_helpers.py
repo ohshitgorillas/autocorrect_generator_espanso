@@ -3,8 +3,8 @@
 import sys
 from typing import TextIO
 
-import yaml
 from loguru import logger
+import yaml
 
 
 def write_yaml_to_stream(

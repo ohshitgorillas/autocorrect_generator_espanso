@@ -1,11 +1,12 @@
 """Integration tests for typo generation with worker context."""
 
-import pytest
 import concurrent.futures
 
+import pytest
+
 from entroppy.core import Config
-from entroppy.processing.stages.data_models import DictionaryData
 from entroppy.processing.stages import generate_typos
+from entroppy.processing.stages.data_models import DictionaryData
 
 
 class TestTypoGenerationWithContext:

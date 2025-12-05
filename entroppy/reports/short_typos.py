@@ -23,7 +23,7 @@ def generate_short_typos_report(data: ReportData, report_dir: Path) -> None:
         f.write("=" * 70 + "\n\n")
 
         # Group by length
-        by_length = {}
+        by_length: dict[int, list[tuple[str, str]]] = {}
         for typo, word, length in data.skipped_short:
             if length not in by_length:
                 by_length[length] = []

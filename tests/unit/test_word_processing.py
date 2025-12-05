@@ -6,7 +6,8 @@ filtering applied. Each test has a single assertion and focuses on behavior.
 
 from unittest.mock import patch
 
-from entroppy.resolution.word_processing import process_word, _add_debug_message
+from entroppy.resolution.word_processing import process_word
+from entroppy.resolution.word_processing_logging import add_debug_message
 from entroppy.utils.debug import DebugTypoMatcher
 
 
@@ -74,7 +75,7 @@ class TestProcessWordGeneratesCorrections:
             exclusions,
         )
 
-        assert corrections == []
+        assert not corrections
 
 
 class TestProcessWordFiltersSourceWords:
@@ -450,7 +451,7 @@ class TestProcessWordReturnsDebugMessages:
             )
 
         # No debug messages when not debugging
-        assert debug_messages == []
+        assert not debug_messages
 
 
 class TestProcessWordSkipsEqualTypos:
@@ -492,7 +493,7 @@ class TestAddDebugMessage:
         message_word = "Test message"
         message_typo = "Typo message"
 
-        _add_debug_message(
+        add_debug_message(
             debug_messages,
             is_debug,
             typo_debug_check,
@@ -514,7 +515,7 @@ class TestAddDebugMessage:
         message_word = "Test message"
         message_typo = "Typo message"
 
-        _add_debug_message(
+        add_debug_message(
             debug_messages,
             is_debug,
             typo_debug_check,
@@ -536,7 +537,7 @@ class TestAddDebugMessage:
         message_word = "Test message"
         message_typo = "Typo message"
 
-        _add_debug_message(
+        add_debug_message(
             debug_messages,
             is_debug,
             typo_debug_check,
@@ -558,7 +559,7 @@ class TestAddDebugMessage:
         message_word = "Test message"
         message_typo = "Typo message"
 
-        _add_debug_message(
+        add_debug_message(
             debug_messages,
             is_debug,
             typo_debug_check,
@@ -580,7 +581,7 @@ class TestAddDebugMessage:
         message_word = "Test message"
         message_typo = "Typo message"
 
-        _add_debug_message(
+        add_debug_message(
             debug_messages,
             is_debug,
             typo_debug_check,
@@ -602,7 +603,7 @@ class TestAddDebugMessage:
         message_word = "Test message"
         message_typo = "Typo message"
 
-        _add_debug_message(
+        add_debug_message(
             debug_messages,
             is_debug,
             typo_debug_check,
@@ -624,7 +625,7 @@ class TestAddDebugMessage:
         message_word = "Test message"
         message_typo = "Typo message"
 
-        _add_debug_message(
+        add_debug_message(
             debug_messages,
             is_debug,
             typo_debug_check,

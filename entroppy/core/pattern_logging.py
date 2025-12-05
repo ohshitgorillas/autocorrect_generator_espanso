@@ -78,7 +78,7 @@ def process_rejected_pattern(
         boundary: The boundary type
         reason: Reason for rejection
         occurrences: List of occurrences for this pattern
-        is_debug_pattern: Whether this is a debug pattern
+        is_debug_pattern_flag: Whether this is a debug pattern
         has_debug_occurrence: Whether any occurrence is a debug item
         debug_words: Set of words to debug
         debug_typo_matcher: Matcher for debug typos

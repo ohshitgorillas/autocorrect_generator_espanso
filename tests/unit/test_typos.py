@@ -4,12 +4,12 @@ Tests verify typo generation behavior. Each test has exactly one assertion.
 """
 
 from entroppy.core.typos import (
-    generate_transpositions,
-    generate_omissions,
+    generate_all_typos,
     generate_duplications,
     generate_insertions,
+    generate_omissions,
     generate_replacements,
-    generate_all_typos,
+    generate_transpositions,
 )
 
 

@@ -8,8 +8,6 @@ import pytest
 
 from entroppy.matching import PatternMatcher
 
-# pylint: disable=protected-access
-
 
 class TestPatternMatcherBehavior:
     """Test PatternMatcher behavior with various patterns and operations."""
@@ -97,30 +95,6 @@ class TestPatternMatcherFilterSet:
         # "exact" matches exact pattern, "gowild" matches "*wild" pattern
         # "wildcard" and "keep" don't match any pattern
         assert result == {"wildcard", "keep"}
-
-
-class TestPatternMatcherGetMatchingPattern:
-    """Test the get_matching_pattern() method for identifying which pattern matched."""
-
-    def test_get_matching_pattern_for_exact(self) -> None:
-        matcher = PatternMatcher({"test"})
-        result = matcher.get_matching_pattern("test")
-        assert result == "test"
-
-    def test_get_matching_pattern_for_wildcard(self) -> None:
-        matcher = PatternMatcher({"*ball"})
-        result = matcher.get_matching_pattern("football")
-        assert result == "*ball"
-
-    def test_get_matching_pattern_returns_none_when_no_match(self) -> None:
-        matcher = PatternMatcher({"test"})
-        result = matcher.get_matching_pattern("other")
-        assert result is None
-
-    def test_get_matching_pattern_with_overlapping_patterns(self) -> None:
-        matcher = PatternMatcher({"test", "*est"})
-        result = matcher.get_matching_pattern("test")
-        assert result == "test"
 
 
 @pytest.mark.parametrize(

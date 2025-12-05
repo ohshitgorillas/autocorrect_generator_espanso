@@ -6,15 +6,16 @@ from typing import TYPE_CHECKING
 from entroppy.core.boundaries import (
     BoundaryIndex,
     BoundaryType,
+    is_substring_of_any,
     would_trigger_at_end,
     would_trigger_at_start,
 )
-from entroppy.platforms.base import MatchDirection
+from entroppy.core.types import MatchDirection
 from entroppy.utils.debug import log_debug_correction
 
 if TYPE_CHECKING:
-    from entroppy.utils.debug import DebugTypoMatcher
     from entroppy.core.pattern_indexes import SourceWordIndex
+    from entroppy.utils.debug import DebugTypoMatcher
 
 
 # Cache for pattern validation results
@@ -209,10 +210,54 @@ def validate_pattern_for_all_occurrences(
         )
         if not is_valid:
             error_msg = (
-                f"Creates '{expected_result}' instead of " f"'{full_word}' for typo '{full_typo}'"
+                f"Creates '{expected_result}' instead of '{full_word}' for typo '{full_typo}'"
             )
             return False, error_msg
     return True, None
+
+
+def _find_example_prefix_match(
+    typo_pattern: str, validation_index: BoundaryIndex, validation_set: set[str]
+) -> str | None:
+    """Find an example validation word that starts with the typo pattern.
+
+    Args:
+        typo_pattern: The typo pattern to check
+        validation_index: Pre-built index for validation_set
+        validation_set: Set of validation words
+
+    Returns:
+        An example word that starts with the pattern, or None if not found
+    """
+    if typo_pattern in validation_index.prefix_index:
+        matching_words = validation_index.prefix_index[typo_pattern]
+        # Exclude exact match and return first example
+        for word in matching_words:
+            if word != typo_pattern and word in validation_set:
+                return word
+    return None
+
+
+def _find_example_suffix_match(
+    typo_pattern: str, validation_index: BoundaryIndex, validation_set: set[str]
+) -> str | None:
+    """Find an example validation word that ends with the typo pattern.
+
+    Args:
+        typo_pattern: The typo pattern to check
+        validation_index: Pre-built index for validation_set
+        validation_set: Set of validation words
+
+    Returns:
+        An example word that ends with the pattern, or None if not found
+    """
+    if typo_pattern in validation_index.suffix_index:
+        matching_words = validation_index.suffix_index[typo_pattern]
+        # Exclude exact match and return first example
+        for word in matching_words:
+            if word != typo_pattern and word in validation_set:
+                return word
+    return None
 
 
 def check_pattern_conflicts(
@@ -221,6 +266,7 @@ def check_pattern_conflicts(
     source_words: set[str],
     match_direction: MatchDirection,
     validation_index: BoundaryIndex,
+    boundary: BoundaryType,
     source_word_index: "SourceWordIndex | None" = None,
     target_words: set[str] | None = None,
 ) -> tuple[bool, str | None]:
@@ -232,6 +278,7 @@ def check_pattern_conflicts(
         source_words: Set of source words
         match_direction: The match direction
         validation_index: Pre-built index for validation_set (must match validation_set)
+        boundary: The boundary type of the pattern (determines which checks to skip)
         source_word_index: Optional pre-built index for source_words (for optimization)
         target_words: Optional set of target words to check against
             (prevents predictive corrections)
@@ -244,12 +291,43 @@ def check_pattern_conflicts(
         return False, f"Conflicts with validation word '{typo_pattern}'"
 
     # Check if pattern would trigger at end of validation words
-    if would_trigger_at_end(typo_pattern, validation_index):
-        return False, "Would trigger at end of validation words"
+    # Skip this check for LEFT and BOTH boundaries (they don't match at word end)
+    if boundary not in (BoundaryType.LEFT, BoundaryType.BOTH):
+        if would_trigger_at_end(typo_pattern, validation_index):
+            # Find an example validation word that ends with the pattern
+            example_word = _find_example_suffix_match(
+                typo_pattern, validation_index, validation_set
+            )
+            if example_word:
+                return False, f"Would trigger at end of validation words (e.g., '{example_word}')"
+            return False, "Would trigger at end of validation words"
 
     # Check if pattern would trigger at start of validation words
-    if would_trigger_at_start(typo_pattern, validation_index):
-        return False, "Would trigger at start of validation words"
+    # Skip this check for RIGHT and BOTH boundaries (they don't match at word start)
+    if boundary not in (BoundaryType.RIGHT, BoundaryType.BOTH):
+        if would_trigger_at_start(typo_pattern, validation_index):
+            # Find an example validation word that starts with the pattern
+            example_word = _find_example_prefix_match(
+                typo_pattern, validation_index, validation_set
+            )
+            if example_word:
+                return False, f"Would trigger at start of validation words (e.g., '{example_word}')"
+            return False, "Would trigger at start of validation words"
+
+    # Check if pattern appears as substring in validation words (for NONE boundary)
+    # NONE boundary matches anywhere, so it would cause false triggers if the pattern
+    # appears as a substring in any validation word
+    if boundary == BoundaryType.NONE:
+        if is_substring_of_any(typo_pattern, validation_index):
+            # Find an example validation word containing the pattern
+            example_word = None
+            for word in validation_set:
+                if typo_pattern in word and typo_pattern != word:
+                    example_word = word
+                    break
+            if example_word:
+                return False, f"Would falsely trigger on correctly spelled word '{example_word}'"
+            return False, "Would falsely trigger on correctly spelled words"
 
     # FIRST: Check if pattern would corrupt target words
     # (highest priority - prevents predictive corrections)

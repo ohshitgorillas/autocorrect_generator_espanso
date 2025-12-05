@@ -4,14 +4,15 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from entroppy.core.boundaries import BoundaryType
 from entroppy.core.patterns import generalize_patterns
-from entroppy.platforms.base import MatchDirection
-from entroppy.resolution.state import RejectionReason
+from entroppy.core.types import MatchDirection
 from entroppy.resolution.solver import Pass
+from entroppy.resolution.state import RejectionReason
 
 if TYPE_CHECKING:
-    from entroppy.resolution.state import DictionaryState
     from entroppy.resolution.solver import PassContext
+    from entroppy.resolution.state import DictionaryState
 
 
 class PatternGeneralizationPass(Pass):
@@ -28,6 +29,20 @@ class PatternGeneralizationPass(Pass):
         - Creates pattern "*er" -> "*re"
         - Removes the specific corrections
     """
+
+    def __init__(self, context: "PassContext") -> None:
+        """Initialize the pass with context and pattern extraction cache.
+
+        Args:
+            context: Shared context with resources
+        """
+        super().__init__(context)
+        # Cache for pattern extraction results
+        # Key: (typo, word, boundary, is_suffix) - correction + pattern type
+        # Value: List of (typo_pattern, word_pattern, boundary, length) - extracted patterns
+        self._pattern_cache: dict[
+            tuple[str, str, BoundaryType, bool], list[tuple[str, str, BoundaryType, int]]
+        ] = {}
 
     @property
     def name(self) -> str:
@@ -53,18 +68,24 @@ class PatternGeneralizationPass(Pass):
         corrections_list = list(state.active_corrections)
 
         try:
-            patterns, corrections_to_remove, _, rejected_patterns = generalize_patterns(
-                corrections_list,
-                self.context.validation_set,
-                self.context.source_words_set,
-                self.context.min_typo_length,
-                match_direction,
-                verbose=False,
-                debug_words=state.debug_words,
-                debug_typo_matcher=state.debug_typo_matcher,
-                jobs=1,  # Single-threaded for now (can be parallelized later)
-                is_in_graveyard=state.is_in_graveyard,
+            patterns, corrections_to_remove, pattern_replacements, rejected_patterns = (
+                generalize_patterns(
+                    corrections_list,
+                    self.context.filtered_validation_set,
+                    self.context.source_words_set,
+                    self.context.min_typo_length,
+                    match_direction,
+                    verbose=self.context.verbose,
+                    debug_words=state.debug_words,
+                    debug_typo_matcher=state.debug_typo_matcher,
+                    jobs=self.context.jobs,
+                    is_in_graveyard=state.is_in_graveyard,
+                    pattern_cache=self._pattern_cache,
+                )
             )
+
+            # Store pattern replacements in state for reporting
+            state.pattern_replacements.update(pattern_replacements)
 
             # Add rejected patterns to graveyard to prevent infinite loops
             for typo_pattern, word_pattern, boundary, reason in rejected_patterns:
@@ -107,6 +128,9 @@ class PatternGeneralizationPass(Pass):
             # If pattern generalization fails, continue without patterns
             # This ensures the solver can continue even if pattern logic has issues
             # Catch specific exceptions that might occur during pattern processing
-            if state.debug_words or (state.debug_typo_matcher and state.debug_typo_matcher.matches):
+            if state.debug_words or (
+                state.debug_typo_matcher is not None
+                and hasattr(state.debug_typo_matcher, "matches")
+            ):
                 # Only log if debugging is enabled to avoid noise
                 logger.debug(f"Pattern generalization failed: {e}")

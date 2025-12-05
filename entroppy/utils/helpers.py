@@ -2,8 +2,8 @@
 
 import functools
 import os
-import re
 from pathlib import Path
+import re
 from re import Pattern
 from typing import Callable, TextIO
 
@@ -57,7 +57,7 @@ def cached_word_frequency(word: str, lang: str = "en") -> float:
         significant performance improvements for large datasets with many
         repeated word lookups.
     """
-    return _word_frequency(word, lang)
+    return float(_word_frequency(word, lang))
 
 
 def ensure_directory_exists(dir_path: str | Path) -> None:

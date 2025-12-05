@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Any
 
 from entroppy.core import Config, Correction
-from entroppy.platforms.base import MatchDirection, PlatformBackend, PlatformConstraints
-from entroppy.platforms.qmk.filtering import filter_corrections as qmk_filter_corrections
+from entroppy.core.types import MatchDirection
+from entroppy.platforms.base import PlatformBackend, PlatformConstraints
 from entroppy.platforms.qmk.output import generate_output as qmk_generate_output
 from entroppy.platforms.qmk.ranking import (
     _build_pattern_sets,
@@ -16,8 +16,7 @@ from entroppy.utils import Constants
 
 
 class QMKBackend(PlatformBackend):
-    """
-    Backend for QMK firmware autocorrect.
+    """Backend for QMK firmware autocorrect.
 
     Characteristics:
     - Matches right-to-left
@@ -31,12 +30,12 @@ class QMKBackend(PlatformBackend):
     # QMK character constraints
     ALLOWED_CHARS = set("abcdefghijklmnopqrstuvwxyz'")
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize QMK backend with storage for scoring metadata."""
         # Store scoring information for report generation
-        self._user_corrections = []
-        self._pattern_scores = []
-        self._direct_scores = []
+        self._user_corrections: list[Any] = []
+        self._pattern_scores: list[Any] = []
+        self._direct_scores: list[Any] = []
         # Cache for pattern sets to avoid rebuilding on every ranking call
         self._cached_pattern_typos: set[tuple[str, str]] | None = None
         self._cached_replaced_by_patterns: set[tuple[str, str]] | None = None
@@ -49,28 +48,7 @@ class QMKBackend(PlatformBackend):
             max_word_length=Constants.QMK_MAX_STRING_LENGTH,
             allowed_chars=self.ALLOWED_CHARS,
             supports_boundaries=True,  # Via ':' notation
-            supports_case_propagation=True,
-            supports_regex=False,
             match_direction=MatchDirection.RIGHT_TO_LEFT,
-            output_format="text",
-        )
-
-    def filter_corrections(
-        self, corrections: list[Correction], config: Config
-    ) -> tuple[list[Correction], dict[str, Any]]:
-        """
-        Apply QMK-specific filtering.
-
-        - Character set validation (only a-z and ')
-        - Same-typo-text conflict detection (different boundaries)
-        - Suffix conflict detection (RTL matching optimization)
-        - Substring conflict detection (QMK's hard constraint)
-        """
-        return qmk_filter_corrections(
-            corrections,
-            config.verbose,
-            config.debug_words,
-            config.debug_typo_matcher,
         )
 
     def rank_corrections(
@@ -81,8 +59,7 @@ class QMKBackend(PlatformBackend):
         user_words: set[str],
         config: Config | None = None,
     ) -> list[Correction]:
-        """
-        Rank corrections by QMK-specific usefulness.
+        """Rank corrections by QMK-specific usefulness.
 
         Three-tier system:
         1. User words (infinite priority)
@@ -127,8 +104,7 @@ class QMKBackend(PlatformBackend):
     def generate_output(
         self, corrections: list[Correction], output_path: str | None, config: Config
     ) -> None:
-        """
-        Generate QMK text output.
+        """Generate QMK text output.
 
         Format:
         typo -> correction
@@ -144,24 +120,22 @@ class QMKBackend(PlatformBackend):
         self,
         final_corrections: list[Correction],
         ranked_corrections_before_limit: list[Correction],
-        filtered_corrections: list[Correction],
+        all_corrections: list[Correction],
         patterns: list[Correction],
         pattern_replacements: dict[Correction, list[Correction]],
-        user_words: set[str],
-        filter_metadata: dict[str, Any],
+        _user_words: set[str],
         report_dir: Path,
-        config: Config,
+        _config: Config,
     ) -> dict[str, Any]:
         """Generate QMK ranking report."""
         return generate_qmk_ranking_report(
             final_corrections,
             ranked_corrections_before_limit,
-            filtered_corrections,
+            all_corrections,
             patterns,
             pattern_replacements,
             self._user_corrections,
             self._pattern_scores,
             self._direct_scores,
-            filter_metadata,
             report_dir,
         )

@@ -3,8 +3,7 @@
 from dataclasses import dataclass
 
 from entroppy.core.boundaries import BoundaryIndex
-from entroppy.core.types import Correction
-from entroppy.platforms.base import MatchDirection
+from entroppy.core.types import Correction, MatchDirection
 
 
 class SourceWordIndex:

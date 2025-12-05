@@ -1,22 +1,16 @@
 """Worker functions for parallel pattern validation."""
 
-import threading
-from typing import TYPE_CHECKING
-
 from dataclasses import dataclass
+import threading
 
 from entroppy.core.boundaries import BoundaryIndex, BoundaryType
-from entroppy.core.types import Correction
 from entroppy.core.pattern_conflicts import check_pattern_would_incorrectly_match_other_corrections
 from entroppy.core.pattern_indexes import CorrectionIndex, SourceWordIndex
 from entroppy.core.pattern_validation import (
     check_pattern_conflicts,
     validate_pattern_for_all_occurrences,
 )
-from entroppy.platforms.base import MatchDirection
-
-if TYPE_CHECKING:
-    from entroppy.utils.debug import DebugTypoMatcher
+from entroppy.core.types import Correction, MatchDirection
 
 # Thread-local storage for pattern validation worker context
 _pattern_worker_context = threading.local()
@@ -117,6 +111,7 @@ def _validate_single_pattern_worker(
         set(context.source_words),
         match_direction,
         validation_index,
+        boundary,
         source_word_index,
         target_words=target_words,
     )

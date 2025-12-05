@@ -53,7 +53,7 @@ def generate_reports(
     """
     # Use provided directory or create a new one
     if report_dir is None:
-        report_dir = create_report_directory(reports_path, platform_name)
+        report_dir = create_report_directory(str(reports_path), platform_name)
 
     if verbose:
         logger.info(f"  Generating reports in: {report_dir}/")

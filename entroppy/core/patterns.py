@@ -1,6 +1,6 @@
 """Pattern generalization for typo corrections."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from loguru import logger
 
@@ -13,8 +13,7 @@ from entroppy.core.pattern_validation_runner import (
     _run_parallel_validation,
     _run_single_threaded_validation,
 )
-from entroppy.core.types import Correction
-from entroppy.platforms.base import MatchDirection
+from entroppy.core.types import Correction, MatchDirection
 
 if TYPE_CHECKING:
     from entroppy.utils.debug import DebugTypoMatcher
@@ -30,7 +29,10 @@ def generalize_patterns(
     debug_words: set[str] | None = None,
     debug_typo_matcher: "DebugTypoMatcher | None" = None,
     jobs: int = 1,
-    is_in_graveyard: callable | None = None,
+    is_in_graveyard: Callable[[str, str, BoundaryType], bool] | None = None,
+    pattern_cache: (
+        dict[tuple[str, str, BoundaryType, bool], list[tuple[str, str, BoundaryType, int]]] | None
+    ) = None,
 ) -> tuple[
     list[Correction],
     set[Correction],
@@ -51,6 +53,7 @@ def generalize_patterns(
         jobs: Number of parallel workers to use (1 = sequential)
         is_in_graveyard: Optional function to check if a pattern is in graveyard
             (prevents infinite loops by skipping already-rejected patterns)
+        pattern_cache: Optional cache for pattern extraction results
 
     Returns:
         Tuple of (patterns, corrections_to_remove, pattern_replacements, rejected_patterns)
@@ -63,18 +66,28 @@ def generalize_patterns(
     indexes = _build_validation_indexes(validation_set, source_words, match_direction, corrections)
 
     # Extract debug typos for pattern extraction logging
-    debug_typos_set = _extract_debug_typos(debug_typo_matcher)
+    debug_typos_result = _extract_debug_typos(debug_typo_matcher)
+    if debug_typos_result:
+        debug_typos_exact, debug_typos_wildcard = debug_typos_result
+    else:
+        debug_typos_exact = set()
+        debug_typos_wildcard = set()
 
     # Extract and merge prefix/suffix patterns
     found_patterns = _extract_and_merge_patterns(
-        corrections, debug_typos_set, verbose, is_in_graveyard
+        corrections,
+        debug_typos_exact,
+        debug_typos_wildcard,
+        verbose,
+        is_in_graveyard,
+        pattern_cache,
     )
 
     # Filter out patterns with only one occurrence before validation
     patterns_to_validate = {k: v for k, v in found_patterns.items() if len(v) >= 2}
 
     # Filter out patterns already in graveyard to prevent infinite loops
-    if is_in_graveyard:
+    if is_in_graveyard is not None:
         filtered_patterns = {}
         skipped_count = 0
         for (typo, word, boundary), occurrences in patterns_to_validate.items():

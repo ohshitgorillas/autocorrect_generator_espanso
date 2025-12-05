@@ -8,8 +8,8 @@ from .boundary_utils import (
     _check_typo_in_target_word,
     _format_incorrect_transformation,
     _get_example_words_with_prefix,
-    _get_example_words_with_suffix,
     _get_example_words_with_substring,
+    _get_example_words_with_suffix,
 )
 
 
@@ -137,7 +137,7 @@ def _log_boundary_rejection(
     typo: str,
     word: str | None,
     boundary: BoundaryType,
-    details: dict[str, bool],
+    details: dict[str, bool | str | None],
     validation_index: BoundaryIndex,
     source_index: BoundaryIndex,
     debug_typo_matcher: DebugTypoMatcher | None,

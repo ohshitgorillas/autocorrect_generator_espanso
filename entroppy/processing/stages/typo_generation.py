@@ -1,16 +1,18 @@
 """Stage 2: Typo generation with multiprocessing support."""
 
-import time
 from collections import defaultdict
 from multiprocessing import Pool
+import time
+from typing import Any
 
 from loguru import logger
 from tqdm import tqdm
 
 from entroppy.core import Config
-from entroppy.resolution import process_word
 from entroppy.processing.stages.data_models import DictionaryData, TypoGenerationResult
-from entroppy.processing.stages.worker_context import WorkerContext, init_worker, get_worker_context
+from entroppy.processing.stages.worker_context import WorkerContext, get_worker_context, init_worker
+from entroppy.resolution import process_word
+from entroppy.utils.debug import DebugTypoMatcher
 
 
 def process_word_worker(word: str) -> tuple[str, list[tuple[str, str]], list[str]]:
@@ -24,15 +26,28 @@ def process_word_worker(word: str) -> tuple[str, list[tuple[str, str]], list[str
         Note: Boundaries are determined later in Stage 3 (collision resolution)
     """
     context = get_worker_context()
+    # Convert dict[str, list[str]] to dict[str, str] for process_word
+    # Join all adjacent letters back into a string
+    adj_map: dict[str, str] | None = None
+    if context.adjacent_letters_map:
+        adj_map = {k: "".join(v) if v else k for k, v in context.adjacent_letters_map.items() if v}
+
+    # Recreate DebugTypoMatcher in worker from patterns (not serializable due to compiled regex)
+    debug_typo_matcher: DebugTypoMatcher | None = (
+        DebugTypoMatcher.from_patterns(set(context.debug_typo_patterns))
+        if context.debug_typo_patterns
+        else None
+    )
+
     corrections, debug_messages = process_word(
         word,
-        context.validation_set,
-        context.source_words_set,
+        set(context.validation_set),
+        set(context.source_words_set),
         context.typo_freq_threshold,
-        context.adjacent_letters_map,
-        context.exclusions_set,
-        context.debug_words,
-        context.debug_typo_matcher,
+        adj_map,
+        set(context.exclusions_set),
+        frozenset(context.debug_words),
+        debug_typo_matcher,
     )
     return (word, corrections, debug_messages)
 
@@ -78,14 +93,16 @@ def generate_typos(
 
             # Wrap with progress bar
             if verbose:
-                results = tqdm(
+                results_wrapped_iter: Any = tqdm(
                     results,
                     total=len(dict_data.source_words),
                     desc="Processing words",
                     unit="word",
                 )
+            else:
+                results_wrapped_iter = results
 
-            for word, corrections, debug_messages in results:
+            for word, corrections, debug_messages in results_wrapped_iter:
                 for typo, correction_word in corrections:
                     typo_map[typo].append(correction_word)
                 # Collect debug messages from workers
@@ -96,17 +113,22 @@ def generate_typos(
             logger.debug(message)
     else:
         # Single-threaded mode
-        words_iter = dict_data.source_words
         if verbose:
-            words_iter = tqdm(dict_data.source_words, desc="Processing words", unit="word")
+            words_iter: list[str] = list(
+                tqdm(dict_data.source_words, desc="Processing words", unit="word")
+            )
+        else:
+            words_iter = dict_data.source_words
 
         for word in words_iter:
+            # Convert dict[str, str] to dict[str, str] | None (already correct type)
+            adj_map = dict_data.adjacent_letters_map if dict_data.adjacent_letters_map else None
             corrections, debug_messages = process_word(
                 word,
                 dict_data.validation_set,
                 dict_data.source_words_set,
                 config.typo_freq_threshold,
-                dict_data.adjacent_letters_map,
+                adj_map,
                 dict_data.exclusions,
                 frozenset(config.debug_words),
                 config.debug_typo_matcher,

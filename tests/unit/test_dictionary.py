@@ -91,7 +91,7 @@ class TestLoadWordList:
     def test_returns_empty_list_when_filepath_is_none(self) -> None:
         """When filepath is None, returns empty list."""
         result = load_word_list(None, verbose=False)
-        assert result == []
+        assert not result
 
     def test_loads_words_from_file(self, tmp_path) -> None:
         """When valid file provided, loads words from file."""
@@ -274,7 +274,7 @@ class TestLoadSourceWords:
         """When top_n is None, returns empty list."""
         config = Config(top_n=None)
         result = load_source_words(config, verbose=False)
-        assert result == []
+        assert not result
 
     @patch("entroppy.data.dictionary.top_n_list")
     def test_loads_words_from_wordfreq(self, mock_top_n: MagicMock) -> None:

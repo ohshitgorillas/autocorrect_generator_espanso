@@ -1,7 +1,8 @@
 """Logging configuration for EntropPy using loguru."""
 
-import sys
 from pathlib import Path
+import sys
+
 from loguru import logger
 
 
@@ -66,10 +67,7 @@ def add_log_file_handler(log_file: str | Path, verbose: bool = False, debug: boo
     # File format (no color codes)
     if debug:
         file_format_str = (
-            "{time:YYYY-MM-DD HH:mm:ss} | "
-            "{level: <8} | "
-            "{name}:{function}:{line} - "
-            "{message}"
+            "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"
         )
     else:
         file_format_str = "{message}"

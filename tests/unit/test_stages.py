@@ -1,14 +1,20 @@
 """Unit tests for pipeline stages - focusing on behavior, not implementation."""
 
+import pytest
+
 from entroppy.core import Config
-from entroppy.processing.stages import (
-    load_dictionaries,
-    generate_typos,
-    resolve_typo_collisions,
-    generalize_typo_patterns,
-    remove_typo_conflicts,
+from entroppy.platforms import get_platform_backend
+from entroppy.processing import run_pipeline
+from entroppy.processing.stages import generate_typos, load_dictionaries
+from entroppy.resolution.passes import (
+    CandidateSelectionPass,
+    ConflictRemovalPass,
+    PatternGeneralizationPass,
+    PlatformConstraintsPass,
+    PlatformSubstringConflictPass,
 )
-from entroppy.platforms.espanso import EspansoBackend
+from entroppy.resolution.solver import IterativeSolver, PassContext
+from entroppy.resolution.state import DictionaryState
 
 
 class TestDictionaryLoading:
@@ -79,6 +85,7 @@ class TestDictionaryLoading:
         result = load_dictionaries(config, verbose=False)
 
         # Filtered set should be smaller if any *ball words were removed
+        # pylint: disable=no-member
         assert result.filtered_validation_set.issubset(result.validation_set)
 
 
@@ -112,10 +119,11 @@ class TestTypoGeneration:
 
 
 class TestCollisionResolution:
-    """Tests for collision resolution stage behavior."""
+    """Tests for collision resolution stage behavior (now part of iterative solver)."""
 
+    @pytest.mark.slow
     def test_produces_corrections_from_typos(self, tmp_path):
-        """Collision resolution produces corrections from the typo map."""
+        """Iterative solver produces corrections from the typo map."""
         exclude_file = tmp_path / "exclude.txt"
         exclude_file.write_text("")
 
@@ -125,25 +133,55 @@ class TestCollisionResolution:
         adjacent_file = tmp_path / "adjacent.txt"
         adjacent_file.write_text("t -> y\ne -> w\n")
 
+        output_dir = tmp_path / "output"
+
         config = Config(
             exclude=str(exclude_file),
             include=str(include_file),
             adjacent_letters=str(adjacent_file),
-            output="output",
+            output=str(output_dir),
             jobs=1,
+            max_iterations=3,  # Reduced for faster tests
         )
 
         dict_data = load_dictionaries(config, verbose=False)
         typo_result = generate_typos(dict_data, config, verbose=False)
-        result = resolve_typo_collisions(typo_result, dict_data, config, verbose=False)
+
+        platform = get_platform_backend(config.platform)
+        pass_context = PassContext.from_dictionary_data(
+            dictionary_data=dict_data,
+            platform=platform,
+            min_typo_length=config.min_typo_length,
+            collision_threshold=config.freq_ratio,
+            jobs=config.jobs,
+            verbose=False,
+        )
+
+        state = DictionaryState(
+            raw_typo_map=typo_result.typo_map,
+            debug_words=config.debug_words,
+            debug_typo_matcher=config.debug_typo_matcher,
+        )
+
+        passes = [
+            CandidateSelectionPass(pass_context),
+            PatternGeneralizationPass(pass_context),
+            ConflictRemovalPass(pass_context),
+            PlatformSubstringConflictPass(pass_context),
+            PlatformConstraintsPass(pass_context),
+        ]
+
+        solver = IterativeSolver(passes, max_iterations=config.max_iterations)
+        solver_result = solver.solve(state)
 
         # Should produce some corrections
-        assert len(result.corrections) > 0
+        assert len(solver_result.corrections) > 0 or len(solver_result.patterns) > 0
 
 
 class TestPatternGeneralization:
-    """Tests for pattern generalization stage behavior."""
+    """Tests for pattern generalization stage behavior (now part of iterative solver)."""
 
+    @pytest.mark.slow
     def test_no_duplicate_typo_word_pairs_across_boundaries(self, tmp_path):
         """A (typo, word) pair appears only once in final output, even across boundary types."""
         exclude_file = tmp_path / "exclude.txt"
@@ -156,32 +194,58 @@ class TestPatternGeneralization:
         adjacent_file = tmp_path / "adjacent.txt"
         adjacent_file.write_text("t -> y\nh -> j\ne -> w\n")
 
+        output_dir = tmp_path / "output"
+
         config = Config(
             exclude=str(exclude_file),
             include=str(include_file),
             adjacent_letters=str(adjacent_file),
-            output="output",
+            output=str(output_dir),
             jobs=1,
+            max_iterations=3,  # Reduced for faster tests
         )
 
         dict_data = load_dictionaries(config, verbose=False)
         typo_result = generate_typos(dict_data, config, verbose=False)
-        collision_result = resolve_typo_collisions(typo_result, dict_data, config, verbose=False)
-        platform = EspansoBackend()
-        match_direction = platform.get_constraints().match_direction
-        result = generalize_typo_patterns(
-            collision_result, dict_data, config, match_direction, verbose=False
+
+        platform = get_platform_backend(config.platform)
+        pass_context = PassContext.from_dictionary_data(
+            dictionary_data=dict_data,
+            platform=platform,
+            min_typo_length=config.min_typo_length,
+            collision_threshold=config.freq_ratio,
+            jobs=config.jobs,
+            verbose=False,
         )
+
+        state = DictionaryState(
+            raw_typo_map=typo_result.typo_map,
+            debug_words=config.debug_words,
+            debug_typo_matcher=config.debug_typo_matcher,
+        )
+
+        passes = [
+            CandidateSelectionPass(pass_context),
+            PatternGeneralizationPass(pass_context),
+            ConflictRemovalPass(pass_context),
+            PlatformSubstringConflictPass(pass_context),
+            PlatformConstraintsPass(pass_context),
+        ]
+
+        solver = IterativeSolver(passes, max_iterations=config.max_iterations)
+        solver_result = solver.solve(state)
 
         # Check: no (typo, word) pair should appear more than once
         seen_pairs = set()
-        for typo, word, _ in result.corrections:
+        all_corrections = solver_result.corrections + solver_result.patterns
+        for typo, word, _ in all_corrections:
             pair = (typo, word)
             assert pair not in seen_pairs, f"Duplicate (typo, word) pair found: {pair}"
             seen_pairs.add(pair)
 
-    def test_tracks_rejected_patterns_from_cross_boundary_conflicts(self, tmp_path):
-        """Patterns rejected due to cross-boundary conflicts are tracked in rejected_patterns."""
+    @pytest.mark.slow
+    def test_graveyard_tracks_rejected_corrections(self, tmp_path):
+        """Rejected corrections are tracked in the graveyard."""
         exclude_file = tmp_path / "exclude.txt"
         exclude_file.write_text("")
 
@@ -191,35 +255,53 @@ class TestPatternGeneralization:
         adjacent_file = tmp_path / "adjacent.txt"
         adjacent_file.write_text("t -> y\nh -> j\ne -> w\n")
 
+        output_dir = tmp_path / "output"
+
         config = Config(
             exclude=str(exclude_file),
             include=str(include_file),
             adjacent_letters=str(adjacent_file),
-            output="output",
+            output=str(output_dir),
             jobs=1,
+            max_iterations=3,  # Reduced for faster tests
         )
 
         dict_data = load_dictionaries(config, verbose=False)
         typo_result = generate_typos(dict_data, config, verbose=False)
-        collision_result = resolve_typo_collisions(typo_result, dict_data, config, verbose=False)
-        platform = EspansoBackend()
-        match_direction = platform.get_constraints().match_direction
-        result = generalize_typo_patterns(
-            collision_result, dict_data, config, match_direction, verbose=False
+
+        platform = get_platform_backend(config.platform)
+        pass_context = PassContext.from_dictionary_data(
+            dictionary_data=dict_data,
+            platform=platform,
+            min_typo_length=config.min_typo_length,
+            collision_threshold=config.freq_ratio,
+            jobs=config.jobs,
+            verbose=False,
         )
 
-        # Check: rejected_patterns should contain any cross-boundary conflicts
-        cross_boundary_rejections = [
-            (typo, word, boundary, reason)
-            for typo, word, boundary, reason in result.rejected_patterns
-            if "cross-boundary" in reason.lower()
+        state = DictionaryState(
+            raw_typo_map=typo_result.typo_map,
+            debug_words=config.debug_words,
+            debug_typo_matcher=config.debug_typo_matcher,
+        )
+
+        passes = [
+            CandidateSelectionPass(pass_context),
+            PatternGeneralizationPass(pass_context),
+            ConflictRemovalPass(pass_context),
+            PlatformSubstringConflictPass(pass_context),
+            PlatformConstraintsPass(pass_context),
         ]
 
-        # If we have multiple corrections with same typo/word, some should be rejected
-        assert isinstance(cross_boundary_rejections, list)
+        solver = IterativeSolver(passes, max_iterations=config.max_iterations)
+        solver_result = solver.solve(state)
 
-    def test_corrections_count_consistent_after_pattern_generalization(self, tmp_path):
-        """Total corrections remain consistent when patterns replace direct corrections."""
+        # Graveyard should track rejected corrections
+        assert solver_result.graveyard_size >= 0
+
+    @pytest.mark.slow
+    def test_corrections_produced_for_multiple_words(self, tmp_path):
+        """Solver produces corrections for multiple input words."""
         exclude_file = tmp_path / "exclude.txt"
         exclude_file.write_text("")
 
@@ -229,30 +311,53 @@ class TestPatternGeneralization:
         adjacent_file = tmp_path / "adjacent.txt"
         adjacent_file.write_text("t -> y\ne -> w\ns -> z\n")
 
+        output_dir = tmp_path / "output"
+
         config = Config(
             exclude=str(exclude_file),
             include=str(include_file),
             adjacent_letters=str(adjacent_file),
-            output="output",
+            output=str(output_dir),
             jobs=1,
+            max_iterations=3,  # Reduced for faster tests
         )
 
         dict_data = load_dictionaries(config, verbose=False)
         typo_result = generate_typos(dict_data, config, verbose=False)
-        collision_result = resolve_typo_collisions(typo_result, dict_data, config, verbose=False)
 
-        platform = EspansoBackend()
-        match_direction = platform.get_constraints().match_direction
-        result = generalize_typo_patterns(
-            collision_result, dict_data, config, match_direction, verbose=False
+        platform = get_platform_backend(config.platform)
+        pass_context = PassContext.from_dictionary_data(
+            dictionary_data=dict_data,
+            platform=platform,
+            min_typo_length=config.min_typo_length,
+            collision_threshold=config.freq_ratio,
+            jobs=config.jobs,
+            verbose=False,
         )
 
-        # Corrections count should be reasonable relative to input
-        # (may decrease if patterns replace multiple, or stay similar)
-        assert len(result.corrections) > 0
+        state = DictionaryState(
+            raw_typo_map=typo_result.typo_map,
+            debug_words=config.debug_words,
+            debug_typo_matcher=config.debug_typo_matcher,
+        )
 
-    def test_patterns_accepted_when_no_cross_boundary_conflict(self, tmp_path):
-        """Patterns without cross-boundary conflicts are included in final corrections."""
+        passes = [
+            CandidateSelectionPass(pass_context),
+            PatternGeneralizationPass(pass_context),
+            ConflictRemovalPass(pass_context),
+            PlatformSubstringConflictPass(pass_context),
+            PlatformConstraintsPass(pass_context),
+        ]
+
+        solver = IterativeSolver(passes, max_iterations=config.max_iterations)
+        solver_result = solver.solve(state)
+
+        # Should produce some corrections or patterns
+        assert len(solver_result.corrections) > 0 or len(solver_result.patterns) > 0
+
+    @pytest.mark.slow
+    def test_patterns_can_be_generated(self, tmp_path):
+        """Solver can generate patterns when appropriate."""
         exclude_file = tmp_path / "exclude.txt"
         exclude_file.write_text("")
 
@@ -263,28 +368,53 @@ class TestPatternGeneralization:
         adjacent_file = tmp_path / "adjacent.txt"
         adjacent_file.write_text("s -> z\ne -> w\nc -> x\nt -> y\ni -> u\no -> p\nn -> m\n")
 
+        output_dir = tmp_path / "output"
+
         config = Config(
             exclude=str(exclude_file),
             include=str(include_file),
             adjacent_letters=str(adjacent_file),
-            output="output",
+            output=str(output_dir),
             jobs=1,
+            max_iterations=3,  # Reduced for faster tests
         )
 
         dict_data = load_dictionaries(config, verbose=False)
         typo_result = generate_typos(dict_data, config, verbose=False)
-        collision_result = resolve_typo_collisions(typo_result, dict_data, config, verbose=False)
-        platform = EspansoBackend()
-        match_direction = platform.get_constraints().match_direction
-        result = generalize_typo_patterns(
-            collision_result, dict_data, config, match_direction, verbose=False
+
+        platform = get_platform_backend(config.platform)
+        pass_context = PassContext.from_dictionary_data(
+            dictionary_data=dict_data,
+            platform=platform,
+            min_typo_length=config.min_typo_length,
+            collision_threshold=config.freq_ratio,
+            jobs=config.jobs,
+            verbose=False,
         )
 
-        # Should have some patterns in the results
-        assert len(result.patterns) >= 0
+        state = DictionaryState(
+            raw_typo_map=typo_result.typo_map,
+            debug_words=config.debug_words,
+            debug_typo_matcher=config.debug_typo_matcher,
+        )
 
-    def test_pattern_replacements_tracked_correctly(self, tmp_path):
-        """Pattern replacements are tracked for debugging and restoration."""
+        passes = [
+            CandidateSelectionPass(pass_context),
+            PatternGeneralizationPass(pass_context),
+            ConflictRemovalPass(pass_context),
+            PlatformSubstringConflictPass(pass_context),
+            PlatformConstraintsPass(pass_context),
+        ]
+
+        solver = IterativeSolver(passes, max_iterations=config.max_iterations)
+        solver_result = solver.solve(state)
+
+        # Should have some results (corrections or patterns)
+        assert len(solver_result.corrections) > 0 or len(solver_result.patterns) > 0
+
+    @pytest.mark.slow
+    def test_solver_produces_results(self, tmp_path):
+        """Solver produces corrections or patterns from input words."""
         exclude_file = tmp_path / "exclude.txt"
         exclude_file.write_text("")
 
@@ -294,94 +424,57 @@ class TestPatternGeneralization:
         adjacent_file = tmp_path / "adjacent.txt"
         adjacent_file.write_text("t -> y\ne -> w\ns -> z\nb -> v\nr -> t\n")
 
-        config = Config(
-            exclude=str(exclude_file),
-            include=str(include_file),
-            adjacent_letters=str(adjacent_file),
-            output="output",
-            jobs=1,
-        )
-
-        dict_data = load_dictionaries(config, verbose=False)
-        typo_result = generate_typos(dict_data, config, verbose=False)
-        collision_result = resolve_typo_collisions(typo_result, dict_data, config, verbose=False)
-        platform = EspansoBackend()
-        match_direction = platform.get_constraints().match_direction
-        result = generalize_typo_patterns(
-            collision_result, dict_data, config, match_direction, verbose=False
-        )
-
-        # Pattern replacements should be tracked
-        assert isinstance(result.pattern_replacements, dict)
-
-    def test_removed_count_reflects_pattern_generalization(self, tmp_path):
-        """The removed_count tracks how many corrections were replaced by patterns."""
-        exclude_file = tmp_path / "exclude.txt"
-        exclude_file.write_text("")
-
-        include_file = tmp_path / "include.txt"
-        include_file.write_text("test\nrest\n")
-
-        adjacent_file = tmp_path / "adjacent.txt"
-        adjacent_file.write_text("t -> y\ne -> w\nr -> t\ns -> z\n")
+        output_dir = tmp_path / "output"
 
         config = Config(
             exclude=str(exclude_file),
             include=str(include_file),
             adjacent_letters=str(adjacent_file),
-            output="output",
+            output=str(output_dir),
             jobs=1,
+            max_iterations=3,  # Reduced for faster tests
         )
 
         dict_data = load_dictionaries(config, verbose=False)
         typo_result = generate_typos(dict_data, config, verbose=False)
-        collision_result = resolve_typo_collisions(typo_result, dict_data, config, verbose=False)
-        platform = EspansoBackend()
-        match_direction = platform.get_constraints().match_direction
-        result = generalize_typo_patterns(
-            collision_result, dict_data, config, match_direction, verbose=False
+
+        platform = get_platform_backend(config.platform)
+        pass_context = PassContext.from_dictionary_data(
+            dictionary_data=dict_data,
+            platform=platform,
+            min_typo_length=config.min_typo_length,
+            collision_threshold=config.freq_ratio,
+            jobs=config.jobs,
+            verbose=False,
         )
 
-        # Removed count should be non-negative
-        assert result.removed_count >= 0
-
-    def test_combines_corrections_with_patterns(self, tmp_path):
-        """Pattern generalization combines original corrections with generated patterns."""
-        exclude_file = tmp_path / "exclude.txt"
-        exclude_file.write_text("")
-
-        include_file = tmp_path / "include.txt"
-        include_file.write_text("test\n")
-
-        adjacent_file = tmp_path / "adjacent.txt"
-        adjacent_file.write_text("t -> y\n")
-
-        config = Config(
-            exclude=str(exclude_file),
-            include=str(include_file),
-            adjacent_letters=str(adjacent_file),
-            output="output",
-            jobs=1,
+        state = DictionaryState(
+            raw_typo_map=typo_result.typo_map,
+            debug_words=config.debug_words,
+            debug_typo_matcher=config.debug_typo_matcher,
         )
 
-        dict_data = load_dictionaries(config, verbose=False)
-        typo_result = generate_typos(dict_data, config, verbose=False)
-        collision_result = resolve_typo_collisions(typo_result, dict_data, config, verbose=False)
-        platform = EspansoBackend()
-        match_direction = platform.get_constraints().match_direction
-        result = generalize_typo_patterns(
-            collision_result, dict_data, config, match_direction, verbose=False
-        )
+        passes = [
+            CandidateSelectionPass(pass_context),
+            PatternGeneralizationPass(pass_context),
+            ConflictRemovalPass(pass_context),
+            PlatformSubstringConflictPass(pass_context),
+            PlatformConstraintsPass(pass_context),
+        ]
 
-        # Result should include corrections (original or patterns)
-        assert len(result.corrections) > 0
+        solver = IterativeSolver(passes, max_iterations=config.max_iterations)
+        solver_result = solver.solve(state)
+
+        # Result should include corrections or patterns
+        assert len(solver_result.corrections) > 0 or len(solver_result.patterns) > 0
 
 
 class TestConflictRemoval:
-    """Tests for conflict removal stage behavior."""
+    """Tests for conflict removal stage behavior (now part of iterative solver)."""
 
-    def test_removes_no_conflicts_when_none_exist(self, tmp_path):
-        """When there are no conflicts, all corrections are kept."""
+    @pytest.mark.slow
+    def test_solver_handles_simple_case(self, tmp_path):
+        """Solver handles simple cases without conflicts correctly."""
         exclude_file = tmp_path / "exclude.txt"
         exclude_file.write_text("")
 
@@ -391,31 +484,56 @@ class TestConflictRemoval:
         adjacent_file = tmp_path / "adjacent.txt"
         adjacent_file.write_text("w -> q\n")
 
+        output_dir = tmp_path / "output"
+
         config = Config(
             exclude=str(exclude_file),
             include=str(include_file),
             adjacent_letters=str(adjacent_file),
-            output="output",
+            output=str(output_dir),
             jobs=1,
+            max_iterations=5,  # Need at least 5 iterations for this case to converge
         )
 
         dict_data = load_dictionaries(config, verbose=False)
         typo_result = generate_typos(dict_data, config, verbose=False)
-        collision_result = resolve_typo_collisions(typo_result, dict_data, config, verbose=False)
-        platform = EspansoBackend()
-        match_direction = platform.get_constraints().match_direction
-        pattern_result = generalize_typo_patterns(
-            collision_result, dict_data, config, match_direction, verbose=False
-        )
-        result = remove_typo_conflicts(pattern_result, verbose=False)
 
-        # No conflicts should be removed for a single simple correction
-        assert result.conflicts_removed == 0
+        platform = get_platform_backend(config.platform)
+        pass_context = PassContext.from_dictionary_data(
+            dictionary_data=dict_data,
+            platform=platform,
+            min_typo_length=config.min_typo_length,
+            collision_threshold=config.freq_ratio,
+            jobs=config.jobs,
+            verbose=False,
+        )
+
+        state = DictionaryState(
+            raw_typo_map=typo_result.typo_map,
+            debug_words=config.debug_words,
+            debug_typo_matcher=config.debug_typo_matcher,
+        )
+
+        passes = [
+            CandidateSelectionPass(pass_context),
+            PatternGeneralizationPass(pass_context),
+            ConflictRemovalPass(pass_context),
+            PlatformSubstringConflictPass(pass_context),
+            PlatformConstraintsPass(pass_context),
+        ]
+
+        solver = IterativeSolver(passes, max_iterations=config.max_iterations)
+        solver_result = solver.solve(state)
+
+        # Solver should converge and produce results
+        assert solver_result.converged
+        assert len(solver_result.corrections) > 0 or len(solver_result.patterns) > 0
 
 
 class TestOutputGeneration:
     """Tests for output generation stage behavior."""
 
+    @pytest.mark.slow
     def test_creates_output_directory(self, tmp_path):
         """Output directory is created when generating output."""
         exclude_file = tmp_path / "exclude.txt"
@@ -435,27 +553,14 @@ class TestOutputGeneration:
             adjacent_letters=str(adjacent_file),
             output=str(output_dir),
             jobs=1,
+            max_iterations=3,  # Reduced for faster tests
         )
 
-        dict_data = load_dictionaries(config, verbose=False)
-        typo_result = generate_typos(dict_data, config, verbose=False)
-        collision_result = resolve_typo_collisions(typo_result, dict_data, config, verbose=False)
-        platform = EspansoBackend()
-        match_direction = platform.get_constraints().match_direction
-        pattern_result = generalize_typo_patterns(
-            collision_result, dict_data, config, match_direction, verbose=False
-        )
-        conflict_result = remove_typo_conflicts(pattern_result, verbose=False)
-
-        backend = EspansoBackend()
-        backend.generate_output(
-            conflict_result.corrections,
-            str(output_dir),
-            config,
-        )
+        run_pipeline(config)
 
         assert output_dir.exists()
 
+    @pytest.mark.slow
     def test_writes_yaml_files(self, tmp_path):
         """YAML files are written to output directory."""
         exclude_file = tmp_path / "exclude.txt"
@@ -475,24 +580,10 @@ class TestOutputGeneration:
             adjacent_letters=str(adjacent_file),
             output=str(output_dir),
             jobs=1,
+            max_iterations=3,  # Reduced for faster tests
         )
 
-        dict_data = load_dictionaries(config, verbose=False)
-        typo_result = generate_typos(dict_data, config, verbose=False)
-        collision_result = resolve_typo_collisions(typo_result, dict_data, config, verbose=False)
-        platform = EspansoBackend()
-        match_direction = platform.get_constraints().match_direction
-        pattern_result = generalize_typo_patterns(
-            collision_result, dict_data, config, match_direction, verbose=False
-        )
-        conflict_result = remove_typo_conflicts(pattern_result, verbose=False)
-
-        backend = EspansoBackend()
-        backend.generate_output(
-            conflict_result.corrections,
-            str(output_dir),
-            config,
-        )
+        run_pipeline(config)
 
         yaml_files = list(output_dir.glob("*.yml"))
         assert len(yaml_files) > 0

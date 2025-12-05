@@ -1,13 +1,14 @@
 """Espanso platform backend implementation."""
 
-import sys
 from pathlib import Path
+import sys
 from typing import Any
 
 from loguru import logger
 
 from entroppy.core import Config, Correction
-from entroppy.platforms.base import MatchDirection, PlatformBackend, PlatformConstraints
+from entroppy.core.types import MatchDirection
+from entroppy.platforms.base import PlatformBackend, PlatformConstraints
 from entroppy.platforms.espanso.file_writing import write_yaml_files
 from entroppy.platforms.espanso.organization import organize_by_letter
 from entroppy.platforms.espanso.ram_estimation import estimate_ram_usage
@@ -17,8 +18,7 @@ from entroppy.platforms.espanso.yaml_helpers import write_yaml_to_stream
 
 
 class EspansoBackend(PlatformBackend):
-    """
-    Backend for Espanso text expander.
+    """Backend for Espanso text expander.
 
     Characteristics:
     - Matches left-to-right
@@ -41,32 +41,16 @@ class EspansoBackend(PlatformBackend):
             max_word_length=None,
             allowed_chars=None,
             supports_boundaries=True,
-            supports_case_propagation=True,
-            supports_regex=True,
             match_direction=MatchDirection.LEFT_TO_RIGHT,
-            output_format="yaml",
         )
-
-    def filter_corrections(
-        self, corrections: list[Correction], config: Config
-    ) -> tuple[list[Correction], dict[str, Any]]:
-        """Espanso filtering (minimal - accepts everything)."""
-        metadata = {
-            "total_input": len(corrections),
-            "total_output": len(corrections),
-            "filtered_count": 0,
-            "filter_reasons": {},
-        }
-
-        return corrections, metadata
 
     def rank_corrections(
         self,
         corrections: list[Correction],
-        patterns: list[Correction],
-        pattern_replacements: dict[Correction, list[Correction]],
-        user_words: set[str],
-        config: Config | None = None,
+        _patterns: list[Correction],
+        _pattern_replacements: dict[Correction, list[Correction]],
+        _user_words: set[str],
+        _config: Config | None = None,
     ) -> list[Correction]:
         """Espanso ranking (passthrough - no prioritization needed)."""
         return corrections
@@ -101,12 +85,11 @@ class EspansoBackend(PlatformBackend):
     def generate_platform_report(
         self,
         final_corrections: list[Correction],
-        ranked_corrections_before_limit: list[Correction],
-        filtered_corrections: list[Correction],
-        patterns: list[Correction],
-        pattern_replacements: dict[Correction, list[Correction]],
-        user_words: set[str],
-        filter_metadata: dict[str, Any],
+        _ranked_corrections_before_limit: list[Correction],
+        _all_corrections: list[Correction],
+        _patterns: list[Correction],
+        _pattern_replacements: dict[Correction, list[Correction]],
+        _user_words: set[str],
         report_dir: Path,
         config: Config,
     ) -> dict[str, Any]:

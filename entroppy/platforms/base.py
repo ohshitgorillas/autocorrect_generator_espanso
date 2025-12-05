@@ -4,16 +4,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from entroppy.core.types import MatchDirection
 
-class MatchDirection(Enum):
-    """Direction in which platform scans for matches."""
-
-    LEFT_TO_RIGHT = "ltr"  # Espanso
-    RIGHT_TO_LEFT = "rtl"  # QMK
+if TYPE_CHECKING:
+    from entroppy.core.config import Config
+    from entroppy.core.types import Correction
 
 
 @dataclass
@@ -30,12 +28,9 @@ class PlatformConstraints:
 
     # Features
     supports_boundaries: bool
-    supports_case_propagation: bool
-    supports_regex: bool
 
     # Behavior
     match_direction: MatchDirection
-    output_format: str  # "yaml", "c_array", "json", etc.
 
 
 class PlatformBackend(ABC):
@@ -46,22 +41,6 @@ class PlatformBackend(ABC):
         """Return platform-specific constraints and capabilities."""
 
     @abstractmethod
-    def filter_corrections(
-        self, corrections: list["Correction"], config: "Config"
-    ) -> tuple[list["Correction"], dict[str, Any]]:
-        """
-        Apply platform-specific filtering.
-
-        Args:
-            corrections: List of corrections to filter
-            config: Configuration object
-
-        Returns:
-            (filtered_corrections, metadata)
-            metadata: dict with filtering statistics and removed items
-        """
-
-    @abstractmethod
     def rank_corrections(
         self,
         corrections: list["Correction"],
@@ -70,8 +49,7 @@ class PlatformBackend(ABC):
         user_words: set[str],
         config: "Config" | None = None,
     ) -> list["Correction"]:
-        """
-        Rank corrections by platform-specific usefulness.
+        """Rank corrections by platform-specific usefulness.
 
         Args:
             corrections: All corrections (direct + patterns)
@@ -88,8 +66,7 @@ class PlatformBackend(ABC):
     def generate_output(
         self, corrections: list["Correction"], output_path: str | None, config: "Config"
     ) -> None:
-        """
-        Generate platform-specific output format.
+        """Generate platform-specific output format.
 
         Args:
             corrections: Final list of corrections to output
@@ -102,25 +79,22 @@ class PlatformBackend(ABC):
         self,
         final_corrections: list["Correction"],
         ranked_corrections_before_limit: list["Correction"],
-        filtered_corrections: list["Correction"],
+        all_corrections: list["Correction"],
         patterns: list["Correction"],
         pattern_replacements: dict["Correction", list["Correction"]],
         user_words: set[str],
-        filter_metadata: dict[str, Any],
         report_dir: Path,
         config: "Config",
     ) -> dict[str, Any]:
-        """
-        Generate platform-specific report.
+        """Generate platform-specific report.
 
         Args:
             final_corrections: Final corrections after limit applied
             ranked_corrections_before_limit: All ranked corrections before applying limit
-            filtered_corrections: Corrections after filtering but before ranking
+            all_corrections: All corrections (direct + patterns)
             patterns: Pattern corrections
             pattern_replacements: Map of pattern -> list of corrections it replaces
             user_words: User-specified words
-            filter_metadata: Metadata from filter_corrections()
             report_dir: Directory to write report to (Path object)
             config: Configuration object
 

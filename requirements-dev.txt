@@ -1,2 +1,5 @@
-pylint
-black
+mypy
+ruff
+types-tqdm
+types-pyyaml
+pre-commit

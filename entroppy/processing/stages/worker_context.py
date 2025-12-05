@@ -1,11 +1,11 @@
 """Worker context for multiprocessing without global state."""
 
-import threading
 from dataclasses import dataclass
+import threading
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from entroppy.utils.debug import DebugTypoMatcher
+    pass
 
 
 @dataclass(frozen=True)
@@ -25,7 +25,7 @@ class WorkerContext:
         adjacent_letters_map: Adjacent letters map for insertions/replacements
         exclusions_set: Set of exclusion patterns
         debug_words: Set of words to trace through pipeline (exact matches)
-        debug_typo_matcher: Matcher for debug typos (with wildcard/boundary support)
+        debug_typo_patterns: Set of debug typo patterns (raw strings, for workers)
     """
 
     validation_set: frozenset[str]
@@ -35,7 +35,7 @@ class WorkerContext:
     adjacent_letters_map: dict[str, list[str]]
     exclusions_set: frozenset[str]
     debug_words: frozenset[str]
-    debug_typo_matcher: "DebugTypoMatcher | None"
+    debug_typo_patterns: frozenset[str]
 
     @classmethod
     def from_dict_data(cls, dict_data, config) -> "WorkerContext":
@@ -48,15 +48,20 @@ class WorkerContext:
         Returns:
             New WorkerContext instance
         """
+        # Convert dict[str, str] to dict[str, list[str]] by splitting string values
+        adjacent_letters_map: dict[str, list[str]] = {}
+        if dict_data.adjacent_letters_map:
+            adjacent_letters_map = {k: list(v) for k, v in dict_data.adjacent_letters_map.items()}
+
         return cls(
             validation_set=frozenset(dict_data.validation_set),
             filtered_validation_set=frozenset(dict_data.filtered_validation_set),
             source_words_set=frozenset(dict_data.source_words_set),
             typo_freq_threshold=config.typo_freq_threshold,
-            adjacent_letters_map=dict_data.adjacent_letters_map,
+            adjacent_letters_map=adjacent_letters_map,
             exclusions_set=frozenset(dict_data.exclusions),
             debug_words=frozenset(config.debug_words),
-            debug_typo_matcher=config.debug_typo_matcher,
+            debug_typo_patterns=frozenset(config.debug_typos),
         )
 
 
@@ -83,6 +88,6 @@ def get_worker_context() -> WorkerContext:
         RuntimeError: If called before init_worker
     """
     try:
-        return _worker_context.value
+        return _worker_context.value  # type: ignore[no-any-return]
     except AttributeError as e:
         raise RuntimeError("Worker context not initialized. Call init_worker first.") from e

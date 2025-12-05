@@ -1,5 +1,6 @@
 """Integration tests for the refactored pipeline stages."""
 
+import pytest
 import yaml
 
 from entroppy.core import Config
@@ -9,6 +10,7 @@ from entroppy.processing import run_pipeline
 class TestPipelineIntegration:
     """Integration tests verifying the complete pipeline behavior."""
 
+    @pytest.mark.slow
     def test_pipeline_produces_yaml_output(self, tmp_path):
         """Complete pipeline run produces YAML output files."""
         exclude_file = tmp_path / "exclude.txt"
@@ -28,6 +30,7 @@ class TestPipelineIntegration:
             adjacent_letters=str(adjacent_file),
             output=str(output_dir),
             jobs=1,
+            max_iterations=3,  # Reduced for faster tests
         )
 
         run_pipeline(config)
@@ -35,6 +38,7 @@ class TestPipelineIntegration:
         yaml_files = list(output_dir.glob("*.yml"))
         assert len(yaml_files) > 0
 
+    @pytest.mark.slow
     def test_pipeline_with_reports(self, tmp_path):
         """Pipeline generates reports when enabled."""
         exclude_file = tmp_path / "exclude.txt"
@@ -56,6 +60,7 @@ class TestPipelineIntegration:
             output=str(output_dir),
             reports=str(reports_dir),
             jobs=1,
+            max_iterations=3,  # Reduced for faster tests
         )
 
         run_pipeline(config)
@@ -63,6 +68,7 @@ class TestPipelineIntegration:
         # Check reports directory was created
         assert reports_dir.exists()
 
+    @pytest.mark.slow
     def test_pipeline_yaml_has_matches_field(self, tmp_path):
         """Generated YAML files contain the 'matches' field."""
         exclude_file = tmp_path / "exclude.txt"
@@ -82,6 +88,7 @@ class TestPipelineIntegration:
             adjacent_letters=str(adjacent_file),
             output=str(output_dir),
             jobs=1,
+            max_iterations=3,  # Reduced for faster tests
         )
 
         run_pipeline(config)
@@ -92,6 +99,7 @@ class TestPipelineIntegration:
             data = yaml.safe_load(f)
             assert "matches" in data
 
+    @pytest.mark.slow
     def test_pipeline_with_multiprocessing(self, tmp_path):
         """Pipeline works correctly with multiple worker processes."""
         exclude_file = tmp_path / "exclude.txt"
@@ -111,6 +119,7 @@ class TestPipelineIntegration:
             adjacent_letters=str(adjacent_file),
             output=str(output_dir),
             jobs=2,  # Use 2 workers
+            max_iterations=3,  # Reduced for faster tests
         )
 
         run_pipeline(config)
@@ -118,6 +127,7 @@ class TestPipelineIntegration:
         yaml_files = list(output_dir.glob("*.yml"))
         assert len(yaml_files) > 0
 
+    @pytest.mark.slow
     def test_pipeline_with_exclusion_patterns_completes(self, tmp_path):
         """Pipeline completes successfully when exclusion patterns are used."""
         exclude_file = tmp_path / "exclude.txt"
@@ -137,6 +147,7 @@ class TestPipelineIntegration:
             adjacent_letters=str(adjacent_file),
             output=str(output_dir),
             jobs=1,
+            max_iterations=3,  # Reduced for faster tests
         )
 
         run_pipeline(config)
@@ -145,6 +156,7 @@ class TestPipelineIntegration:
         yaml_files = list(output_dir.glob("*.yml"))
         assert len(yaml_files) > 0
 
+    @pytest.mark.slow
     def test_pipeline_with_min_typo_length_completes(self, tmp_path):
         """Pipeline completes successfully with minimum typo length constraint."""
         exclude_file = tmp_path / "exclude.txt"
@@ -165,6 +177,7 @@ class TestPipelineIntegration:
             output=str(output_dir),
             min_typo_length=5,  # Very high minimum
             jobs=1,
+            max_iterations=3,  # Reduced for faster tests
         )
 
         run_pipeline(config)

@@ -1,6 +1,7 @@
 """Collision resolution for typo corrections."""
 
 from multiprocessing import Pool
+from typing import Any
 
 from loguru import logger
 from tqdm import tqdm
@@ -20,7 +21,9 @@ from .worker_context import (
 )
 
 
-def _process_typo_worker(item: tuple[str, list[str]]) -> tuple[
+def _process_typo_worker(
+    item: tuple[str, list[str]],
+) -> tuple[
     list[Correction],  # corrections (can be multiple per typo now)
     list[tuple[str, str, str | None]],  # excluded_list
     list[tuple[str, list[str], float, BoundaryType]],  # skipped_collisions (now includes boundary)
@@ -125,7 +128,7 @@ def resolve_collisions(
     min_typo_length: int,
     min_word_length: int,
     user_words: set[str],
-    exclusion_matcher: ExclusionMatcher,
+    exclusion_matcher: ExclusionMatcher | None,
     debug_words: set[str] | None = None,
     debug_typo_matcher: DebugTypoMatcher | None = None,
     exclusion_set: set[str] | None = None,
@@ -177,6 +180,8 @@ def resolve_collisions(
             logger.info("  Preparing worker context...")
 
         # Create context for workers
+        # Note: validation_set parameter should be filtered_validation_set (words matching
+        # exclusion patterns removed) for boundary detection
         context = CollisionResolutionContext(
             validation_set=frozenset(validation_set),
             source_words=frozenset(source_words),
@@ -202,12 +207,14 @@ def resolve_collisions(
 
             # Wrap with progress bar if verbose
             if verbose:
-                results = tqdm(
+                results_wrapped_iter: Any = tqdm(
                     results,
                     total=len(items),
                     desc="Resolving collisions",
                     unit="typo",
                 )
+            else:
+                results_wrapped_iter = results
 
             all_boundary_details = []
             for (
@@ -216,7 +223,7 @@ def resolve_collisions(
                 skipped_collisions_list,
                 skipped_short_list,
                 boundary_details_list,
-            ) in results:
+            ) in results_wrapped_iter:
                 # Accumulate all corrections
                 final_corrections.extend(corrections_list)
 
@@ -245,20 +252,25 @@ def resolve_collisions(
     else:
         # Single-threaded mode (original implementation)
         # Build boundary indexes for efficient lookups
+        # Use filtered validation set - words matching exclusion patterns
+        # should not block valid typos
         if verbose:
             logger.info("  Building boundary indexes...")
         validation_index = BoundaryIndex(validation_set)
         source_index = BoundaryIndex(source_words)
 
         # Wrap with progress bar if verbose
-        items_iter = typo_map.items()
         if verbose:
-            items_iter = tqdm(
-                typo_map.items(),
-                total=len(typo_map),
-                desc="Resolving collisions",
-                unit="typo",
+            items_iter: list[tuple[str, list[str]]] = list(
+                tqdm(
+                    typo_map.items(),
+                    total=len(typo_map),
+                    desc="Resolving collisions",
+                    unit="typo",
+                )
             )
+        else:
+            items_iter = list(typo_map.items())
 
         for typo, word_list in items_iter:
             unique_words = list(set(word_list))
@@ -272,6 +284,9 @@ def resolve_collisions(
                 # function from different contexts (single-threaded vs parallel worker).
                 # This is not duplicate code that should be refactored - it's the same function
                 # call with the same parameters.
+                if exclusion_matcher is None:
+                    # Create a dummy ExclusionMatcher if None
+                    exclusion_matcher = ExclusionMatcher(set())
                 correction, was_skipped_short, excluded_info, _ = process_single_word_correction(
                     typo,
                     word,
@@ -298,6 +313,9 @@ def resolve_collisions(
                 # function from different contexts (single-threaded vs parallel worker).
                 # This is not duplicate code that should be refactored - it's the same function
                 # call with the same parameters.
+                if exclusion_matcher is None:
+                    # Create a dummy ExclusionMatcher if None
+                    exclusion_matcher = ExclusionMatcher(set())
                 corrections_list, excluded_list, skipped_collisions_list, boundary_details_list = (
                     process_collision_case(
                         typo,

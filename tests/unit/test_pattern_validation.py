@@ -230,7 +230,12 @@ class TestCheckPatternConflicts:
         validation_set = {"the", "word"}
         validation_index = BoundaryIndex(validation_set)
         is_safe, _ = check_pattern_conflicts(
-            "teh", validation_set, set(), MatchDirection.RIGHT_TO_LEFT, validation_index
+            "teh",
+            validation_set,
+            set(),
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert is_safe is True
 
@@ -239,7 +244,12 @@ class TestCheckPatternConflicts:
         validation_set = {"the", "word"}
         validation_index = BoundaryIndex(validation_set)
         is_safe, _ = check_pattern_conflicts(
-            "the", validation_set, set(), MatchDirection.RIGHT_TO_LEFT, validation_index
+            "the",
+            validation_set,
+            set(),
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert is_safe is False
 
@@ -248,7 +258,12 @@ class TestCheckPatternConflicts:
         validation_set = {"the", "word"}
         validation_index = BoundaryIndex(validation_set)
         _, error_msg = check_pattern_conflicts(
-            "the", validation_set, set(), MatchDirection.RIGHT_TO_LEFT, validation_index
+            "the",
+            validation_set,
+            set(),
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert error_msg is not None
 
@@ -257,7 +272,12 @@ class TestCheckPatternConflicts:
         validation_set = {"the", "word"}
         validation_index = BoundaryIndex(validation_set)
         _, error_msg = check_pattern_conflicts(
-            "the", validation_set, set(), MatchDirection.RIGHT_TO_LEFT, validation_index
+            "the",
+            validation_set,
+            set(),
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert "the" in error_msg
 
@@ -266,7 +286,12 @@ class TestCheckPatternConflicts:
         validation_set = {"wordeh", "other"}
         validation_index = BoundaryIndex(validation_set)
         is_safe, _ = check_pattern_conflicts(
-            "eh", validation_set, set(), MatchDirection.LEFT_TO_RIGHT, validation_index
+            "eh",
+            validation_set,
+            set(),
+            MatchDirection.LEFT_TO_RIGHT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert is_safe is False
 
@@ -275,7 +300,12 @@ class TestCheckPatternConflicts:
         validation_set = {"wordeh", "other"}
         validation_index = BoundaryIndex(validation_set)
         _, error_msg = check_pattern_conflicts(
-            "eh", validation_set, set(), MatchDirection.LEFT_TO_RIGHT, validation_index
+            "eh",
+            validation_set,
+            set(),
+            MatchDirection.LEFT_TO_RIGHT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert error_msg is not None
 
@@ -284,7 +314,12 @@ class TestCheckPatternConflicts:
         validation_set = {"wordeh", "other"}
         validation_index = BoundaryIndex(validation_set)
         _, error_msg = check_pattern_conflicts(
-            "eh", validation_set, set(), MatchDirection.LEFT_TO_RIGHT, validation_index
+            "eh",
+            validation_set,
+            set(),
+            MatchDirection.LEFT_TO_RIGHT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert "end" in error_msg.lower()
 
@@ -293,7 +328,12 @@ class TestCheckPatternConflicts:
         validation_set = set()
         validation_index = BoundaryIndex(validation_set)
         is_safe, _ = check_pattern_conflicts(
-            "teh", validation_set, {"tehword"}, MatchDirection.RIGHT_TO_LEFT, validation_index
+            "teh",
+            validation_set,
+            {"tehword"},
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert is_safe is False
 
@@ -302,7 +342,12 @@ class TestCheckPatternConflicts:
         validation_set = set()
         validation_index = BoundaryIndex(validation_set)
         is_safe, _ = check_pattern_conflicts(
-            "eh", validation_set, {"wordeh"}, MatchDirection.LEFT_TO_RIGHT, validation_index
+            "eh",
+            validation_set,
+            {"wordeh"},
+            MatchDirection.LEFT_TO_RIGHT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert is_safe is False
 
@@ -311,7 +356,12 @@ class TestCheckPatternConflicts:
         validation_set = set()
         validation_index = BoundaryIndex(validation_set)
         _, error_msg = check_pattern_conflicts(
-            "teh", validation_set, {"tehword"}, MatchDirection.RIGHT_TO_LEFT, validation_index
+            "teh",
+            validation_set,
+            {"tehword"},
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert error_msg is not None
 
@@ -320,7 +370,12 @@ class TestCheckPatternConflicts:
         validation_set = set()
         validation_index = BoundaryIndex(validation_set)
         _, error_msg = check_pattern_conflicts(
-            "teh", validation_set, {"tehword"}, MatchDirection.RIGHT_TO_LEFT, validation_index
+            "teh",
+            validation_set,
+            {"tehword"},
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert "corrupt" in error_msg.lower()
 
@@ -329,7 +384,12 @@ class TestCheckPatternConflicts:
         validation_set = set()
         validation_index = BoundaryIndex(validation_set)
         is_safe, _ = check_pattern_conflicts(
-            "teh", validation_set, {"wordtehword"}, MatchDirection.RIGHT_TO_LEFT, validation_index
+            "teh",
+            validation_set,
+            {"wordtehword"},
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert is_safe is True
 
@@ -343,6 +403,7 @@ class TestCheckPatternConflicts:
             {"word", "tehbook", "other"},
             MatchDirection.RIGHT_TO_LEFT,
             validation_index,
+            BoundaryType.NONE,
         )
         assert is_safe is False
 
@@ -351,7 +412,12 @@ class TestCheckPatternConflicts:
         validation_set = {"the"}
         validation_index = BoundaryIndex(validation_set)
         _, error_msg = check_pattern_conflicts(
-            "teh", validation_set, {"word"}, MatchDirection.RIGHT_TO_LEFT, validation_index
+            "teh",
+            validation_set,
+            {"word"},
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert error_msg is None
 
@@ -360,7 +426,12 @@ class TestCheckPatternConflicts:
         validation_set = set()
         validation_index = BoundaryIndex(validation_set)
         is_safe, _ = check_pattern_conflicts(
-            "teh", validation_set, {"word"}, MatchDirection.RIGHT_TO_LEFT, validation_index
+            "teh",
+            validation_set,
+            {"word"},
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert is_safe is True
 
@@ -369,7 +440,12 @@ class TestCheckPatternConflicts:
         validation_set = {"the"}
         validation_index = BoundaryIndex(validation_set)
         is_safe, _ = check_pattern_conflicts(
-            "teh", validation_set, set(), MatchDirection.RIGHT_TO_LEFT, validation_index
+            "teh",
+            validation_set,
+            set(),
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert is_safe is True
 
@@ -378,7 +454,12 @@ class TestCheckPatternConflicts:
         validation_set = {"the"}
         validation_index = BoundaryIndex(validation_set)
         is_safe, _ = check_pattern_conflicts(
-            "the", validation_set, {"theword"}, MatchDirection.RIGHT_TO_LEFT, validation_index
+            "the",
+            validation_set,
+            {"theword"},
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert is_safe is False
 
@@ -387,6 +468,57 @@ class TestCheckPatternConflicts:
         validation_set = {"the"}
         validation_index = BoundaryIndex(validation_set)
         _, error_msg = check_pattern_conflicts(
-            "the", validation_set, {"theword"}, MatchDirection.RIGHT_TO_LEFT, validation_index
+            "the",
+            validation_set,
+            {"theword"},
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.NONE,
         )
         assert "validation word" in error_msg.lower()
+
+    def test_right_boundary_skips_start_trigger_check(self) -> None:
+        """When pattern has RIGHT boundary, skips check for triggering at start."""
+        validation_set = {"tehueco", "other"}
+        validation_index = BoundaryIndex(validation_set)
+        # "teh" would trigger at start of "tehueco", but RIGHT boundary only matches at end
+        is_safe, _ = check_pattern_conflicts(
+            "teh",
+            validation_set,
+            set(),
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.RIGHT,
+        )
+        assert is_safe is True
+
+    def test_left_boundary_skips_end_trigger_check(self) -> None:
+        """When pattern has LEFT boundary, skips check for triggering at end of validation words."""
+        validation_set = {"wordeh", "other"}
+        validation_index = BoundaryIndex(validation_set)
+        # "eh" would trigger at end of "wordeh", but LEFT boundary only matches at start
+        is_safe, _ = check_pattern_conflicts(
+            "eh",
+            validation_set,
+            set(),
+            MatchDirection.LEFT_TO_RIGHT,
+            validation_index,
+            BoundaryType.LEFT,
+        )
+        assert is_safe is True
+
+    def test_both_boundary_skips_both_trigger_checks(self) -> None:
+        """When pattern has BOTH boundary, skips both start and end trigger checks."""
+        validation_set = {"tehueco", "wordeh", "other"}
+        validation_index = BoundaryIndex(validation_set)
+        # "teh" would trigger at start of "tehueco" and "eh" would trigger at end of "wordeh",
+        # but BOTH boundary only matches standalone words
+        is_safe, _ = check_pattern_conflicts(
+            "teh",
+            validation_set,
+            set(),
+            MatchDirection.RIGHT_TO_LEFT,
+            validation_index,
+            BoundaryType.BOTH,
+        )
+        assert is_safe is True

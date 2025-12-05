@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "entroppy"
-version = "0.6.0"
+version = "0.7.0"
 description = "A Python-based autocorrect dictionary generator for multiple text expansion and autocorrect platforms"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -63,9 +63,55 @@ packages = ["entroppy"]
 [tool.setuptools.package-data]
 entroppy = ["py.typed"]
 
-[tool.black]
+[tool.ruff]
 line-length = 100
-target-version = ["py310", "py311", "py312", "py313"]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "D",   # pydocstyle
+    "RET", # refurb: catches unnecessary else after return, etc.
+    "ARG", # ruff: unused function arguments
+    "PLC0415", # pylint: import-outside-toplevel (catches lazy imports)
+]
+ignore = [
+    "PLR0913", # Too many arguments (pylint: too-many-arguments)
+    "PLR0912", # Too many branches (pylint: too-many-branches)
+    "PLR0917", # Too many positional arguments (pylint: too-many-positional-arguments)
+    "PLR0915", # Too many statements (pylint: too-many-statements)
+    "PLR0914", # Too many local variables (pylint: too-many-locals)
+    "PLR0904", # Too many public methods (pylint: too-many-public-methods)
+    "PLR0911", # Too many return statements (pylint: too-many-return-statements)
+    "PLR0916", # Too many boolean expressions (pylint: too-many-boolean-expressions)
+    "PLR1702", # Too many nested blocks (pylint: too-many-nested-blocks)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-sort-within-sections = true
+known-first-party = ["entroppy"]
+split-on-trailing-comma = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "D",      # pydocstyle (pylint: missing-function-docstring)
+]
+"**/test_*.py" = ["D"]  # pydocstyle: match = "(?!test_).*\\.py"
+"tests/**" = ["D"]      # pydocstyle: match_dir = "(?!tests|examples).*"
+"examples/**" = ["D"]   # pydocstyle: match_dir = "(?!tests|examples).*"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -76,20 +122,19 @@ addopts = [
     "-v",
     "--strict-markers",
 ]
-
-[tool.pylint.main]
-disable = [
-    "too-many-arguments",
-    "too-many-positional-arguments",
-    "too-many-locals",
-    "too-many-branches",
-    "too-many-statements",
-    "too-many-instance-attributes",
-    "too-many-public-methods",
-    "too-few-public-methods",
-    "too-many-return-statements",
-    "too-many-boolean-expressions",
-    "too-many-nested-blocks",
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
 
-
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+show_error_codes = true
+exclude = [
+    "tests/",
+    "examples/",
+    "vulture_whitelist.py",
+]

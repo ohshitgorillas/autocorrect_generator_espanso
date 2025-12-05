@@ -1,25 +1,25 @@
 """Main processing pipeline orchestration."""
 
 import time
+import traceback
 
 from loguru import logger
 
 from entroppy.core import Config
 from entroppy.platforms import PlatformBackend, get_platform_backend
-from entroppy.reports import ReportData, format_time, generate_reports, create_report_directory
-from entroppy.utils.logging import add_log_file_handler
-from entroppy.processing.stages import (
-    load_dictionaries,
-    generate_typos,
-)
-from entroppy.resolution.state import DictionaryState
-from entroppy.resolution.solver import IterativeSolver, PassContext
+from entroppy.processing.stages import generate_typos, load_dictionaries
+from entroppy.reports import ReportData, create_report_directory, format_time, generate_reports
 from entroppy.resolution.passes import (
     CandidateSelectionPass,
     ConflictRemovalPass,
     PatternGeneralizationPass,
     PlatformConstraintsPass,
+    PlatformSubstringConflictPass,
 )
+from entroppy.resolution.solver import IterativeSolver, PassContext
+from entroppy.resolution.state import DictionaryState, RejectionReason
+from entroppy.utils.helpers import cached_word_frequency
+from entroppy.utils.logging import add_log_file_handler
 
 
 def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> None:
@@ -125,6 +125,8 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
         platform=platform,
         min_typo_length=config.min_typo_length,
         collision_threshold=config.freq_ratio,
+        jobs=config.jobs,
+        verbose=verbose,
     )
 
     # Create passes
@@ -132,6 +134,7 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
         CandidateSelectionPass(pass_context),
         PatternGeneralizationPass(pass_context),
         ConflictRemovalPass(pass_context),
+        PlatformSubstringConflictPass(pass_context),
         PlatformConstraintsPass(pass_context),
     ]
 
@@ -154,29 +157,116 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
         report_data.stage_times["Iterative solver"] = solver_elapsed
         report_data.total_corrections = len(solver_result.corrections)
 
+        # Extract data from graveyard for reporting
+        for entry in state.graveyard.values():
+            if entry.reason == RejectionReason.COLLISION_AMBIGUOUS:
+                # Get all words that were in collision for this typo
+                words = state.raw_typo_map.get(entry.typo, [])
+                if words:
+                    # Calculate frequency ratio for collision
+                    word_freqs = [cached_word_frequency(w, "en") for w in words]
+                    if len(word_freqs) > 1:
+                        word_freqs.sort(reverse=True)
+                        ratio = word_freqs[0] / word_freqs[1] if word_freqs[1] > 0 else float("inf")
+                        report_data.skipped_collisions.append(
+                            (entry.typo, words, ratio, entry.boundary)
+                        )
+            elif entry.reason == RejectionReason.BLOCKED_BY_CONFLICT:
+                # Extract conflict information
+                if entry.blocker:
+                    # blocker is the shorter typo that blocked this one
+                    blocking_typo = entry.blocker
+                    # Try to find the blocking correction in active corrections or graveyard
+                    blocking_word = None
+                    for corr_typo, corr_word, _ in state.active_corrections:
+                        if corr_typo == blocking_typo:
+                            blocking_word = corr_word
+                            break
+                    if not blocking_word:
+                        # Check graveyard
+                        for grave_entry in state.graveyard.values():
+                            if grave_entry.typo == blocking_typo:
+                                blocking_word = grave_entry.word
+                                break
+                    if blocking_word:
+                        report_data.removed_conflicts.append(
+                            (
+                                entry.typo,
+                                entry.word,
+                                blocking_typo,
+                                blocking_word,
+                                entry.boundary,
+                            )
+                        )
+            elif entry.reason == RejectionReason.EXCLUDED_BY_PATTERN:
+                report_data.excluded_corrections.append(
+                    (
+                        entry.typo,
+                        entry.word,
+                        entry.blocker or "exclusion pattern",
+                    )
+                )
+            elif entry.reason == RejectionReason.TOO_SHORT:
+                min_length = pass_context.min_typo_length
+                report_data.skipped_short.append((entry.typo, entry.word, min_length))
+            elif entry.reason == RejectionReason.PATTERN_VALIDATION_FAILED:
+                report_data.rejected_patterns.append(
+                    (
+                        entry.typo,
+                        entry.word,
+                        entry.boundary,
+                        entry.blocker or "validation failed",
+                    )
+                )
+
+        # Extract pattern data
+        for pattern in state.active_patterns:
+            typo, word, boundary = pattern
+            replacements = state.pattern_replacements.get(pattern, [])
+            report_data.generalized_patterns.append((typo, word, boundary, len(replacements)))
+            if replacements:
+                report_data.pattern_replacements[pattern] = replacements
+
+        # Track corrections counts at different stages
+        # Before generalization: all corrections that were ever active
+        # We approximate this as active corrections + patterns (since patterns replace corrections)
+        report_data.corrections_before_generalization = (
+            len(state.active_corrections)
+            + len(state.active_patterns)
+            + len(state.pattern_replacements)
+        )
+        report_data.corrections_after_generalization = len(state.active_corrections) + len(
+            state.active_patterns
+        )
+        # After conflicts: same as after generalization (conflicts are removed during solver)
+        report_data.corrections_after_conflicts = report_data.corrections_after_generalization
+
     # Stage 7: Platform-specific ranking and filtering
     if verbose:
         logger.info("Stage 7: Applying platform-specific ranking...")
 
     # Combine corrections and patterns for ranking
-    all_corrections = solver_result.corrections + solver_result.patterns
-
-    # Filter corrections (if platform provides additional filtering)
-    filtered_corrections, _ = platform.filter_corrections(all_corrections, config)
+    # Deduplicate: same (typo, word, boundary) can appear in both corrections and patterns
+    all_corrections = list(dict.fromkeys(solver_result.corrections + solver_result.patterns))
 
     # Rank corrections
-    # Create dummy pattern_replacements for compatibility
-    pattern_replacements = {}
+    # Use pattern_replacements from state
+    pattern_replacements = state.pattern_replacements.copy()
+    # Ensure all patterns have entries (even if empty)
     for pattern in solver_result.patterns:
-        pattern_replacements[pattern] = []
+        if pattern not in pattern_replacements:
+            pattern_replacements[pattern] = []
 
     ranked_corrections = platform.rank_corrections(
-        filtered_corrections,
+        all_corrections,
         solver_result.patterns,
         pattern_replacements,
         dict_data.user_words_set,
         config,
     )
+
+    if report_data:
+        report_data.ranked_corrections_before_limit = ranked_corrections.copy()
 
     # Apply platform constraints (e.g., max corrections limit)
     if constraints.max_corrections and len(ranked_corrections) > constraints.max_corrections:
@@ -191,6 +281,9 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     if verbose:
         logger.info(f"✓ Final: {len(final_corrections)} corrections")
         logger.info("")
+
+    if report_data:
+        report_data.final_corrections = final_corrections
 
     # Stage 8: Generate output
     start_output = time.time()
@@ -210,13 +303,31 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
         report_data.stage_times["Generating output"] = output_elapsed
 
     # Generate reports if enabled
-    if config.reports:
+    if config.reports and report_data is not None and report_dir is not None:
         if verbose:
             logger.info("Stage 9: Generating reports...")
 
         # Generate standard reports (report_dir already created earlier)
         platform_name = platform.get_name()
         generate_reports(report_data, config.reports, platform_name, verbose, report_dir=report_dir)
+
+        # Generate platform-specific reports
+        if hasattr(platform, "generate_platform_report"):
+            try:
+                platform.generate_platform_report(
+                    final_corrections,
+                    ranked_corrections,
+                    all_corrections,
+                    solver_result.patterns,
+                    pattern_replacements,
+                    dict_data.user_words_set,
+                    report_dir,
+                    config,
+                )
+            except (ValueError, KeyError, AttributeError, OSError) as e:
+                logger.warning(f"Failed to generate platform-specific report: {e}")
+                if config.debug:
+                    logger.debug(traceback.format_exc())
 
         if verbose:
             logger.info(f"✓ Reports written to: {report_dir}/")

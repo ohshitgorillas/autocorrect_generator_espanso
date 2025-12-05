@@ -1,10 +1,7 @@
 """Data models for passing information between pipeline stages."""
 
-from collections import defaultdict
-
 from pydantic import BaseModel, Field
 
-from entroppy.core import BoundaryType, Correction
 from entroppy.matching import ExclusionMatcher
 
 
@@ -34,39 +31,4 @@ class DictionaryData(StageResult):
 class TypoGenerationResult(StageResult):
     """Output from typo generation stage."""
 
-    typo_map: dict[str, list[str]] = Field(default_factory=lambda: defaultdict(list))
-
-
-class CollisionResolutionResult(StageResult):
-    """Output from collision resolution stage."""
-
-    corrections: list[Correction] = Field(default_factory=list)
-    skipped_collisions: list[tuple[str, list[str], float, BoundaryType]] = Field(
-        default_factory=list
-    )
-    skipped_short: list[tuple[str, str, int]] = Field(default_factory=list)
-    excluded_corrections: list[tuple[str, str, str | None]] = Field(default_factory=list)
-
-
-class PatternGeneralizationResult(StageResult):
-    """Output from pattern generalization stage."""
-
-    corrections: list[Correction] = Field(default_factory=list)
-    patterns: list[Correction] = Field(default_factory=list)
-    removed_count: int = Field(0, ge=0)
-    pattern_replacements: dict[Correction, list[Correction]] = Field(default_factory=dict)
-    rejected_patterns: list[tuple[str, str, BoundaryType, str]] = Field(default_factory=list)
-
-
-class ConflictRemovalResult(StageResult):
-    """Output from conflict removal stage."""
-
-    corrections: list[Correction] = Field(default_factory=list)
-    removed_corrections: list[tuple[str, str, str, str, BoundaryType]] = Field(default_factory=list)
-    conflicts_removed: int = Field(0, ge=0)
-
-
-class OutputGenerationResult(StageResult):
-    """Output from output generation stage."""
-
-    files_written: int = Field(0, ge=0)
+    typo_map: dict[str, list[str]] = Field(default_factory=dict)

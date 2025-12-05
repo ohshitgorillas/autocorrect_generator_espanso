@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any, TextIO
 
-from entroppy.core import BoundaryType, Correction, format_boundary_display, format_boundary_name
+from entroppy.core import BoundaryType, Correction, format_boundary_display
 from entroppy.reports import write_report_header
 from entroppy.reports.helpers import write_section_header
 from entroppy.utils.helpers import write_file_safely
@@ -12,13 +12,12 @@ from entroppy.utils.helpers import write_file_safely
 def generate_qmk_ranking_report(
     final_corrections: list[Correction],
     ranked_corrections_before_limit: list[Correction],
-    filtered_corrections: list[Correction],
+    all_corrections: list[Correction],
     patterns: list[Correction],
     pattern_replacements: dict[Correction, list[Correction]],
     user_corrections: list[Correction],
     pattern_scores: list[tuple[float, str, str, BoundaryType]],
     direct_scores: list[tuple[float, str, str, BoundaryType]],
-    filter_metadata: dict[str, Any],
     report_dir: Path,
 ) -> dict[str, Any]:
     """Generate comprehensive QMK ranking report."""
@@ -26,7 +25,7 @@ def generate_qmk_ranking_report(
 
     def write_content(f: TextIO) -> None:
         write_report_header(f, "QMK AUTOCORRECT RANKING REPORT")
-        _write_overview_statistics(f, final_corrections, filtered_corrections)
+        _write_overview_statistics(f, final_corrections, all_corrections)
         _write_summary_by_type(
             f,
             final_corrections,
@@ -35,7 +34,6 @@ def generate_qmk_ranking_report(
             direct_scores,
             pattern_replacements,
         )
-        _write_filtering_details(f, filter_metadata)
         _write_complete_ranked_list(
             f,
             final_corrections,
@@ -79,15 +77,13 @@ def generate_qmk_ranking_report(
 
 
 def _write_overview_statistics(
-    f: TextIO, final_corrections: list[Correction], filtered_corrections: list[Correction]
+    f: TextIO, final_corrections: list[Correction], all_corrections: list[Correction]
 ) -> None:
     """Write overview statistics section."""
     write_section_header(f, "OVERVIEW STATISTICS")
     f.write(f"Total corrections selected:        {len(final_corrections):,}\n")
-    f.write(f"Available after filtering:         {len(filtered_corrections):,}\n")
-    selection_rate = (
-        (len(final_corrections) / len(filtered_corrections) * 100) if filtered_corrections else 0
-    )
+    f.write(f"Available corrections:              {len(all_corrections):,}\n")
+    selection_rate = (len(final_corrections) / len(all_corrections) * 100) if all_corrections else 0
     f.write(f"Selection rate:                    {selection_rate:.1f}%\n\n")
 
 
@@ -309,77 +305,6 @@ def _write_enhanced_direct_details(
         boundary_display = format_boundary_display(boundary)
         f.write(f"Rank {rank:4d}  Score: {score:.6f}  {typo} → {word}  {boundary_display}\n")
 
-    f.write("\n")
-
-
-def _write_filtering_details(f: TextIO, filter_metadata: dict[str, Any]) -> None:
-    """Write filtering details section."""
-    write_section_header(f, "FILTERING DETAILS")
-    filter_reasons = filter_metadata.get("filter_reasons", {})
-    f.write(f"Character set violations:          {filter_reasons.get('char_set', 0):,}\n")
-    f.write(
-        f"Same-typo conflicts resolved:      {filter_reasons.get('same_typo_conflicts', 0):,}\n"
-    )
-    f.write(f"RTL suffix conflicts removed:      {filter_reasons.get('suffix_conflicts', 0):,}\n\n")
-
-    _write_char_violations(f, filter_metadata)
-    _write_same_typo_conflicts(f, filter_metadata)
-    _write_suffix_conflicts(f, filter_metadata)
-
-
-def _write_char_violations(f: TextIO, filter_metadata: dict[str, Any]) -> None:
-    """Write character set violations examples."""
-    char_filtered = filter_metadata.get("char_filtered", [])
-    if not char_filtered:
-        return
-
-    f.write("  Character Set Violations (first 10 examples):\n")
-    for typo, word, reason in char_filtered[:10]:
-        f.write(f"    {typo} → {word} ({reason})\n")
-    remaining = len(char_filtered) - 10
-    if remaining > 0:
-        f.write(f"    ... and {remaining} more\n")
-    f.write("\n")
-
-
-def _write_same_typo_conflicts(f: TextIO, filter_metadata: dict[str, Any]) -> None:
-    """Write same-typo conflicts examples."""
-    same_typo_conflicts = filter_metadata.get("same_typo_conflicts", [])
-    if not same_typo_conflicts:
-        return
-
-    f.write("  Same-Typo Conflicts (first 10 examples):\n")
-    for (
-        removed_typo,
-        removed_word,
-        kept_typo,
-        kept_word,
-        boundary,
-    ) in same_typo_conflicts[:10]:
-        boundary_name = format_boundary_name(boundary)
-        f.write(f"    REMOVED: {removed_typo} → {removed_word} ({boundary_name})\n")
-        f.write(f"    KEPT:    {kept_typo} → {kept_word} (less restrictive)\n")
-        f.write("\n")
-    remaining = len(same_typo_conflicts) - 10
-    if remaining > 0:
-        f.write(f"    ... and {remaining} more\n")
-    f.write("\n")
-
-
-def _write_suffix_conflicts(f: TextIO, filter_metadata: dict[str, Any]) -> None:
-    """Write RTL suffix conflicts examples."""
-    suffix_conflicts = filter_metadata.get("suffix_conflicts", [])
-    if not suffix_conflicts:
-        return
-
-    f.write("  RTL Suffix Conflicts (first 10 examples):\n")
-    for long_typo, long_word, short_typo, short_word, _ in suffix_conflicts[:10]:
-        f.write(f"    {long_typo} → {long_word}\n")
-        f.write(f"      blocked by: {short_typo} → {short_word}\n")
-        f.write("\n")
-    remaining = len(suffix_conflicts) - 10
-    if remaining > 0:
-        f.write(f"    ... and {remaining} more\n")
     f.write("\n")
 
 

@@ -5,9 +5,9 @@ from loguru import logger
 from entroppy.cli import create_parser
 from entroppy.core import load_config
 from entroppy.processing import run_pipeline
+from entroppy.utils.constants import Constants
 from entroppy.utils.debug import DebugTypoMatcher
 from entroppy.utils.logging import setup_logger
-from entroppy.utils.constants import Constants
 
 
 def main():

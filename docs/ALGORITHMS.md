@@ -1,322 +1,695 @@
-# EntropPy Algorithms and Architecture
+# EntropPy: Complete Algorithm Documentation
 
-## Overview
+This document explains how EntropPy works, from loading dictionaries to generating the final autocorrect output.
 
-EntropPy uses a sophisticated pipeline to generate typo corrections that work reliably across different text expansion platforms. As of version 0.6.0, the core optimization engine uses an **Iterative Solver Architecture** that can backtrack and self-heal when conflicts arise.
+---
 
-## Pipeline Architecture
+## Overview: The Complete Pipeline
 
-### Stages 1-2: Data Preparation
+EntropPy processes words through seven main stages:
 
-#### Stage 1: Dictionary Loading
-- Loads validation dictionaries, source words, and exclusion patterns
-- Builds boundary detection indices for efficient lookups
-- Prepares adjacent letter mappings for typo generation
+1. **Dictionary Loading** - Loads source words and validation dictionaries
+2. **Typo Generation** - Creates typos from each word using five error types
+3. **Collision Resolution** - Resolves when multiple words map to the same typo
+4. **Pattern Generalization** - Finds common patterns to reduce dictionary size
+5. **Conflict Removal** - Removes corrections that would interfere with each other
+6. **Platform Filtering** - Applies platform-specific constraints
+7. **Final Selection** - Ranks and selects the best corrections
 
-#### Stage 2: Typo Generation
-- Generates candidate typos using various error simulation methods:
-  - Character transpositions (adjacent swaps)
-  - Character substitutions (using QWERTY keyboard proximity)
-  - Character deletions
-  - Character insertions
-- Produces a "raw typo map": `typo -> [possible_words]`
+Let's walk through each stage in detail.
 
-### Stages 3-6: Iterative Solver (New in v0.6.0)
+---
 
-The iterative solver replaces the linear stages 3-6 with a convergence-based approach that can backtrack and retry alternatives when conflicts arise.
+## Stage 1: Dictionary Loading
 
-#### Core Concept
+### What Happens
 
-Instead of making irrevocable decisions in early stages, the solver treats dictionary optimization as a **convergence problem**. If a correction is rejected by a later stage (e.g., due to conflicts), earlier stages can propose alternative versions (e.g., using stricter boundaries) in the next iteration.
+EntropPy loads three types of data:
 
-#### Architecture Components
+1. **Source Words** - The words to generate typos from
+2. **Validation Dictionary** - Words that are considered "valid" (typos shouldn't match these)
+3. **Configuration** - Adjacent key mappings, exclusions, etc.
 
-##### 1. DictionaryState
+### Source Words
 
-The centralized "Source of Truth" that manages:
+Source words come from two places:
 
-- **Raw Typo Map**: The input from Stage 2 (`typo -> [possible_words]`)
-- **Active Corrections**: Current set of valid `(typo, word, boundary)` tuples
-- **Active Patterns**: Generalized pattern rules
-- **The Graveyard**: Registry of rejected corrections
-  - Key: `(typo, word, boundary)`
-  - Value: `RejectionReason` and blocker information
-  - **Critical**: Prevents infinite loops by remembering failed attempts
+- **Top-N from wordfreq**: The most common English words (e.g., `--top-n 5000`)
+- **Include file**: Custom words you specify (e.g., `--include my_words.txt`)
+- **Full dictionary (with `--hurtmycpu`)**: When `--hurtmycpu` is enabled, ALL words from the `english-words` dictionary are used as source words (minus exclusions and length filters). This enables comprehensive pattern discovery but takes significantly longer to process. The `--top-n` argument still controls final dictionary selection/ranking.
 
-##### 2. IterativeSolver
+### Validation Dictionary
 
-The orchestrator that runs passes in sequence until convergence:
+The validation dictionary is built from:
 
-```python
-iteration = 0
-while state.is_dirty and iteration < MAX_ITERATIONS:
-    state.start_iteration()
+- **English words database** (`english-words` package with web2 and gcide)
+- **Include file words** (added to validation set)
+- **Exclude file patterns** (removed from validation set)
 
-    for pass in passes:
-        pass.run(state)
+### Adjacent Key Mapping
 
-    iteration += 1
-```
+If provided, this maps each key to its adjacent keys on the keyboard. This is used to generate realistic typos based on keyboard layout.
 
-Convergence occurs when no changes are made in a complete iteration.
+### Exclusion Patterns
 
-##### 3. The Passes
+Exclusions can filter out:
+- **Words** from the validation dictionary (using wildcard patterns like `*teh*`)
+- **Corrections** from being generated (using `typo -> word` syntax)
 
-###### A. CandidateSelectionPass (Refactored Stage 3)
+---
 
-**Role**: Promotes raw typos to active corrections
+## Stage 2: Typo Generation
 
-**Logic**:
-1. Iterate through all raw typos
-2. Skip typos already covered by active corrections or patterns
-3. Attempt to resolve collisions (frequency-based)
-4. Determine valid boundaries (ordered: NONE → LEFT/RIGHT → BOTH)
-5. **Crucial Step**: Check the Graveyard
-   - If `(typo, word, NONE)` is in graveyard, try `(typo, word, LEFT/RIGHT)`
-   - This implements **backtracking/self-healing**
-6. Add valid correction to active set
+### What Happens
 
-**Self-Healing Example**:
-```
-Iteration 1:
-  - "teh" → "the" added with NONE boundary
-  - "tehir" → "their" attempted with NONE boundary
-  - Added to active corrections
+For each source word, EntropPy generates typos using five algorithms:
 
-Next pass (Conflict Removal):
-  - Detects "tehir" conflicts with "teh"
-  - Removes "tehir", adds to graveyard with reason "blocked_by_conflict"
-
-Iteration 2:
-  - CandidateSelectionPass sees "tehir" is not covered
-  - Checks graveyard: (tehir, their, NONE) is dead
-  - Tries (tehir, their, LEFT) instead
-  - Succeeds! No conflict with LEFT boundary
-```
-
-###### B. PatternGeneralizationPass (Refactored Stage 4)
-
-**Role**: Compresses specific corrections into general patterns
+1. **Transpositions** - Swapped adjacent characters
+2. **Omissions** - Missing characters
+3. **Duplications** - Doubled characters
+4. **Replacements** - Wrong characters (requires adjacent key map)
+5. **Insertions** - Extra characters (requires adjacent key map)
 
-**Logic**:
-1. Scan active corrections for repeated patterns
-2. Identify prefix/suffix patterns (e.g., `*er → *re`)
-3. Validate patterns against validation set
-4. Check graveyard (don't retry failed patterns)
-5. **Action**: Add pattern to active set, remove specific corrections
-
-**Example**:
-```
-Corrections:
-  aer → are
-  ehr → her
-  oer → ore
-
-Pattern detected:
-  *er → *re
-
-Result:
-  Pattern added: *er → *re
-  Specific corrections removed
-```
-
-###### C. ConflictRemovalPass (Refactored Stage 5)
-
-**Role**: Enforces substring/overlap rules
-
-**Logic**:
-1. Group corrections by boundary type
-2. For each group, detect conflicts:
-   - **LEFT/NONE/BOTH**: Longer typos starting with shorter typos
-   - **RIGHT**: Longer typos ending with shorter typos
-3. **Action**: Remove conflicting correction, add to graveyard with blocker info
-4. **Self-Healing Trigger**: By removing and recording the blocker, this signals CandidateSelectionPass to try a stricter boundary in the next iteration
-
-**Conflict Detection**:
-```
-Corrections:
-  teh → the (NONE)
-  tehir → their (NONE)
-
-Conflict check:
-  - "tehir" starts with "teh"?  Yes
-  - "teh" + "ir" = "their"?     Yes
-  - Conflict!
-
-Action:
-  - Remove (tehir, their, NONE)
-  - Add to graveyard with blocker="teh"
-```
-
-###### D. PlatformConstraintsPass (Refactored Stage 6)
-
-**Role**: Enforces hard platform limits
-
-**Logic**:
-1. Check character set constraints (e.g., QMK: a-z and apostrophe only)
-2. Check length limits for typos and words
-3. Check boundary support
-4. **Action**: Remove invalid items, add to graveyard with reason
-
-**Example Constraints**:
-```
-QMK Platform:
-  - Max corrections: 6000
-  - Allowed chars: a-z, '
-  - Boundary support: Yes
-
-Action:
-  - Remove: café → cafe (invalid chars)
-  - Add to graveyard: platform_constraint
-```
-
-#### Data Flow
-
-```
-Raw Typo Map
-    ↓
-DictionaryState ←→ CandidateSelection
-    ↓                    ↓
-PatternGeneralization ← ← ←
-    ↓
-ConflictRemoval (adds to graveyard)
-    ↓
-PlatformConstraints (adds to graveyard)
-    ↓
-Converged? → YES: Final corrections
-           → NO:  Start next iteration
-```
-
-### Stage 7: Platform-Specific Ranking and Filtering
-
-- Apply additional platform-specific filtering
-- Rank corrections by usefulness/frequency
-- Prioritize user-specified words
-- Apply max corrections limit
-
-### Stage 8: Output Generation
-
-- Generate platform-specific output format
-- YAML for Espanso
-- C array for QMK
-
-### Stage 9: Report Generation (Optional)
-
-- Generate detailed reports
-- Show statistics for each stage
-- List rejected patterns and conflicts
-- Debug trace for specified words/typos
-
-## Boundary Types
-
-Boundary markers control when corrections trigger:
-
-- **NONE**: Triggers anywhere (e.g., "teh" in "atheist" → "atheist")
-- **LEFT**: Must be at word start (e.g., `:teh` matches "teh" but not "ateh")
-- **RIGHT**: Must be at word end (e.g., `teh:` matches "teh" but not "tehn")
-- **BOTH**: Standalone word only (e.g., `:teh:` matches "teh" but not in "teh" or "ateh")
-
-## Conflict Resolution
-
-### Substring Conflicts
-
-When one typo is a substring of another, the shorter one takes precedence:
-
-```
-Example (LEFT boundary):
-  teh → the
-  tehir → their
-
-When typing "tehir":
-  1. Platform sees "teh" first
-  2. Triggers: "the" + "ir" = "their" ✓
-  3. Result: "tehir" correction is redundant
-```
-
-### Collision Resolution
-
-When multiple words compete for the same typo:
-
-```
-Example:
-  nto → not (freq: 1000)
-  nto → into (freq: 100)
-
-Frequency ratio: 1000/100 = 10.0
-Threshold: 2.0
-
-Result: Choose "not" (clear winner)
-```
-
-If ratio ≤ threshold: ambiguous collision, skip both.
-
-## Pattern Generalization
+### Algorithm Details
+
+#### 1. Transpositions
+
+Swaps each pair of adjacent characters. For a word of length n, generates n-1 typos.
+
+**Example**: For the word "have":
+- `ahve` (swapped h-a)
+- `hvae` (swapped a-v)
+- `haev` (swapped v-e)
+
+For the word "there":
+- `htere` (swapped t-h)
+- `tehre` (swapped h-e)
+- `three` (swapped e-r, but filtered as it's a source word)
+
+#### 2. Omissions
+
+Removes each character (only for words with 4+ characters). For a word of length n, generates n typos.
+
+**Example**: For the word "have":
+- `ave` (removed h, but filtered - is a valid word)
+- `hve` (removed a)
+- `hae` (removed v)
+- `hav` (removed e)
+
+For the word "example":
+- `xample` (removed e)
+- `eample` (removed x)
+- `exmple` (removed a)
+- `exaple` (removed m)
+- `examle` (removed p)
+- `exampe` (removed l)
+- `exampl` (removed e)
+
+#### 3. Duplications
+
+Doubles each character. For a word of length n, generates n typos.
+
+**Example**: For the word "have":
+- `hhave` (doubled h)
+- `haave` (doubled a)
+- `havve` (doubled v)
+- `havee` (doubled e)
+
+For the word "other":
+- `oother` (doubled o)
+- `otther` (doubled t)
+- `othher` (doubled h)
+- `otheer` (doubled e)
+- `otherr` (doubled r)
+
+#### 4. Replacements
+
+Replaces each character with adjacent keys (requires adjacent key map). For each character that has adjacent keys mapped, generates one typo per adjacent key.
+
+**Example**: For the word "have" (h adjacent to g, j; a adjacent to s, w, q; v adjacent to c, b, f, g):
+- `hgave` (replaced h with g)
+- `ghave` (replaced h with g, inserted before)
+- `hjave` (replaced h with j)
+- `jhave` (replaced h with j, inserted before)
+- `hasve` (replaced a with s)
+- `hsave` (replaced a with s, inserted before)
+- `havce` (replaced v with c)
+- `hacve` (replaced v with c, inserted before)
+- `havbe` (replaced v with b)
+- `habve` (replaced v with b, inserted before)
+
+#### 5. Insertions
+
+Inserts adjacent keys before or after each character (requires adjacent key map). For each character that has adjacent keys mapped, generates two typos per adjacent key: one inserted after the character, and one inserted before the character.
+
+**Example**: For the word "have" (v adjacent to w, r):
+- `havew` (inserted w after v)
+- `havwe` (inserted w before v)
+- `haver` (inserted r after v, but filtered - is a valid word)
+- `havre` (inserted r before v)
+
+For the word "there" (h adjacent to g, j, y, t, r):
+- `trhere` (inserted r before h)
+- `rthere` (inserted r after h)
+- `tyhere` (inserted y before h)
+- `ythere` (inserted y after h)
+
+### Filtering Generated Typos
+
+Not all generated typos are kept. Each typo is checked:
+
+1. **Is it the original word?** → Skip
+2. **Is it a source word?** → Skip
+3. **Is it in the validation dictionary?** → Skip
+4. **Is it explicitly excluded?** → Skip
+5. **Does it exceed frequency threshold?** → Skip (too common, might be a real word)
+
+**Examples**:
+- For "have": `ave` was filtered because it's a valid word (in validation dictionary)
+- For "have": `gave` was filtered because it's a source word
+- For "have": `haver` was filtered because it's a valid word
+- For "there": `three` was filtered because it's a source word
+- For "there": `theer` was filtered because it's a valid word
+- For "there": `here` was filtered because it's a source word
+- For "there": `thee` was filtered because it's a valid word
+- For "other": `toher` was filtered because it's a valid word
+- For "other": `pother` was filtered because it's a valid word
+- For "other": `ither` was filtered because it's a valid word
+- For "example": `exampler` was filtered because it's a valid word
+- For "haven't": `havent` was filtered because it's a valid word
+
+Notice that some typos map to multiple words - this is a **collision** that needs resolution in the next stage.
+
+---
+
+## Stage 3: Collision Resolution
+
+### What Happens
+
+When multiple words map to the same typo, EntropPy must decide which correction to use (or skip it entirely).
+
+### Resolution Algorithm
+
+The key insight is that **boundaries fundamentally change whether corrections conflict**. For example, "nto" with BOTH boundary → "not" doesn't conflict with "nto" with NONE boundary → "onto" because they match in different contexts.
+
+**New Algorithm (Boundary-First Approach):**
+
+1. **Determine boundaries for all competing words** - For each word competing for the same typo, determine the least restrictive boundary that prevents false triggers
+2. **Group words by boundary type** - Separate competing words into groups based on their boundary type (NONE, LEFT, RIGHT, BOTH)
+3. **Resolve collisions within each boundary group** - For each boundary group:
+   - If only one word in the group → accept it (no collision for this boundary)
+   - If multiple words in the group → apply frequency-based resolution:
+     - Calculate word frequencies using `wordfreq`
+     - Compare frequencies - if one word is much more common (ratio > threshold), use it
+     - If ratio is too low, skip this boundary group (ambiguous for this boundary)
+4. **Validate** - Check length, exclusions, etc. for each accepted correction
+5. **Return multiple corrections** - One correction per valid boundary group
+
+**Result**: The same typo can produce multiple corrections with different boundaries, as long as they don't conflict within the same boundary group. For example, "nto" can map to:
+- "nto" (BOTH) → "not" (standalone word only)
+- "nto" (NONE) → "onto" (matches anywhere)
+
+**Examples**:
+
+**Ambiguous collisions (skipped due to similar frequencies)**:
+- `theree` → `['there', 'there', 'three']` with ratio 1.00, boundary: both - skipped (ambiguous)
+- `neeed` → `['need', 'need', 'needed']` with ratio 1.00, boundary: none - skipped (ambiguous)
+- `yeasr` → `['year', 'years']` with ratio 1.00, boundary: none - skipped (ambiguous)
+- `dsay` → `['day', 'day', 'say']` with ratio 1.00, boundary: left - skipped (ambiguous)
+- `partt` → `['part', 'part', 'party']` with ratio 1.00, boundary: none - skipped (ambiguous)
+- `fel` → `['feel', 'feel', 'felt', 'fell', 'fell', 'fuel', 'del']` with ratio 1.00, boundary: both - skipped (ambiguous)
+- `fre` → `['free', 'free', 'fire', 'fee', 'fred']` with ratio 1.00, boundary: both - skipped (ambiguous)
+- `dsays` → `['days', 'days', 'says']` with ratio 1.00, boundary: none - skipped (ambiguous)
+- `caree` → `['care', 'care', 'career']` with ratio 1.00, boundary: right - skipped (ambiguous)
+- `businesss` → `['business', 'business', 'businesses']` with ratio 1.00, boundary: none - skipped (ambiguous)
+- `wek` → `['week', 'week', 'weak']` with ratio 1.00, boundary: right - skipped (ambiguous)
+- `ful` → `['full', 'full', 'fuel']` with ratio 1.00, boundary: both - skipped (ambiguous)
+
+**Note**: User words (from include file) are included in collision resolution like any other words. They receive special priority treatment during QMK ranking (Stage 6), not during collision resolution.
+
+### Boundary Selection
+
+For each typo, EntropPy selects the **least restrictive boundary** that doesn't cause false triggers (garbage corrections).
+
+**Selection Algorithm:**
+
+1. **Determine natural boundary** using `determine_boundaries()`:
+   - Checks if typo appears as substring in validation or source words
+   - Uses **filtered validation set** (respects user exclusion patterns) for boundary detection
+   - Returns `NONE` if typo doesn't appear anywhere, `BOTH` if appears only in middle, `LEFT`/`RIGHT` if appears at word boundaries
+
+2. **Get boundary order to try** based on natural boundary:
+   - If natural is `NONE` → Try: NONE, LEFT, RIGHT, BOTH
+   - If natural is `LEFT` → Try: LEFT, BOTH
+   - If natural is `RIGHT` → Try: RIGHT, BOTH
+   - If natural is `BOTH` → Try: BOTH only
+
+3. **For each boundary in the determined order**, check if it would cause false triggers (in priority order):
+   - **Target word check (highest priority)**: Check if typo appears as prefix/suffix/substring of the target word itself
+     - This prevents "predictive corrections" where the correction would trigger when typing the correct word
+     - Example: `alway -> always` with NONE/LEFT boundary would trigger when typing "always", producing "alwayss"
+   - **Validation words check**: Check if typo appears as prefix/suffix/substring in validation dictionary (uses **full validation set** to catch all garbage corrections, regardless of user exclusions)
+   - **Source words check**: Check if typo appears as prefix/suffix/substring in source words
+   - **NONE**: Would cause false trigger if typo appears as substring anywhere (target, validation, or source)
+   - **LEFT**: Would cause false trigger if typo appears as prefix of any word (target, validation, or source)
+   - **RIGHT**: Would cause false trigger if typo appears as suffix of any word (target, validation, or source)
+   - **BOTH**: Never causes false triggers (always safe)
+
+4. **Select the first boundary** that doesn't cause false triggers and passes all other checks (length, exclusions)
+
+5. **Graveyard false triggers**: If a boundary would cause false triggers, it is added to the graveyard with `RejectionReason.FALSE_TRIGGER`. This prevents the same unsafe boundary from being retried on subsequent iterations.
+
+6. **Fallback**: If all boundaries would cause false triggers or fail other checks, the correction is **not added** in this iteration. On the next iteration, the graveyard prevents retrying unsafe boundaries, allowing the solver to try safer boundaries (e.g., BOTH instead of NONE) and eventually converge to a safe solution.
+
+**Key Principle**: Select the least restrictive boundary that safely prevents the typo from incorrectly matching the target word, validation words, or source words in unintended contexts. The boundary order is optimized based on the typo's relationship to the target word to avoid testing incompatible boundaries. Target word check takes highest priority to prevent predictive corrections.
+
+---
+
+## Stage 4: Pattern Generalization
+
+### What Happens
+
+EntropPy looks for common patterns in corrections to reduce dictionary size. Instead of storing many similar corrections, it stores one pattern that matches multiple cases.
 
 ### Pattern Types
 
-- **Suffix patterns**: `*typo → *word` (e.g., `*er → *re`)
-- **Prefix patterns**: `typo* → word*` (e.g., `th* → the*`)
+Patterns are extracted from the **end** of words (suffix patterns) for Espanso, or from the **beginning** (prefix patterns) for QMK, depending on the platform's matching direction.
+
+#### Suffix Patterns (Espanso - Left-to-Right Matching)
+
+Patterns are extracted from the end of words. The algorithm:
+1. Groups corrections by word length (for efficiency)
+2. For each correction, extracts all valid pattern candidates at different suffix lengths (2 to max)
+3. Groups directly by `(typo_pattern, word_pattern, boundary)` across ALL corrections, regardless of their "other part" (prefix)
+4. A pattern is found when 2+ corrections share the same typo suffix and word suffix
+
+**Key improvement**: Patterns are found even when corrections have different prefixes. For example, "action" → "action" and "lection" → "lection" both share the pattern "tion" → "tion" despite having different prefixes ("ac" vs "lec").
+
+**Examples**:
+- Pattern `unents → uments` replaced 2 specific corrections:
+  - `argunents → arguments`
+  - `instrunents → instruments`
+- Pattern `biilty → bility` replaced 3 specific corrections:
+  - `disabiilty → disability`
+  - `stabiilty → stability`
+  - `possibiilty → possibility`
+- Pattern `nnign → nning` replaced 5 specific corrections:
+  - `beginnign → beginning`
+  - `plannign → planning`
+  - `stunnign → stunning`
+  - `runnign → running`
+  - `winnign → winning`
+- Pattern `giht → ight` replaced 13 specific corrections:
+  - `flgiht → flight`
+  - `alrgiht → alright`
+  - `kngiht → knight`
+  - `brgiht → bright`
+  - `highlgiht → highlight`
+  - `wegiht → weight`
+  - `stragiht → straight`
+  - `slgiht → slight`
+  - `hegiht → height`
+  - `copyrgiht → copyright`
+- Pattern `nibg → ning` replaced 28 specific corrections:
+  - `plannibg → planning`
+  - `minibg → mining`
+  - `meanibg → meaning`
+  - `runnibg → running`
+  - `listenibg → listening`
+  - `concernibg → concerning`
+  - `warnibg → warning`
+  - `cleanibg → cleaning`
+  - `returnibg → returning`
+  - `joinibg → joining`
+- Pattern `vwly → vely` (RIGHT boundary) replaced 5 specific corrections:
+  - `exclusivwly → exclusively`
+  - `effectivwly → effectively`
+  - `lovwly → lovely`
+  - `relativwly → relatively`
+  - `activwly → actively`
+
+**Boundary inclusion**: For suffix patterns, corrections with both `RIGHT` and `NONE` boundaries are included, since NONE boundary corrections can still have valid suffix patterns.
+
+#### Prefix Patterns (QMK - Right-to-Left Matching)
+
+Prefix patterns work similarly but extract from the beginning of words:
+1. Groups corrections by word length (for efficiency)
+2. For each correction, extracts all valid pattern candidates at different prefix lengths (2 to max)
+3. Groups directly by `(typo_pattern, word_pattern, boundary)` across ALL corrections, regardless of their "other part" (suffix)
+4. A pattern is found when 2+ corrections share the same typo prefix and word prefix
+
+**Boundary inclusion**: For prefix patterns, corrections with both `LEFT` and `NONE` boundaries are included, since NONE boundary corrections can still have valid prefix patterns.
+
+**Examples**:
+- Pattern `prvo → prov` (LEFT boundary) replaced 2 specific corrections:
+  - `prvoen → proven`
+  - `prvoed → proved`
+- Pattern `trsd → trad` (LEFT boundary) replaced 3 specific corrections:
+  - `trsditional → traditional`
+  - `trsding → trading`
+  - `trsdition → tradition`
+- Pattern `proef → profe` (LEFT boundary) replaced 2 specific corrections:
+  - `proefssional → professional`
+  - `proefssor → professor`
+- Pattern `legislait → legislati` (LEFT boundary) replaced 2 specific corrections:
+  - `legislaitve → legislative`
+  - `legislaiton → legislation`
+- Pattern `srcu → secu` (LEFT boundary) replaced 3 specific corrections:
+  - `srcurity → security`
+  - `srcured → secured`
+  - `srcurities → securities`
+
+### Pattern Extraction Caching
+
+To optimize performance across solver iterations, pattern extraction results are cached per correction. This avoids re-extracting patterns for the same corrections on each iteration.
+
+**Caching Strategy:**
+- **Cache Key**: `(typo, word, boundary, is_suffix)` - uniquely identifies a correction and pattern type (prefix vs suffix)
+- **Cache Value**: List of all valid patterns extracted from that correction: `(typo_pattern, word_pattern, boundary, length)`
+- **Cache Lifetime**: Persists across all solver iterations (stored in `PatternGeneralizationPass` instance)
+- **Cache Invalidation**: Not needed - patterns are extracted once per correction, then filtered by graveyard state on each iteration
+
+**How It Works:**
+1. On first extraction: Extract all valid patterns from a correction (without graveyard filtering) and store in cache
+2. On subsequent iterations: Retrieve cached patterns and filter by current graveyard state (which changes as patterns are rejected)
+3. Benefits: Eliminates redundant pattern extraction work when corrections persist across multiple iterations
+
+**Performance Impact**: Significantly reduces pattern extraction time for iterative solver runs, especially when many corrections persist across iterations.
 
 ### Pattern Validation
 
-Patterns must:
-1. Apply to at least 2 corrections
-2. Not create false positives
-3. Not violate platform constraints
+Not all patterns are valid. Each pattern must pass these checks in order:
 
-### Pattern Efficiency
+1. **Have at least 2 occurrences** - Patterns with only one occurrence are skipped (not worth generalizing)
+2. **Meet minimum length** - Pattern must be at least `min_typo_length` characters
+3. **Work for all occurrences** - The pattern must correctly transform all matching typos (validates that applying the pattern to each full typo produces the expected full word)
+4. **Not conflict with validation words** - Pattern typo must not be a validation word, and must not trigger at the start or end of validation words. The boundary type determines which checks are performed:
+   - **RIGHT boundary**: Only checks if pattern would trigger at end (skips start check, since RIGHT only matches at word end)
+   - **LEFT boundary**: Only checks if pattern would trigger at start (skips end check, since LEFT only matches at word start)
+   - **BOTH boundary**: Skips both checks (BOTH only matches standalone words, not substrings)
+   - **NONE boundary**: Checks both start and end (NONE matches anywhere)
 
-A pattern is worth it if:
-```
-Savings = (corrections_replaced * correction_cost) - pattern_cost > 0
-```
+   **Examples**:
+   - Pattern `teh → the` (NONE) is rejected because it would trigger at start of validation words (e.g., `tehuelet`, `teheran`)
+   - Pattern `teh → eth` (NONE) is rejected because it would trigger at start of validation words (e.g., `teheran`)
+5. **Not corrupt target words (highest priority for corruption checks)** - Pattern must not incorrectly transform any target word from corrections that use the pattern (prevents predictive corrections). This check is performed before checking source words.
+6. **Not corrupt source words** - Pattern must not incorrectly transform any source word
+7. **Not incorrectly match other corrections** - Pattern must not appear as a substring (prefix or suffix) of another correction's typo where applying the pattern would produce a different result. This check applies in both directions regardless of platform or matching direction:
+   - **Suffix conflicts**: If pattern appears as suffix of another correction's typo, applying the pattern must produce the same result as the direct correction
+   - **Prefix conflicts**: If pattern appears as prefix of another correction's typo, applying the pattern must produce the same result as the direct correction
+   - **Examples**:
+     - Pattern `toin → tion` is rejected because it would incorrectly match `bictoin → bitcoin` as a suffix, producing `biction` instead of `bitcoin`
+     - Pattern `toin → tion` is rejected because it would incorrectly match `washingtoin → washington` as a suffix, producing `washingtion` instead of `washington`
+     - Pattern `ntoin → ntion` is rejected because it would incorrectly match `clintoin → clinton` as a suffix, producing `clintion` instead of `clinton`
+     - Pattern `atoin → ation` is rejected because it would incorrectly match `latoin → latin` as a suffix, producing `lation` instead of `latin`
+     - Pattern `actoin → action` is rejected because it would incorrectly match `actoing → acting` as a prefix, producing `actiong` instead of `acting`
+8. **Not redundant with already-accepted patterns** - Pattern must not be redundant with shorter patterns that have already been accepted. A pattern is redundant if a shorter pattern would produce the same result when applied to the longer pattern's typo:
+   - Checks all positions where the shorter pattern appears in the longer pattern's typo
+   - If applying the shorter pattern produces the same result as the longer pattern, the longer pattern is rejected
+   - **Examples**:
+     - If `utoin → ution` is already accepted, then `tutoin → tution` is rejected because applying `utoin → ution` to `tutoin` at position 1 produces `tution`
+     - If `utoin → ution` is already accepted, then `lutoin → lution` is rejected because applying `utoin → ution` to `lutoin` at position 1 produces `lution`
+     - If `utoin → ution` is already accepted, then `itutoin → itution` is rejected because applying `utoin → ution` to `itutoin` at position 2 produces `itution`
+     - If `entoin → ention` is already accepted, then `tentoin → tention` is rejected because applying `entoin → ention` to `tentoin` at position 1 produces `tention`
+     - If `tehr → ther` is already accepted, then `otehr → other` is rejected because applying `tehr → ther` to `otehr` at position 1 produces `other`
+   - This check works regardless of matching direction and prevents duplicate patterns in output
 
-## Self-Healing Architecture Benefits
+### Pattern Collision Resolution
 
-### 1. Automatic Backtracking
+Patterns can also have collisions (multiple words for same pattern typo). These are resolved the same way as regular collisions using frequency ratios. After collision resolution, patterns also undergo substring conflict removal to eliminate redundant patterns (e.g., if pattern "ectiona" exists, pattern "lectiona" would be redundant).
 
-No need for upfront planning. The solver automatically retries with stricter boundaries when conflicts arise.
+### Cross-Boundary Deduplication
 
-### 2. Convergence Guarantees
+After pattern validation, if a pattern's (typo, word) pair already exists as a direct correction (even with different boundary), the pattern is rejected and the direct corrections that would have been replaced by the pattern are restored to the final corrections list. This is a separate step from pattern validation that ensures patterns don't duplicate existing direct corrections.
 
-The graveyard prevents infinite loops. Each correction can only be tried once per boundary type.
+---
 
-### 3. Robustness
+## Stage 5: Conflict Removal
 
-If one approach fails, the solver automatically tries alternatives. This leads to more comprehensive coverage.
+### What Happens
 
-### 4. Debuggability
+EntropPy removes corrections and patterns where one typo is a substring of another **with the same boundary**. This prevents shorter corrections from blocking longer ones. Both direct corrections and patterns are checked for conflicts, and patterns can conflict with each other or with direct corrections.
 
-The trace log shows exactly why each decision was made, making it easy to understand and debug the optimization process.
+### Why Conflicts Matter
 
-## Performance Characteristics
+When a text expansion tool sees a typo, it triggers on the **first match** (shortest, leftmost). If a shorter typo matches first, a longer one becomes unreachable. Conflicts only occur when corrections share the same boundary type.
 
-### Time Complexity
+### Conflict Detection Algorithm
 
-- **CandidateSelection**: O(n) per iteration
-- **ConflictRemoval**: O(n²) worst case, O(n log n) average with indexing
-- **PatternGeneralization**: O(n)
-- **Total**: O(n² * i) where i = number of iterations (typically 2-3)
+1. **Combine corrections and patterns** - Both `active_corrections` and `active_patterns` are included in conflict detection, as patterns can conflict with each other and with direct corrections
+2. **Group by boundary type** - Process each boundary separately (conflicts only occur within the same boundary type)
+3. **Sort by typo length** (shortest first) - Process shorter typos first to identify which longer typos they block
+4. **For each shorter typo**, check if it appears as a substring of any longer typo **anywhere** (prefix, suffix, or middle):
+   - **For RIGHT boundary**: Finds the last occurrence (right-to-left matching)
+   - **For LEFT/NONE/BOTH boundaries**: Finds the first occurrence (left-to-right matching)
+5. **Validate the result** - If substring match found, verify that triggering the shorter correction would produce the correct result for the longer typo
+6. **If conflict found**, remove the longer typo/pattern (the shorter one blocks it) and add it to the graveyard
+7. **Keep the shorter typo** (it blocks the longer one and produces the correct result)
 
-### Space Complexity
+The algorithm uses character-based indexing for efficiency, checking only typos that share the same starting/ending character rather than comparing all pairs.
 
-- **DictionaryState**: O(n) for corrections + O(g) for graveyard
-- **Passes**: O(1) (stateless)
-- **Total**: O(n + g) where g = graveyard size (typically < n)
+**Examples**:
+- For the word "abandoned", the shorter typo `annd → and` blocks 8 longer typos:
+  - `abanndoned` (blocked by `annd`)
+  - `abaandoned` (blocked by `aand`)
+  - `ababndoned` (blocked by `abnd`)
+  - `abanfdoned` (blocked by `anfd`)
+  - `abanbdoned` (blocked by `anbd`)
+  - `abamndoned` (blocked by `amnd`)
+  - `abanmdoned` (blocked by `anmd`)
+  - `abasndoned` (blocked by `asnd`)
+- For the word "absolute", the shorter typo `abso` blocks 10 longer typos:
+  - `sbsolute` (blocked by `sbso`)
+  - `basolute` (blocked by `basol`)
+  - `avsolute` (blocked by `avso`)
+  - `aboslute` (blocked by `abosl`)
+  - `ansolute` (blocked by `ansol`)
+  - `absplute` (blocked by `abspl`)
+  - `absilute` (blocked by `absil`)
+  - `absloute` (blocked by `abslo`)
+  - `abaolute` (blocked by `aolu`)
+  - `abdolute` (blocked by `abdol`)
 
-## Future Enhancements
+### Pattern Updates from Conflicts
 
-### Possible Improvements
+When a shorter correction blocks a longer one during conflict removal (Stage 5), the shorter correction becomes a **pattern** (if it wasn't already), and the blocked correction is added to its replacements. This also happens during platform filtering (Stage 6) when QMK-specific conflicts are detected (suffix conflicts and substring conflicts). Corrections with BOTH boundaries are skipped from pattern updates since they can't block other corrections (they only match standalone words).
 
-1. **Parallel Pass Execution**: Some passes could run in parallel
-2. **Incremental Updates**: Only reprocess changed items
-3. **Heuristic Ordering**: Order passes based on expected impact
-4. **Adaptive Thresholds**: Adjust collision threshold based on feedback
+---
 
-### Extension Points
+## Stage 5.5: Platform Substring Conflict Detection
 
-The Pass interface makes it easy to add new passes:
-- Grammar-aware corrections
-- Context-sensitive rules
-- Machine learning-based ranking
-- Custom platform-specific optimizations
+### What Happens
+
+After within-boundary conflicts are removed (Stage 5), this pass detects **cross-boundary substring conflicts** that occur when the same typo text appears with different boundaries. This is critical for platforms like QMK where boundary markers are part of the formatted string.
+
+### Why This Matters
+
+**QMK (RTL)**: QMK formats boundaries using colon notation:
+- `aemr` (NONE boundary) → `"aemr"`
+- `aemr` (LEFT boundary) → `":aemr"`
+
+When QMK's compiler sees both `"aemr"` and `":aemr"`, it detects that `"aemr"` is a substring of `":aemr"` and rejects the dictionary with: "Typos may not be substrings of one another, otherwise the longer typo would never trigger".
+
+**Espanso (LTR)**: While boundaries are handled separately in YAML (not part of the trigger string), the same core typo with different boundaries can still cause runtime conflicts depending on matching order.
+
+### Conflict Detection Algorithm
+
+1. **Format typos with platform-specific boundary markers** (parallelized for large datasets):
+   - **QMK**: Uses colon notation (`:typo`, `typo:`, `:typo:`, or `typo`)
+   - **Espanso**: Uses core typo text (boundaries are separate YAML fields)
+   - Results are cached to avoid redundant formatting
+
+2. **Build formatted typo index** - Map each formatted typo to its corrections
+
+3. **Check for substring relationships** using optimized algorithms:
+   - **Length bucket processing**: Group formatted typos by length into buckets and process buckets in length order. Only check conflicts between adjacent length buckets (a typo of length 3 can't be a substring of a typo of length 2)
+   - **Character-based indexing**: Within each bucket comparison, index shorter typos by their first character
+   - For each longer formatted typo, only check against shorter typos that share the same first character
+   - This reduces comparisons from O(N²) to O(N × K) where K = average candidates per character (typically < 50)
+   - **Optimized substring checks**: Use `startswith()` for prefix checks and `endswith()` for suffix checks (faster than `in` operator), falling back to `in` only for middle substrings
+   - Uses `processed_pairs` set to avoid duplicate conflict processing
+   - **Early termination**: Track corrections already marked for removal and skip checking pairs where one correction is already marked
+
+4. **Determine which to remove** based on:
+   - **Same word**: Prefer less restrictive boundary (NONE > LEFT/RIGHT > BOTH) - if both boundaries passed false trigger checks, the less restrictive one matches in more contexts
+   - **Different words + RTL (QMK)**: Prefer less restrictive boundary (NONE > LEFT/RIGHT > BOTH)
+   - **Different words + LTR (Espanso)**: Prefer less restrictive boundary (NONE > LEFT/RIGHT > BOTH)
+
+5. **Remove conflicting correction** and add to graveyard with reason
+   - Conflict pairs are stored during detection to avoid redundant searching in debug logging
+
+### Examples
+
+**Example 1**: For QMK with typos `aemr` (NONE) and `aemr` (LEFT):
+- Formatted: `"aemr"` and `":aemr"`
+- Conflict detected: `"aemr"` is substring of `":aemr"`
+- Decision: Remove `":aemr"` (LEFT - more restrictive), keep `"aemr"` (NONE - less restrictive)
+- Reasoning: Both boundaries passed false trigger checks in Stage 3, so NONE is preferred because it matches in more contexts
+- Result: QMK compiler accepts the dictionary
+
+
+---
+
+## Stage 6: Platform-Specific Filtering and Ranking
+
+### What Happens
+
+Each platform (Espanso, QMK) has different constraints and capabilities. This stage applies platform-specific filtering and ranks corrections by usefulness.
+
+### Platform Constraints
+
+#### Espanso Constraints
+- **No character limits** - Supports full Unicode
+- **No correction limits** - Can handle hundreds of thousands
+- **Supports boundaries** - LEFT, RIGHT, BOTH, NONE
+- **Left-to-right matching** - Matches from start of word
+
+#### QMK Constraints
+- **Character limits** - Only letters (a-z) and apostrophe (')
+- **Correction limits** - Limited by flash memory (typically ~1,100)
+- **Supports boundaries** - Via ':' notation (:typo, typo:, :typo:)
+- **Right-to-left matching** - Matches from end of word
+
+### Platform Filtering
+
+#### QMK Filtering
+
+QMK filtering applies one essential step:
+
+**1. Character Set Filtering** - Removes corrections containing characters other than a-z and apostrophe. Both typo and word are checked, and both are converted to lowercase.
+
+**Note**: From the actual run, 0 character set violations were found, meaning all corrections passed this filter.
+
+**Note:** Same-typo conflict resolution, suffix, and substring conflict detection were removed because:
+- QMK DOES support boundaries (via ':' notation), so all boundary variants should be kept
+- The iterative solver (ConflictRemovalPass) already handles conflicts within boundary groups
+- The previous logic was removing good corrections (like "teh" -> "the") and keeping bad ones (like "geou" -> "grou")
+- QMK's compiler will reject any remaining substring conflicts anyway, so pre-filtering is unnecessary
+- The "garbage correction removal" logic was flawed and could restore invalid corrections that had been properly rejected earlier
+
+#### Espanso Filtering
+
+Espanso has minimal filtering - it accepts all corrections passed from earlier stages (passthrough). The only processing is organizing corrections by starting letter and splitting into multiple YAML files if they exceed the `max_entries_per_file` limit.
+
+### Platform Ranking
+
+#### QMK Ranking
+
+QMK uses a three-tier ranking system:
+
+1. **User words first** - All corrections for words from include file get infinite priority (always included)
+2. **Patterns ranked by coverage** - Patterns are scored by the sum of word frequencies of all corrections they replace. Higher total frequency ranks higher.
+3. **Direct corrections ranked by frequency** - Direct corrections are scored by their word frequency. More common words rank higher.
+
+Within each tier, corrections are sorted by score (descending). The final ranked list is: user corrections + sorted patterns + sorted direct corrections.
+
+**Examples from actual QMK ranking**:
+
+**User words (always included first)**:
+- Rank 1: `fiurmware → firmware` (LEFT boundary) - USER word
+- Rank 2: `keybnoard → keyboard` - USER word
+- Rank 3: `keybord → keyboard` - USER word
+- Rank 4: `keybioard → keyboard` - USER word
+- Rank 5: `mechanival → mechanical` - USER word
+
+**Patterns (ranked by coverage - sum of word frequencies)**:
+- Patterns are scored by the total frequency of all words they replace
+- Higher coverage patterns rank higher (e.g., a pattern replacing 28 corrections with high-frequency words ranks higher than one replacing 2 corrections with low-frequency words)
+- Example: Pattern `nibg → ning` replaced 28 corrections including `planning`, `mining`, `meaning`, `running`, etc., so it gets a high score based on the sum of all those word frequencies
+
+**Direct corrections (ranked by word frequency)**:
+- More common words rank higher
+- In the actual run, 0 direct corrections made it into the top 1,000 (patterns were more valuable)
+
+**Final ranking example** (from actual run):
+- Total corrections selected: 1,000 (out of 229,426 available)
+- User words: 282 (28.2%) - always included first
+- Patterns: 718 (71.8%) - replaced 4,709 corrections total
+- Direct corrections: 0 (0.0%) - none made it into top 1,000
+
+#### Espanso Ranking
+
+Espanso uses no ranking - corrections are passed through in their original order (passthrough). They are sorted alphabetically by word, then by typo, for output organization only.
+
+
+---
+
+## Stage 7: Final Selection and Output
+
+### What Happens
+
+The final stage applies platform limits and generates output files.
+
+### Applying Limits
+
+If the platform has a `max_corrections` limit, truncate the ranked list to that limit.
+
+**Example**: For QMK with a limit of 1,000 corrections:
+- After ranking, the top 1,000 corrections are selected
+- From the example run: 229,426 corrections were available after filtering
+- Only 1,000 (0.4%) were selected based on ranking
+- All 282 user words were included (they have infinite priority)
+- 718 patterns were included (ranked by coverage)
+- 0 direct corrections made it into the final list (patterns were more valuable)
+
+### Output Generation
+
+#### Espanso Output
+
+Generates YAML files with corrections, including boundary markers (`:` for boundaries) and splitting into multiple files if needed.
+
+
+#### QMK Output
+
+Generates a text file with corrections in the format `typo word`, one per line.
+
+### Report Generation
+
+If `--reports` is specified, generates detailed reports including summaries, collision resolutions, patterns, conflicts, statistics, and platform-specific analysis.
+
+---
+
+## Key Algorithms Summary
+
+### Typo Generation Algorithms
+
+1. **Transpositions**: `O(n)` - Swap each adjacent pair
+2. **Omissions**: `O(n)` - Remove each character (n≥4)
+3. **Duplications**: `O(n)` - Double each character
+4. **Replacements**: `O(n×k)` - Replace with k adjacent keys
+5. **Insertions**: `O(n×k)` - Insert k adjacent keys at each position
+
+**Total complexity per word**: `O(n×k)` where n=word length, k=avg adjacent keys
+
+### Collision Resolution
+
+**Algorithm**: Frequency-based selection with ratio threshold
+- **Time**: `O(m log m)` where m=number of competing words
+- **Space**: `O(m)`
+
+### Pattern Generalization
+
+**Algorithm**: Sliding window pattern extraction
+- **Time**: `O(n×m)` where n=corrections, m=avg word length
+- **Space**: `O(n×m)`
+
+### Conflict Removal
+
+**Algorithm**: Substring matching with boundary grouping
+- **Time**: `O(n²×m)` where n=corrections, m=avg typo length
+- **Space**: `O(n)`
+
+---
+
+## Conclusion
+
+EntropPy's pipeline transforms a list of words into an optimized autocorrect dictionary through seven carefully designed stages. Each stage addresses specific challenges:
+
+- **Stage 2** generates realistic typos
+- **Stage 3** resolves ambiguities
+- **Stage 4** reduces dictionary size
+- **Stage 5** prevents interference
+- **Stage 6** optimizes for platform constraints
+- **Stage 7** produces final output
+
+The result is a high-quality autocorrect dictionary tailored to your platform's capabilities and constraints.

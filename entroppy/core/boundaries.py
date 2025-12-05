@@ -147,7 +147,15 @@ def is_substring_of_any(typo: str, index: BoundaryIndex) -> bool:
     Returns:
         True if typo is a substring of any word (excluding exact matches)
     """
-    return _check_typo_in_wordset(typo, "substring", index)
+    # First check the pre-built substring_set for fast lookup
+    if typo in index.substring_set:
+        return True
+    # Also do a direct check against all words in case substring_set is incomplete
+    # This is a fallback for when validation set doesn't include all possible words
+    for word in index.word_set:
+        if typo in word and typo != word:
+            return True
+    return False
 
 
 def would_trigger_at_start(typo: str, index: BoundaryIndex) -> bool:

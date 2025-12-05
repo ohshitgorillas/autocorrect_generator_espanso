@@ -7,7 +7,7 @@ from typing import TextIO
 def format_time(seconds: float) -> str:
     """Format seconds into human-readable time."""
     if seconds < 1:
-        return f"{seconds*1000:.0f}ms"
+        return f"{seconds * 1000:.0f}ms"
     if seconds < 60:
         return f"{seconds:.1f}s"
     minutes, secs = divmod(seconds, 60)

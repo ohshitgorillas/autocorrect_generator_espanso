@@ -4,12 +4,8 @@ Tests verify pattern extraction logic that finds common prefix and suffix patter
 in typo corrections. Each test has a single assertion and focuses on behavior.
 """
 
-from entroppy.core.boundaries import BoundaryType
-from entroppy.core.config import Correction
-from entroppy.core.pattern_extraction import (
-    find_suffix_patterns,
-    find_prefix_patterns,
-)
+from entroppy.core import BoundaryType, Correction
+from entroppy.core.pattern_extraction import find_prefix_patterns, find_suffix_patterns
 
 
 class TestFindSuffixPatterns:
@@ -38,11 +34,13 @@ class TestFindSuffixPatterns:
         """When corrections have different boundary types, only extracts from RIGHT boundaries."""
         corrections: list[Correction] = [
             ("testeh", "testhe", BoundaryType.RIGHT),
-            ("testeh", "testhe", BoundaryType.LEFT),
+            ("wordeh", "wordhe", BoundaryType.RIGHT),
+            ("testeh", "testhe", BoundaryType.LEFT),  # This should be ignored
         ]
         result = find_suffix_patterns(corrections)
         pattern_key = ("eh", "he", BoundaryType.RIGHT)
-        assert len(result[pattern_key]) == 1
+        # Should have 2 matches (both RIGHT boundary corrections)
+        assert len(result[pattern_key]) == 2
 
     def test_requires_minimum_length_for_non_pattern_part(self) -> None:
         """When non-pattern part is too short, does not extract pattern."""
@@ -88,13 +86,13 @@ class TestFindSuffixPatterns:
         assert not result
 
     def test_handles_single_correction(self) -> None:
-        """When only one correction exists, extracts patterns from it."""
+        """When only one correction exists, no patterns are returned (requires 2+ occurrences)."""
         corrections: list[Correction] = [
             ("testeh", "testhe", BoundaryType.RIGHT),
         ]
         result = find_suffix_patterns(corrections)
-        # Function extracts patterns from individual corrections
-        assert len(result) > 0
+        # Patterns require 2+ occurrences, so single correction produces no patterns
+        assert len(result) == 0
 
     def test_extracts_pattern_from_corrections_of_same_length(self) -> None:
         """When corrections have same word length, extracts pattern correctly."""
@@ -185,13 +183,13 @@ class TestFindPrefixPatterns:
         assert not result
 
     def test_handles_single_correction(self) -> None:
-        """When only one correction exists, extracts patterns from it."""
+        """When only one correction exists, no patterns are returned (requires 2+ occurrences)."""
         corrections: list[Correction] = [
             ("hword", "tword", BoundaryType.LEFT),
         ]
         result = find_prefix_patterns(corrections)
-        # Function extracts patterns from individual corrections
-        assert len(result) > 0
+        # Patterns require 2+ occurrences, so single correction produces no patterns
+        assert len(result) == 0
 
     def test_extracts_pattern_from_corrections_of_same_length(self) -> None:
         """When corrections have same word length, extracts pattern correctly."""

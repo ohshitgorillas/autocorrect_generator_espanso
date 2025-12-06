@@ -8,8 +8,6 @@ from loguru import logger
 from tqdm import tqdm
 
 from entroppy.core import BoundaryType
-from entroppy.core.boundaries import determine_boundaries
-from entroppy.resolution.false_trigger_check import _check_false_trigger_with_details
 from entroppy.resolution.passes.candidate_selection_workers import (
     _process_typo_batch_worker,
 )
@@ -31,13 +29,8 @@ if TYPE_CHECKING:
 class CandidateSelectionPass(Pass):
     """Selects and promotes raw typos to active corrections.
 
-    This pass:
-    1. Iterates through all raw typos
-    2. Checks if each is already covered by active corrections or patterns
-    3. If not covered, attempts to resolve collisions and add corrections
-    4. Implements self-healing by checking the Graveyard:
-       - If (typo, word, NONE) is dead, tries (typo, word, LEFT/RIGHT/BOTH)
-       - This allows the solver to backtrack to stricter boundaries
+    Iterates through raw typos, checks coverage, resolves collisions, and adds corrections.
+    Implements self-healing via Graveyard: if (typo, word, NONE) fails, tries stricter boundaries.
     """
 
     @property
@@ -52,11 +45,25 @@ class CandidateSelectionPass(Pass):
             state: The dictionary state to modify
         """
         # Get typos to process (not already covered)
-        typos_to_process = [
-            (typo, word_list)
-            for typo, word_list in state.raw_typo_map.items()
-            if not state.is_typo_covered(typo)
-        ]
+        # Use uncovered_typos set if available and not first iteration
+        uncovered_typos = state._caching._uncovered_typos
+        if state.current_iteration == 1:
+            # First iteration: check all typos and build uncovered set
+            typos_to_process = []
+            for typo, word_list in state.raw_typo_map.items():
+                if not state.is_typo_covered(typo):
+                    typos_to_process.append((typo, word_list))
+                    uncovered_typos.add(typo)
+        else:
+            # Subsequent iterations: early termination if no uncovered typos
+            if not uncovered_typos:
+                return
+            # Only process uncovered typos
+            typos_to_process = [
+                (typo, state.raw_typo_map[typo])
+                for typo in uncovered_typos
+                if typo in state.raw_typo_map
+            ]
 
         if not typos_to_process:
             return
@@ -124,12 +131,8 @@ class CandidateSelectionPass(Pass):
             graveyard=graveyard_set,
         )
 
-        # Split into chunks (4 chunks per worker for load balancing)
-        chunk_size = max(1, len(typos_to_process) // (self.context.jobs * 4))
-        chunks = [
-            typos_to_process[i : i + chunk_size]
-            for i in range(0, len(typos_to_process), chunk_size)
-        ]
+        # Calculate optimal chunk size based on workload
+        chunks = self._calculate_optimal_chunks(typos_to_process, self.context.jobs)
 
         logger.info(f"  Using {self.context.jobs} parallel workers for candidate selection")
         logger.info(f"  Processing {len(typos_to_process)} typos in {len(chunks)} chunks")
@@ -172,6 +175,36 @@ class CandidateSelectionPass(Pass):
                         typo, word, boundary, reason, blocker, pass_name=self.name
                     )
 
+    @staticmethod
+    def _calculate_optimal_chunks(
+        typos_to_process: list[tuple[str, list[str]]], num_workers: int
+    ) -> list[list[tuple[str, list[str]]]]:
+        """Calculate optimal chunk size and split typos into chunks.
+
+        Args:
+            typos_to_process: List of (typo, word_list) tuples to process
+            num_workers: Number of parallel workers
+
+        Returns:
+            List of chunks, each containing a list of (typo, word_list) tuples
+        """
+        # Estimate work per typo (single word vs collision)
+        single_word_typos = sum(1 for _, words in typos_to_process if len(set(words)) == 1)
+        collision_typos = len(typos_to_process) - single_word_typos
+
+        # Collisions are 3-5x more expensive
+        total_work_units = single_word_typos + (collision_typos * 4)
+
+        # Target 50-100 work units per chunk (balances overhead vs granularity)
+        optimal_chunks = max(num_workers, total_work_units // 75)
+        optimal_chunks = min(optimal_chunks, num_workers * 10)  # Cap at 10 chunks per worker
+
+        chunk_size = max(1, len(typos_to_process) // optimal_chunks)
+        return [
+            typos_to_process[i : i + chunk_size]
+            for i in range(0, len(typos_to_process), chunk_size)
+        ]
+
     def _process_single_word(
         self,
         state: "DictionaryState",
@@ -185,8 +218,8 @@ class CandidateSelectionPass(Pass):
             typo: The typo string
             word: The correct word
         """
-        # Determine the natural boundary for this typo
-        natural_boundary = determine_boundaries(
+        # Determine the natural boundary for this typo (using cache)
+        natural_boundary = state._caching.get_cached_boundary(
             typo,
             self.context.validation_index,
             self.context.source_index,
@@ -223,12 +256,12 @@ class CandidateSelectionPass(Pass):
                 )
                 continue
 
-            # Check for false triggers
+            # Check for false triggers (using cache)
             # pylint: disable=duplicate-code
             # Intentional duplication: Same false trigger check pattern used in multiple places
             # (worker functions, sequential functions, and boundary_selection.py) to ensure
             # consistent validation logic across all code paths where corrections are added.
-            would_cause, details = _check_false_trigger_with_details(
+            would_cause, details = state._caching.get_cached_false_trigger(
                 typo,
                 boundary,
                 self.context.validation_index,
@@ -266,15 +299,14 @@ class CandidateSelectionPass(Pass):
             typo: The typo string
             unique_words: List of competing words
         """
-        # Determine boundaries for each word
-        word_boundary_map = {}
-        for word in unique_words:
-            boundary = determine_boundaries(
-                typo,
-                self.context.validation_index,
-                self.context.source_index,
-            )
-            word_boundary_map[word] = boundary
+        # Determine boundaries for each word (using cache - same typo for all words)
+        boundary = state._caching.get_cached_boundary(
+            typo,
+            self.context.validation_index,
+            self.context.source_index,
+        )
+        # All words for the same typo will have the same boundary
+        word_boundary_map = {word: boundary for word in unique_words}
 
         # Group words by boundary type
         by_boundary = defaultdict(list)
@@ -336,12 +368,12 @@ class CandidateSelectionPass(Pass):
                 )
                 continue
 
-            # Check for false triggers
+            # Check for false triggers (using cache)
             # pylint: disable=duplicate-code
             # Intentional duplication: Same false trigger check pattern used in multiple places
             # (worker functions, sequential functions, and boundary_selection.py) to ensure
             # consistent validation logic across all code paths where corrections are added.
-            would_cause, _ = _check_false_trigger_with_details(
+            would_cause, _ = state._caching.get_cached_false_trigger(
                 typo,
                 bound,
                 self.context.validation_index,
@@ -446,12 +478,12 @@ class CandidateSelectionPass(Pass):
                 )
                 continue
 
-            # Check for false triggers
+            # Check for false triggers (using cache)
             # pylint: disable=duplicate-code
             # Intentional duplication: Same false trigger check pattern used in multiple places
             # (worker functions, sequential functions, and boundary_selection.py) to ensure
             # consistent validation logic across all code paths where corrections are added.
-            would_cause, _ = _check_false_trigger_with_details(
+            would_cause, _ = state._caching.get_cached_false_trigger(
                 typo,
                 bound,
                 self.context.validation_index,

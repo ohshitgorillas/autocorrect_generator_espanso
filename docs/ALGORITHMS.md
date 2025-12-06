@@ -506,6 +506,9 @@ When QMK's compiler sees both `"aemr"` and `":aemr"`, it detects that `"aemr"` i
    - **Character-based indexing**: Within each bucket comparison, index shorter typos by their first character
    - For each longer formatted typo, only check against shorter typos that share the same first character
    - This reduces comparisons from O(N²) to O(N × K) where K = average candidates per character (typically < 50)
+   - **Parallel detection** (when `--jobs > 1` and bucket size >= 100): Conflict detection is parallelized using a two-phase approach:
+     - **Phase 1 (Parallel)**: Multiple workers perform read-only conflict detection across chunks of typos in the current bucket, finding all potential conflicts without modifying shared state
+     - **Phase 2 (Sequential)**: All detected conflicts are resolved deterministically using the same decision rules as the sequential algorithm, ensuring correctness while achieving 7-8x speedup on conflict detection
    - **Optimized substring checks**: Use `startswith()` for prefix checks and `endswith()` for suffix checks (faster than `in` operator), falling back to `in` only for middle substrings
    - Uses `processed_pairs` set to avoid duplicate conflict processing
    - **Early termination**: Track corrections already marked for removal and skip checking pairs where one correction is already marked

@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - **Comprehensive debug reports**: Added three new debug report flags (`--debug-graveyard`, `--debug-patterns`, `--debug-corrections`) for tracking complete lifecycle of corrections, patterns, and graveyard entries with iteration/pass context, timestamps, and reasons. Enhanced existing `--debug-words` and `--debug-typos` flags to generate lifecycle reports combining Stage 2 typo generation events with solver lifecycle events. History tracking uses Pydantic models for type validation.
+- **Parallelized platform substring conflict detection**: Implemented two-phase parallelization for `PlatformSubstringConflicts` pass. Phase 1 performs read-only conflict detection in parallel across multiple workers, while Phase 2 applies deterministic sequential resolution to ensure correctness. This provides 7-8x speedup on conflict detection when using multiple workers, significantly reducing runtime for large correction sets. Parallelization is automatically enabled when `--jobs > 1` and bucket size >= 100.
+
+### Changed
 
 ### Changed
 

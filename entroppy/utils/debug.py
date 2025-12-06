@@ -97,17 +97,32 @@ class DebugTypoMatcher:
         if starts_with_colon and ends_with_colon:
             # BOTH boundary
             cls._add_to_boundary_collection(
-                core, pattern, has_wildcard, both_boundary, both_wc_regexes, both_wc_originals
+                core,
+                pattern,
+                has_wildcard,
+                both_boundary,
+                both_wc_regexes,
+                both_wc_originals,
             )
         elif starts_with_colon:
             # LEFT boundary
             cls._add_to_boundary_collection(
-                core, pattern, has_wildcard, left_boundary, left_wc_regexes, left_wc_originals
+                core,
+                pattern,
+                has_wildcard,
+                left_boundary,
+                left_wc_regexes,
+                left_wc_originals,
             )
         elif ends_with_colon:
             # RIGHT boundary
             cls._add_to_boundary_collection(
-                core, pattern, has_wildcard, right_boundary, right_wc_regexes, right_wc_originals
+                core,
+                pattern,
+                has_wildcard,
+                right_boundary,
+                right_wc_regexes,
+                right_wc_originals,
             )
         else:
             # No boundary markers - matches any boundary

@@ -12,6 +12,7 @@ from entroppy.resolution.state import RejectionReason
 from entroppy.resolution.worker_context import (
     CandidateSelectionContext,
     get_candidate_selection_worker_context,
+    get_candidate_worker_boundary_cache,
     get_candidate_worker_indexes,
 )
 from entroppy.utils.helpers import cached_word_frequency
@@ -88,8 +89,13 @@ def _process_single_word_worker(
         corrections: List to append corrections to
         graveyard_entries: List to append graveyard entries to
     """
-    # Determine the natural boundary for this typo
-    natural_boundary = determine_boundaries(typo, validation_index, source_index)
+    # Determine the natural boundary for this typo (using cache)
+    boundary_cache = get_candidate_worker_boundary_cache()
+    if typo in boundary_cache:
+        natural_boundary = boundary_cache[typo]
+    else:
+        natural_boundary = determine_boundaries(typo, validation_index, source_index)
+        boundary_cache[typo] = natural_boundary
 
     # Try boundaries in order: NONE -> LEFT/RIGHT -> BOTH
     boundaries_to_try = _get_boundary_order(natural_boundary)
@@ -222,7 +228,13 @@ def _handle_ambiguous_collision(
     """Handle ambiguous collision by adding all words to graveyard."""
     for word in words:
         graveyard_entries.append(
-            (typo, word, boundary, RejectionReason.COLLISION_AMBIGUOUS, f"ratio={ratio:.2f}")
+            (
+                typo,
+                word,
+                boundary,
+                RejectionReason.COLLISION_AMBIGUOUS,
+                f"ratio={ratio:.2f}",
+            )
         )
 
 
@@ -345,11 +357,16 @@ def _process_collision_worker(
         corrections: List to append corrections to
         graveyard_entries: List to append graveyard entries to
     """
-    # Determine boundaries for each word
-    word_boundary_map = {}
-    for word in unique_words:
+    # Determine boundaries for each word (using cache - same typo for all words)
+    boundary_cache = get_candidate_worker_boundary_cache()
+    if typo in boundary_cache:
+        boundary = boundary_cache[typo]
+    else:
         boundary = determine_boundaries(typo, validation_index, source_index)
-        word_boundary_map[word] = boundary
+        boundary_cache[typo] = boundary
+
+    # All words for the same typo will have the same boundary
+    word_boundary_map = {word: boundary for word in unique_words}
 
     # Group words by boundary type
     by_boundary = defaultdict(list)

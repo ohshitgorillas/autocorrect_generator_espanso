@@ -146,7 +146,12 @@ def _process_collision_case_wrapper(
             source_index,
         )
     )
-    return corrections_list, excluded_list, skipped_collisions_list, boundary_details_list
+    return (
+        corrections_list,
+        excluded_list,
+        skipped_collisions_list,
+        boundary_details_list,
+    )
 
 
 def _log_boundary_details(

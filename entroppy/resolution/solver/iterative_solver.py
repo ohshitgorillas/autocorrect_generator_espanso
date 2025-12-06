@@ -205,7 +205,11 @@ class IterativeSolver:
 
             # Run pass normally (before or including ConflictRemovalPass)
             self._run_single_pass(
-                pass_instance, state, corrections_before, patterns_before, graveyard_before
+                pass_instance,
+                state,
+                corrections_before,
+                patterns_before,
+                graveyard_before,
             )
 
     def _log_iteration_start(self, iteration: int, state: "DictionaryState") -> None:
@@ -293,7 +297,11 @@ class IterativeSolver:
 
             converged, previous_corrections, previous_patterns, previous_graveyard = (
                 _check_convergence(
-                    state, iteration, previous_corrections, previous_patterns, previous_graveyard
+                    state,
+                    iteration,
+                    previous_corrections,
+                    previous_patterns,
+                    previous_graveyard,
                 )
             )
 

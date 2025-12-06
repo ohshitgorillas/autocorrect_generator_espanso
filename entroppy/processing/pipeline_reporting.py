@@ -88,7 +88,12 @@ def _extract_rejection_data(
         report_data.skipped_short.append((entry.typo, entry.word, min_length))
     elif entry.reason == RejectionReason.PATTERN_VALIDATION_FAILED:
         report_data.rejected_patterns.append(
-            (entry.typo, entry.word, entry.boundary, entry.blocker or "validation failed")
+            (
+                entry.typo,
+                entry.word,
+                entry.boundary,
+                entry.blocker or "validation failed",
+            )
         )
 
 

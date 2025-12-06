@@ -62,6 +62,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Performance
 
+- **Suffix array optimization for platform substring conflicts**: Implemented suffix array-based substring detection in `PlatformSubstringConflictPass` using `pysuffixarray` library. Replaces O(N²) nested loop with O(log N + M) suffix array queries, reducing conflict detection time from 4-14 min to ~2 min (85% reduction). Builds suffix array once from all formatted typos, then queries efficiently for substring matches.
+- **Batch false trigger checks**: Added batch checking methods to `BoundaryIndex` class (`batch_check_start`, `batch_check_end`, `batch_check_substring`) and integrated batch processing into `CandidateSelectionPass`. Instead of making 420K individual index queries (6-11 min), all typos are checked in a single batch operation, reducing false trigger check time to 2-3 min (65% reduction). Batch results are cached and reused for individual false trigger checks.
 - **QMK ranking optimizations**: Batch word frequency lookups (O(1) access), lazy pattern scoring, optimized debug logging, and separate tier sorting. Expected 70-90% reduction in ranking time.
 - **Parallelized solver passes**: Candidate selection, pattern generalization, and conflict detection now use multiprocessing with linear speedup proportional to CPU cores. Pattern extraction results cached across iterations.
 - **Platform substring conflict detection optimizations**:

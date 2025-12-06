@@ -122,6 +122,7 @@ class TestFalseTriggerGraveyarding:
         )
 
         pass_obj = CandidateSelectionPass(pass_context)
+        state.start_iteration()  # Match production flow - solver calls this before passes
         pass_obj.run(state)
 
         # Verify NONE boundary is in graveyard with FALSE_TRIGGER reason
@@ -195,6 +196,7 @@ class TestFalseTriggerGraveyarding:
         )
 
         pass_obj = CandidateSelectionPass(pass_context)
+        state.start_iteration()  # Match production flow - solver calls this before passes
         pass_obj.run(state)
 
         graveyard_entry = state.graveyard.get(("alway", "always", BoundaryType.NONE))

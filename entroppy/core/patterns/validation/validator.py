@@ -215,7 +215,10 @@ def _check_end_trigger_conflict(
     if would_trigger_at_end(typo_pattern, validation_index):
         example_word = _find_example_suffix_match(typo_pattern, validation_index, validation_set)
         if example_word:
-            return False, f"Would trigger at end of validation words (e.g., '{example_word}')"
+            return (
+                False,
+                f"Would trigger at end of validation words (e.g., '{example_word}')",
+            )
         return False, "Would trigger at end of validation words"
 
     return True, None
@@ -235,7 +238,10 @@ def _check_start_trigger_conflict(
     if would_trigger_at_start(typo_pattern, validation_index):
         example_word = _find_example_prefix_match(typo_pattern, validation_index, validation_set)
         if example_word:
-            return False, f"Would trigger at start of validation words (e.g., '{example_word}')"
+            return (
+                False,
+                f"Would trigger at start of validation words (e.g., '{example_word}')",
+            )
         return False, "Would trigger at start of validation words"
 
     return True, None
@@ -259,7 +265,10 @@ def _check_none_boundary_substring_conflict(
                 example_word = word
                 break
         if example_word:
-            return False, f"Would falsely trigger on correctly spelled word '{example_word}'"
+            return (
+                False,
+                f"Would falsely trigger on correctly spelled word '{example_word}'",
+            )
         return False, "Would falsely trigger on correctly spelled words"
 
     return True, None

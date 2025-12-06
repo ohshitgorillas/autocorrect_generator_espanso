@@ -114,7 +114,14 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
     # Stage 7: Platform-specific ranking and filtering
     constraints = platform.get_constraints()
     final_corrections, ranked_corrections, pattern_replacements = run_stage_7_ranking(
-        solver_result, state, dict_data, platform, config, constraints, verbose, report_data
+        solver_result,
+        state,
+        dict_data,
+        platform,
+        config,
+        constraints,
+        verbose,
+        report_data,
     )
 
     # Stage 8: Generate output

@@ -12,10 +12,7 @@ from entroppy.matching import ExclusionMatcher
 from entroppy.utils.debug import DebugTypoMatcher
 
 from .boundaries.selection import log_boundary_selection_details
-from .collision_helpers import (
-    _process_collision_item,
-    _process_single_word_item,
-)
+from .collision_helpers import _process_collision_item, _process_single_word_item
 from .processing import process_collision_case, process_single_word_correction
 from .worker_context import (
     CollisionResolutionContext,
@@ -101,9 +98,21 @@ def _process_typo_worker(
                 [boundary_details] if boundary_details else [],
             )
         if excluded_info:
-            return [], [excluded_info], [], [], [boundary_details] if boundary_details else []
+            return (
+                [],
+                [excluded_info],
+                [],
+                [],
+                [boundary_details] if boundary_details else [],
+            )
         if correction:
-            return [correction], [], [], [], [boundary_details] if boundary_details else []
+            return (
+                [correction],
+                [],
+                [],
+                [],
+                [boundary_details] if boundary_details else [],
+            )
         return [], [], [], [], [boundary_details] if boundary_details else []
 
     # Collision case: multiple words compete for same typo
@@ -233,7 +242,12 @@ def _process_single_threaded_collisions(
     # Wrap with progress bar if verbose
     if verbose:
         items_iter: list[tuple[str, list[str]]] = list(
-            tqdm(typo_map.items(), total=len(typo_map), desc="Resolving collisions", unit="typo")
+            tqdm(
+                typo_map.items(),
+                total=len(typo_map),
+                desc="Resolving collisions",
+                unit="typo",
+            )
         )
     else:
         items_iter = list(typo_map.items())

@@ -45,7 +45,9 @@ def _write_overview(
 
 
 def _write_file_breakdown(
-    f: TextIO, corrections_by_letter: dict[str, list[dict[str, Any]]], max_entries_per_file: int
+    f: TextIO,
+    corrections_by_letter: dict[str, list[dict[str, Any]]],
+    max_entries_per_file: int,
 ) -> None:
     """Write file breakdown section."""
     write_section_header(f, "FILE BREAKDOWN")

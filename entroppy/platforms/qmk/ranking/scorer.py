@@ -91,7 +91,12 @@ def score_patterns(
     scores = []
     if verbose:
         pattern_iter: list[Correction] = list(
-            tqdm(pattern_corrections, desc="  Scoring patterns", unit="pattern", leave=False)
+            tqdm(
+                pattern_corrections,
+                desc="  Scoring patterns",
+                unit="pattern",
+                leave=False,
+            )
         )
     else:
         pattern_iter = pattern_corrections

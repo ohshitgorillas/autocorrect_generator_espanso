@@ -368,7 +368,12 @@ def resolve_conflicts_for_group(
 
     # Build index and identify blocked typos
     typos_to_remove, blocking_map = build_typo_index(
-        corrections, detector, boundary, debug_words, debug_typo_matcher, collect_blocking_map
+        corrections,
+        detector,
+        boundary,
+        debug_words,
+        debug_typo_matcher,
+        collect_blocking_map,
     )
 
     # Return corrections that weren't removed

@@ -26,7 +26,11 @@ def _find_patterns(
     verbose: bool = False,
     is_in_graveyard: Callable[[str, str, BoundaryType], bool] | None = None,
     pattern_cache: (
-        dict[tuple[str, str, BoundaryType, bool], list[tuple[str, str, BoundaryType, int]]] | None
+        dict[
+            tuple[str, str, BoundaryType, bool],
+            list[tuple[str, str, BoundaryType, int]],
+        ]
+        | None
     ) = None,
     debug_typos_exact: set[str] | None = None,
     debug_typos_wildcard: set[str] | None = None,
@@ -121,7 +125,11 @@ def _find_patterns(
 
     # Find common patterns (2+ occurrences)
     patterns = _find_common_patterns(
-        pattern_candidates, debug_typos, debug_enabled, debug_typos_exact, debug_typos_wildcard
+        pattern_candidates,
+        debug_typos,
+        debug_enabled,
+        debug_typos_exact,
+        debug_typos_wildcard,
     )
 
     # Log debug summary
@@ -140,7 +148,11 @@ def find_suffix_patterns(
     verbose: bool = False,
     is_in_graveyard: Callable[[str, str, BoundaryType], bool] | None = None,
     pattern_cache: (
-        dict[tuple[str, str, BoundaryType, bool], list[tuple[str, str, BoundaryType, int]]] | None
+        dict[
+            tuple[str, str, BoundaryType, bool],
+            list[tuple[str, str, BoundaryType, int]],
+        ]
+        | None
     ) = None,
     debug_typos_exact: set[str] | None = None,
     debug_typos_wildcard: set[str] | None = None,
@@ -180,7 +192,11 @@ def find_prefix_patterns(
     verbose: bool = False,
     is_in_graveyard: Callable[[str, str, BoundaryType], bool] | None = None,
     pattern_cache: (
-        dict[tuple[str, str, BoundaryType, bool], list[tuple[str, str, BoundaryType, int]]] | None
+        dict[
+            tuple[str, str, BoundaryType, bool],
+            list[tuple[str, str, BoundaryType, int]],
+        ]
+        | None
     ) = None,
     debug_typos_exact: set[str] | None = None,
     debug_typos_wildcard: set[str] | None = None,

@@ -43,4 +43,3 @@ class ReportData:
 
     # Platform-specific data for reports
     final_corrections: list[Correction] = field(default_factory=list)
-    ranked_corrections_before_limit: list[Correction] = field(default_factory=list)

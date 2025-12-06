@@ -80,7 +80,11 @@ def extract_and_merge_patterns(
     verbose: bool,
     is_in_graveyard: Callable[[str, str, BoundaryType], bool] | None = None,
     pattern_cache: (
-        dict[tuple[str, str, BoundaryType, bool], list[tuple[str, str, BoundaryType, int]]] | None
+        dict[
+            tuple[str, str, BoundaryType, bool],
+            list[tuple[str, str, BoundaryType, int]],
+        ]
+        | None
     ) = None,
 ) -> dict[tuple[str, str, BoundaryType], list[Correction]]:
     """Extract prefix and suffix patterns and merge them.

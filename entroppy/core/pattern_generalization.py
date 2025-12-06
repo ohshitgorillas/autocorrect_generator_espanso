@@ -121,7 +121,11 @@ def generalize_patterns(
     jobs: int = 1,
     is_in_graveyard: Callable[[str, str, BoundaryType], bool] | None = None,
     pattern_cache: (
-        dict[tuple[str, str, BoundaryType, bool], list[tuple[str, str, BoundaryType, int]]] | None
+        dict[
+            tuple[str, str, BoundaryType, bool],
+            list[tuple[str, str, BoundaryType, int]],
+        ]
+        | None
     ) = None,
 ) -> tuple[
     list[Correction],

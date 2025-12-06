@@ -66,3 +66,60 @@ class BoundaryIndex:
             self._build_prefix_index(word)
             self._build_suffix_index(word)
             self._build_substring_set(word)
+
+    def batch_check_start(self, typos: list[str]) -> dict[str, bool]:
+        """Batch check if typos appear as prefixes of any word.
+
+        Args:
+            typos: List of typo strings to check
+
+        Returns:
+            Dict mapping typo -> True if it appears as a prefix (excluding exact matches)
+        """
+        results: dict[str, bool] = {}
+        for typo in typos:
+            if typo in self.prefix_index:
+                matching_words = self.prefix_index[typo]
+                # Exclude exact match
+                results[typo] = any(word != typo for word in matching_words)
+            else:
+                results[typo] = False
+        return results
+
+    def batch_check_end(self, typos: list[str]) -> dict[str, bool]:
+        """Batch check if typos appear as suffixes of any word.
+
+        Args:
+            typos: List of typo strings to check
+
+        Returns:
+            Dict mapping typo -> True if it appears as a suffix (excluding exact matches)
+        """
+        results: dict[str, bool] = {}
+        for typo in typos:
+            if typo in self.suffix_index:
+                matching_words = self.suffix_index[typo]
+                # Exclude exact match
+                results[typo] = any(word != typo for word in matching_words)
+            else:
+                results[typo] = False
+        return results
+
+    def batch_check_substring(self, typos: list[str]) -> dict[str, bool]:
+        """Batch check if typos are substrings of any word.
+
+        Args:
+            typos: List of typo strings to check
+
+        Returns:
+            Dict mapping typo -> True if it is a substring (excluding exact matches)
+        """
+        results: dict[str, bool] = {}
+        for typo in typos:
+            # First check the pre-built substring_set for fast lookup
+            if typo in self.substring_set:
+                results[typo] = True
+            else:
+                # Fallback: direct check against all words
+                results[typo] = any(typo in word and typo != word for word in self.word_set)
+        return results

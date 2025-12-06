@@ -3,6 +3,8 @@
 from typing import TYPE_CHECKING
 
 from entroppy.core import BoundaryType
+from entroppy.core.boundaries import determine_boundaries
+from entroppy.resolution.false_trigger_check import _check_false_trigger_with_details
 
 if TYPE_CHECKING:
     from entroppy.core.boundaries.types import BoundaryIndex
@@ -21,6 +23,9 @@ class StateCaching:
         self._false_trigger_cache: dict[
             tuple[str, BoundaryType], tuple[bool, dict[str, bool | str | None]]
         ] = {}
+        # Batch false trigger results: typo -> dict of batch check results
+        # (cleared at start of each iteration)
+        self._batch_false_trigger_results: dict[str, dict[str, bool]] = {}
         # Track uncovered typos for early termination
         self._uncovered_typos: set[str] = set()
 
@@ -42,9 +47,6 @@ class StateCaching:
         """
         if typo in self._boundary_cache:
             return self._boundary_cache[typo]
-
-        # Import here to avoid circular dependency
-        from entroppy.core.boundaries import determine_boundaries  # noqa: PLC0415
 
         boundary = determine_boundaries(typo, validation_index, source_index)
         self._boundary_cache[typo] = boundary
@@ -74,20 +76,33 @@ class StateCaching:
         if cache_key in self._false_trigger_cache:
             return self._false_trigger_cache[cache_key]
 
-        # Import here to avoid circular dependency
-        from entroppy.resolution.false_trigger_check import (  # noqa: PLC0415
-            _check_false_trigger_with_details,
+        # Use batch results if available
+        batch_results = (
+            self._batch_false_trigger_results if self._batch_false_trigger_results else None
         )
-
         would_cause, details = _check_false_trigger_with_details(
-            typo, boundary, validation_index, source_index, target_word=target_word
+            typo,
+            boundary,
+            validation_index,
+            source_index,
+            target_word=target_word,
+            batch_results=batch_results,
         )
         self._false_trigger_cache[cache_key] = (would_cause, details)
         return would_cause, details
 
+    def set_batch_false_trigger_results(self, batch_results: dict[str, dict[str, bool]]) -> None:
+        """Set batch false trigger results for use in individual checks.
+
+        Args:
+            batch_results: Dict mapping typo -> dict of batch check results
+        """
+        self._batch_false_trigger_results = batch_results
+
     def clear_false_trigger_cache(self) -> None:
-        """Clear false trigger cache (called at start of each iteration)."""
+        """Clear false trigger cache and batch results (called at start of each iteration)."""
         self._false_trigger_cache.clear()
+        self._batch_false_trigger_results.clear()
 
     def invalidate_pattern_coverage_cache(self) -> None:
         """Invalidate pattern coverage cache (called when patterns change)."""
@@ -117,3 +132,48 @@ class StateCaching:
             if pattern_typo == typo:  # For now, exact match
                 return True
         return False
+
+    def is_typo_covered(
+        self,
+        typo: str,
+        coverage_map: dict[str, set[tuple[str, str, BoundaryType]]],
+        active_patterns: set[tuple[str, str, BoundaryType]],
+    ) -> bool:
+        """Check if a raw typo is covered by active corrections or patterns.
+
+        Args:
+            typo: The typo to check
+            coverage_map: Map of typo -> set of corrections
+            active_patterns: Set of active patterns
+
+        Returns:
+            True if the typo is covered by any active correction or pattern
+        """
+        # Check cache first
+        cache = self._pattern_coverage_cache
+        if typo in cache:
+            return cache[typo]
+
+        # Check if any active correction covers this typo (fast: O(1))
+        if typo in coverage_map and coverage_map[typo]:
+            cache[typo] = True
+            return True
+
+        # Check if any pattern covers this typo (slow: O(P) where P=2000-2300)
+        # For now, exact match (patterns will be enhanced in PatternGeneralizationPass)
+        for pattern_typo, _, _ in active_patterns:
+            if pattern_typo == typo:
+                cache[typo] = True
+                return True
+
+        # Not covered
+        cache[typo] = False
+        return False
+
+    def get_uncovered_typos(self) -> set[str]:
+        """Get uncovered typos set (for CandidateSelection pass optimization).
+
+        Returns:
+            Set of uncovered typos
+        """
+        return self._uncovered_typos

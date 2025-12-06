@@ -126,7 +126,7 @@ def apply_platform_ranking(
 def generate_platform_reports(
     platform: PlatformBackend,
     final_corrections: list[Correction],
-    ranked_corrections: list[Correction],
+    _ranked_corrections: list[Correction],
     all_corrections: list[Correction],
     solver_result: "SolverResult",
     pattern_replacements: dict,
@@ -151,7 +151,6 @@ def generate_platform_reports(
         try:
             platform.generate_platform_report(
                 final_corrections,
-                ranked_corrections,
                 all_corrections,
                 solver_result.patterns,
                 pattern_replacements,
@@ -194,7 +193,10 @@ def run_stage_1_load_dictionaries(
 
 
 def run_stage_2_generate_typos(
-    dict_data: "DictionaryData", config: Config, verbose: bool, report_data: ReportData | None
+    dict_data: "DictionaryData",
+    config: Config,
+    verbose: bool,
+    report_data: ReportData | None,
 ) -> "TypoGenerationResult":
     """Run Stage 2: Generate typos.
 
@@ -317,9 +319,6 @@ def run_stage_7_ranking(
     for pattern in solver_result.patterns:
         if pattern not in pattern_replacements:
             pattern_replacements[pattern] = []
-
-    if report_data:
-        report_data.ranked_corrections_before_limit = ranked_corrections.copy()
 
     # Apply platform constraints (e.g., max corrections limit)
     if constraints.max_corrections and len(ranked_corrections) > constraints.max_corrections:

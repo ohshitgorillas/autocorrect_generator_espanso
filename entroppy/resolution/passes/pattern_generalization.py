@@ -41,7 +41,8 @@ class PatternGeneralizationPass(Pass):
         # Key: (typo, word, boundary, is_suffix) - correction + pattern type
         # Value: List of (typo_pattern, word_pattern, boundary, length) - extracted patterns
         self._pattern_cache: dict[
-            tuple[str, str, BoundaryType, bool], list[tuple[str, str, BoundaryType, int]]
+            tuple[str, str, BoundaryType, bool],
+            list[tuple[str, str, BoundaryType, int]],
         ] = {}
 
     @property
@@ -58,7 +59,9 @@ class PatternGeneralizationPass(Pass):
         return match_direction
 
     def _process_rejected_patterns(
-        self, state: "DictionaryState", rejected_patterns: list[tuple[str, str, BoundaryType, str]]
+        self,
+        state: "DictionaryState",
+        rejected_patterns: list[tuple[str, str, BoundaryType, str]],
     ) -> None:
         """Add rejected patterns to graveyard to prevent infinite loops."""
         for typo_pattern, word_pattern, boundary, reason in rejected_patterns:

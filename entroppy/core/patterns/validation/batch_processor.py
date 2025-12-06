@@ -421,7 +421,11 @@ def run_parallel_validation(
 
     # Post-process to remove redundant patterns (parallel validation can't check during validation)
     result = _remove_redundant_patterns_post_process(
-        patterns, pattern_replacements, corrections_to_remove, rejected_patterns, debug_words
+        patterns,
+        pattern_replacements,
+        corrections_to_remove,
+        rejected_patterns,
+        debug_words,
     )
     return (
         result[0],

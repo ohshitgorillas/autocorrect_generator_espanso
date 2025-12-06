@@ -6,10 +6,7 @@ from entroppy.core.boundaries.detection import (
     would_trigger_at_end,
     would_trigger_at_start,
 )
-from entroppy.core.boundaries.formatting import (
-    format_boundary_display,
-    format_boundary_name,
-)
+from entroppy.core.boundaries.formatting import format_boundary_display, format_boundary_name
 from entroppy.core.boundaries.parsing import parse_boundary_markers
 from entroppy.core.boundaries.types import BoundaryIndex, BoundaryType
 

@@ -7,10 +7,7 @@ to keep the main state.py file focused on core state management.
 import time
 
 from entroppy.core.boundaries import BoundaryType
-from entroppy.resolution.history import (
-    CorrectionHistoryEntry,
-    PatternHistoryEntry,
-)
+from entroppy.resolution.history import CorrectionHistoryEntry, PatternHistoryEntry
 from entroppy.resolution.state_types import DebugTraceEntry
 
 

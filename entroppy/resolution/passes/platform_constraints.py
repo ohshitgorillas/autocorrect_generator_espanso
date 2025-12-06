@@ -30,7 +30,9 @@ class PlatformConstraintsPass(Pass):
         return "PlatformConstraints"
 
     def _check_correction_constraints(
-        self, correction: tuple[str, str, BoundaryType], constraints: PlatformConstraints
+        self,
+        correction: tuple[str, str, BoundaryType],
+        constraints: PlatformConstraints,
     ) -> str | None:
         """Check if a correction violates platform constraints.
 

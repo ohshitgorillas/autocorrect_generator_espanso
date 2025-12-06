@@ -85,7 +85,6 @@ class EspansoBackend(PlatformBackend):
     def generate_platform_report(
         self,
         final_corrections: list[Correction],
-        _ranked_corrections_before_limit: list[Correction],
         _all_corrections: list[Correction],
         _patterns: list[Correction],
         _pattern_replacements: dict[Correction, list[Correction]],

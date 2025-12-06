@@ -99,7 +99,12 @@ def _validate_single_pattern_worker(
             False,
             None,
             [],
-            (typo_pattern, word_pattern, boundary, validation_error or "Validation failed"),
+            (
+                typo_pattern,
+                word_pattern,
+                boundary,
+                validation_error or "Validation failed",
+            ),
         )
 
     # Extract target words from occurrences
@@ -122,7 +127,12 @@ def _validate_single_pattern_worker(
             False,
             None,
             [],
-            (typo_pattern, word_pattern, boundary, conflict_error or "Conflict detected"),
+            (
+                typo_pattern,
+                word_pattern,
+                boundary,
+                conflict_error or "Conflict detected",
+            ),
         )
 
     # Check if pattern would incorrectly match other corrections
@@ -138,7 +148,12 @@ def _validate_single_pattern_worker(
             False,
             None,
             [],
-            (typo_pattern, word_pattern, boundary, incorrect_match_error or "Incorrect match"),
+            (
+                typo_pattern,
+                word_pattern,
+                boundary,
+                incorrect_match_error or "Incorrect match",
+            ),
         )
 
     # Pattern passed all checks - accept it

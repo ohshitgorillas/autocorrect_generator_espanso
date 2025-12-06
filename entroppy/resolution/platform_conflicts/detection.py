@@ -5,10 +5,12 @@ substring conflicts in platform-formatted typo strings.
 """
 
 from collections import defaultdict
+from multiprocessing import Pool
 from typing import TYPE_CHECKING
 
 from entroppy.core.boundaries import BoundaryIndex, BoundaryType
 from entroppy.core.types import MatchDirection
+from entroppy.resolution.platform_conflicts import parallel
 from entroppy.resolution.platform_conflicts.resolution import process_conflict_pair
 
 if TYPE_CHECKING:
@@ -60,7 +62,8 @@ def build_length_buckets(
         Dict mapping length -> list of (formatted_typo, corrections) tuples
     """
     length_buckets: dict[
-        int, list[tuple[str, list[tuple[tuple[str, str, BoundaryType], str, BoundaryType]]]]
+        int,
+        list[tuple[str, list[tuple[tuple[str, str, BoundaryType], str, BoundaryType]]]],
     ] = defaultdict(list)
 
     for formatted_typo, corrections in formatted_to_corrections.items():
@@ -239,11 +242,16 @@ def check_bucket_conflicts(
     source_index: BoundaryIndex | None = None,
     debug_words: set[str] | None = None,
     debug_typo_matcher: "DebugTypoMatcher | None" = None,
+    num_workers: int = 1,
 ) -> tuple[
     list[tuple[tuple[str, str, BoundaryType], str]],
     dict[tuple[str, str, BoundaryType], tuple[str, str, BoundaryType]],
 ]:
     """Check conflicts for a bucket against accumulated shorter typos.
+
+    Uses a two-phase approach when parallelization is enabled:
+    1. Parallel detection (read-only): Find all conflicts without modifying state
+    2. Sequential resolution: Apply deterministic rules to resolve conflicts
 
     Args:
         current_bucket: List of (formatted_typo, corrections) tuples for current length
@@ -256,29 +264,42 @@ def check_bucket_conflicts(
         source_index: Optional boundary index for source words (for false trigger checks)
         debug_words: Optional set of words to debug
         debug_typo_matcher: Optional matcher for debug typos
+        num_workers: Number of worker processes to use (1 = sequential, >1 = parallel)
 
     Returns:
         Tuple of:
         - corrections_to_remove: List of (correction, reason) tuples
         - conflict_pairs: Dict mapping removed_correction -> conflicting_correction
     """
-    corrections_to_remove = []
+    # Determine if we should use parallel processing
+    use_parallel = num_workers > 1 and len(current_bucket) >= 100
+
+    # Initialize return values
+    corrections_to_remove: list[tuple[tuple[str, str, BoundaryType], str]] = []
     conflict_pairs: dict[tuple[str, str, BoundaryType], tuple[str, str, BoundaryType]] = {}
 
-    for formatted_typo, corrections_for_typo in current_bucket:
-        # Update progress bar for each formatted typo processed
+    if use_parallel:
+        # Phase 1: Parallel detection (read-only)
+        chunks = parallel.divide_into_chunks(current_bucket, num_workers)
+
+        with Pool(processes=num_workers) as pool:
+            all_conflicts_lists = pool.starmap(
+                parallel.detect_conflicts_for_chunk,
+                [(chunk, candidates_by_char) for chunk in chunks],
+            )
+
+        # Flatten all conflicts from all workers
+        all_conflicts = []
+        for conflicts_list in all_conflicts_lists:
+            all_conflicts.extend(conflicts_list)
+
+        # Update progress bar
         if progress_bar is not None:
-            progress_bar.update(1)
+            progress_bar.update(len(current_bucket))
 
-        # Build index keys to check
-        index_keys_to_check = _build_index_keys_to_check(formatted_typo)
-
-        # Process conflicts for this typo
-        typo_corrections_to_remove, typo_conflict_pairs = _process_typo_conflicts(
-            formatted_typo,
-            corrections_for_typo,
-            index_keys_to_check,
-            candidates_by_char,
+        # Phase 2: Sequential resolution (deterministic)
+        corrections_to_remove, conflict_pairs = parallel.resolve_conflicts_sequential(
+            all_conflicts,
             match_direction,
             processed_pairs,
             corrections_to_remove_set,
@@ -287,12 +308,38 @@ def check_bucket_conflicts(
             debug_words,
             debug_typo_matcher,
         )
+    else:
+        # Sequential processing (original algorithm)
 
-        corrections_to_remove.extend(typo_corrections_to_remove)
-        conflict_pairs.update(typo_conflict_pairs)
+        for formatted_typo, corrections_for_typo in current_bucket:
+            # Update progress bar for each formatted typo processed
+            if progress_bar is not None:
+                progress_bar.update(1)
 
-        # Add to index for future checks (only shorter typos are added since we
-        # process in length order)
+            # Build index keys to check
+            index_keys_to_check = _build_index_keys_to_check(formatted_typo)
+
+            # Process conflicts for this typo
+            typo_corrections_to_remove, typo_conflict_pairs = _process_typo_conflicts(
+                formatted_typo,
+                corrections_for_typo,
+                index_keys_to_check,
+                candidates_by_char,
+                match_direction,
+                processed_pairs,
+                corrections_to_remove_set,
+                validation_index,
+                source_index,
+                debug_words,
+                debug_typo_matcher,
+            )
+
+            corrections_to_remove.extend(typo_corrections_to_remove)
+            conflict_pairs.update(typo_conflict_pairs)
+
+    # Add to index for future checks (only shorter typos are added since we
+    # process in length order)
+    for formatted_typo, corrections_for_typo in current_bucket:
         index_key = formatted_typo[0] if formatted_typo else ""
         candidates_by_char[index_key].append((formatted_typo, corrections_for_typo))
 

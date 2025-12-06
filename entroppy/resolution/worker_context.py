@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import threading
+from typing import cast
 
 from entroppy.core.boundaries import BoundaryIndex, BoundaryType
 
@@ -121,6 +122,7 @@ class CandidateSelectionContext:
 # Thread-local storage for candidate selection worker context and indexes
 _candidate_worker_context = threading.local()
 _candidate_worker_indexes = threading.local()
+_candidate_worker_boundary_cache = threading.local()
 
 
 def init_candidate_selection_worker(context: "CandidateSelectionContext") -> None:
@@ -135,6 +137,9 @@ def init_candidate_selection_worker(context: "CandidateSelectionContext") -> Non
     # This prevents the progress bar from freezing when workers start
     _candidate_worker_indexes.validation_index = BoundaryIndex(context.validation_set)
     _candidate_worker_indexes.source_index = BoundaryIndex(context.source_words)
+
+    # Initialize boundary cache for this worker
+    _candidate_worker_boundary_cache.value = {}
 
 
 def get_candidate_selection_worker_context() -> "CandidateSelectionContext":
@@ -168,9 +173,38 @@ def get_candidate_worker_indexes() -> tuple[BoundaryIndex, BoundaryIndex]:
         RuntimeError: If called before init_candidate_selection_worker
     """
     try:
-        return _candidate_worker_indexes.validation_index, _candidate_worker_indexes.source_index
+        return (
+            _candidate_worker_indexes.validation_index,
+            _candidate_worker_indexes.source_index,
+        )
     except AttributeError as e:
         raise RuntimeError(
             "Candidate selection worker indexes not initialized. "
             "Call init_candidate_selection_worker first."
         ) from e
+
+
+def get_candidate_worker_boundary_cache() -> dict[str, BoundaryType]:
+    """Get boundary cache from thread-local storage.
+
+    Returns:
+        Dictionary mapping typo -> BoundaryType
+
+    Raises:
+        RuntimeError: If called before init_candidate_selection_worker
+    """
+    cache_dict: dict[str, BoundaryType]
+    try:
+        cache = _candidate_worker_boundary_cache.value
+        if cache is None or not isinstance(cache, dict):
+            cache_dict = {}
+            _candidate_worker_boundary_cache.value = cache_dict
+            return cache_dict
+        # Type narrowing: isinstance check ensures cache is dict
+        # Cast to proper type since thread-local storage doesn't preserve types
+        cache_dict = cast(dict[str, BoundaryType], cache)
+        return cache_dict
+    except AttributeError:
+        cache_dict = {}
+        _candidate_worker_boundary_cache.value = cache_dict
+        return cache_dict

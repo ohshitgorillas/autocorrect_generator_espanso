@@ -63,7 +63,13 @@ def _create_write_tasks(
             last_word = chunk[-1]["replace"]
 
             filename = _generate_filename(
-                letter, first_word, last_word, matches_sorted, max_entries_per_file, output_dir, i
+                letter,
+                first_word,
+                last_word,
+                matches_sorted,
+                max_entries_per_file,
+                output_dir,
+                i,
             )
 
             write_tasks.append((filename, chunk))

@@ -169,7 +169,12 @@ def process_collision_case(
 
     # Group words by boundary type
     by_boundary = _group_words_by_boundary(
-        typo, unique_words, validation_index, source_index, debug_words, debug_typo_matcher
+        typo,
+        unique_words,
+        validation_index,
+        source_index,
+        debug_words,
+        debug_typo_matcher,
     )
 
     # Process each boundary group separately

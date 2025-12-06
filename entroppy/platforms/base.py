@@ -78,7 +78,6 @@ class PlatformBackend(ABC):
     def generate_platform_report(
         self,
         final_corrections: list["Correction"],
-        ranked_corrections_before_limit: list["Correction"],
         all_corrections: list["Correction"],
         patterns: list["Correction"],
         pattern_replacements: dict["Correction", list["Correction"]],

@@ -11,52 +11,6 @@ from entroppy.core.boundaries import (
 from .boundaries.utils import _check_typo_in_target_word
 
 
-def _collect_trigger_checks(
-    typo: str,
-    validation_index: BoundaryIndex,
-    source_index: BoundaryIndex,
-    target_word: str | None,
-) -> tuple[bool, bool, bool, bool, bool, bool, bool, bool, bool]:
-    """Collect all trigger checks for a typo.
-
-    Args:
-        typo: The typo string
-        validation_index: Boundary index for validation set
-        source_index: Boundary index for source words
-        target_word: Optional target word to check against
-
-    Returns:
-        Tuple of (would_trigger_start_target, would_trigger_end_target, is_substring_target,
-                 would_trigger_start_val, would_trigger_end_val, is_substring_val,
-                 would_trigger_start_src, would_trigger_end_src, is_substring_src)
-    """
-    # FIRST: Check target word (highest priority - most critical check)
-    would_trigger_start_target, would_trigger_end_target, is_substring_target = (
-        _check_typo_in_target_word(typo, target_word)
-    )
-
-    # Check validation and source words
-    would_trigger_start_val = would_trigger_at_start(typo, validation_index)
-    would_trigger_end_val = would_trigger_at_end(typo, validation_index)
-    is_substring_val = is_substring_of_any(typo, validation_index)
-
-    would_trigger_start_src = would_trigger_at_start(typo, source_index)
-    would_trigger_end_src = would_trigger_at_end(typo, source_index)
-    is_substring_src = is_substring_of_any(typo, source_index)
-
-    return (
-        would_trigger_start_target,
-        would_trigger_end_target,
-        is_substring_target,
-        would_trigger_start_val,
-        would_trigger_end_val,
-        is_substring_val,
-        would_trigger_start_src,
-        would_trigger_end_src,
-        is_substring_src,
-    )
-
-
 def _determine_none_boundary_reason(
     would_trigger_start_target: bool,
     would_trigger_end_target: bool,
@@ -151,44 +105,53 @@ def _determine_false_trigger_for_boundary(
     return would_cause, reason
 
 
-def _would_cause_false_trigger(
+def _check_false_trigger_with_details(
     typo: str,
     boundary: BoundaryType,
     validation_index: BoundaryIndex,
     source_index: BoundaryIndex,
     target_word: str | None = None,
-    return_details: bool = False,
-) -> bool | tuple[bool, dict[str, bool | str | None]]:
-    """Check if a boundary would cause false triggers (garbage corrections).
+    batch_results: dict[str, dict[str, bool]] | None = None,
+) -> tuple[bool, dict[str, bool | str | None]]:
+    """Check if boundary would cause false triggers and return details.
 
-    A false trigger occurs when the typo would match validation/source words incorrectly
-    due to the boundary restrictions (or lack thereof).
+    This helper function eliminates duplication between boundary_selection.py
+    and correction_processing.py by centralizing the call pattern.
 
     Args:
         typo: The typo string
         boundary: The boundary type to check
         validation_index: Boundary index for validation set
         source_index: Boundary index for source words
-        target_word: Optional target word to check against (highest priority check)
-        return_details: If True, return tuple of (bool, details_dict) instead of just bool
+        target_word: Optional target word to check against
+        batch_results: Optional pre-computed batch results dict with keys:
+            'start_val', 'end_val', 'substring_val', 'start_src', 'end_src', 'substring_src'
 
     Returns:
-        If return_details is False: True if the boundary would cause false triggers, False otherwise
-        If return_details is True: Tuple of (would_cause_false_trigger, details_dict) where
-            details_dict contains breakdown of checks performed
+        Tuple of (would_cause_false_trigger, details_dict)
     """
-    # Collect all trigger checks
-    (
-        would_trigger_start_target,
-        would_trigger_end_target,
-        is_substring_target,
-        would_trigger_start_val,
-        would_trigger_end_val,
-        is_substring_val,
-        would_trigger_start_src,
-        would_trigger_end_src,
-        is_substring_src,
-    ) = _collect_trigger_checks(typo, validation_index, source_index, target_word)
+    # Use batch results if available, otherwise compute individually
+    if batch_results and typo in batch_results:
+        batch = batch_results[typo]
+        would_trigger_start_val = batch.get("start_val", False)
+        would_trigger_end_val = batch.get("end_val", False)
+        is_substring_val = batch.get("substring_val", False)
+        would_trigger_start_src = batch.get("start_src", False)
+        would_trigger_end_src = batch.get("end_src", False)
+        is_substring_src = batch.get("substring_src", False)
+    else:
+        # Fallback to individual checks
+        would_trigger_start_val = would_trigger_at_start(typo, validation_index)
+        would_trigger_end_val = would_trigger_at_end(typo, validation_index)
+        is_substring_val = is_substring_of_any(typo, validation_index)
+        would_trigger_start_src = would_trigger_at_start(typo, source_index)
+        would_trigger_end_src = would_trigger_at_end(typo, source_index)
+        is_substring_src = is_substring_of_any(typo, source_index)
+
+    # Check target word (always done individually as it's per-typo)
+    would_trigger_start_target, would_trigger_end_target, is_substring_target = (
+        _check_typo_in_target_word(typo, target_word)
+    )
 
     # Combine checks: target word check takes precedence
     would_trigger_start = (
@@ -214,58 +177,62 @@ def _would_cause_false_trigger(
         is_substring_src,
     )
 
-    if return_details:
-        details = {
-            "would_cause_false_trigger": would_cause,
-            "reason": reason,
-            "would_trigger_start": would_trigger_start,
-            "would_trigger_end": would_trigger_end,
-            "is_substring": is_substring,
-            "would_trigger_start_target": would_trigger_start_target,
-            "would_trigger_end_target": would_trigger_end_target,
-            "is_substring_target": is_substring_target,
-            "would_trigger_start_val": would_trigger_start_val,
-            "would_trigger_end_val": would_trigger_end_val,
-            "is_substring_val": is_substring_val,
-            "would_trigger_start_src": would_trigger_start_src,
-            "would_trigger_end_src": would_trigger_end_src,
-            "is_substring_src": is_substring_src,
-        }
-        return would_cause, details
-
-    return would_cause
+    details = {
+        "would_cause_false_trigger": would_cause,
+        "reason": reason,
+        "would_trigger_start": would_trigger_start,
+        "would_trigger_end": would_trigger_end,
+        "is_substring": is_substring,
+        "would_trigger_start_target": would_trigger_start_target,
+        "would_trigger_end_target": would_trigger_end_target,
+        "is_substring_target": is_substring_target,
+        "would_trigger_start_val": would_trigger_start_val,
+        "would_trigger_end_val": would_trigger_end_val,
+        "is_substring_val": is_substring_val,
+        "would_trigger_start_src": would_trigger_start_src,
+        "would_trigger_end_src": would_trigger_end_src,
+        "is_substring_src": is_substring_src,
+    }
+    return would_cause, details
 
 
-def _check_false_trigger_with_details(
-    typo: str,
-    boundary: BoundaryType,
+def batch_check_false_triggers(
+    typos: list[str],
     validation_index: BoundaryIndex,
     source_index: BoundaryIndex,
-    target_word: str | None = None,
-) -> tuple[bool, dict[str, bool | str | None]]:
-    """Check if boundary would cause false triggers and return details.
+) -> dict[str, dict[str, bool]]:
+    """Batch check false trigger conditions for multiple typos.
 
-    This helper function eliminates duplication between boundary_selection.py
-    and correction_processing.py by centralizing the call pattern.
+    Pre-computes validation and source index checks for all typos at once,
+    which is much faster than checking individually.
 
     Args:
-        typo: The typo string
-        boundary: The boundary type to check
+        typos: List of typo strings to check
         validation_index: Boundary index for validation set
         source_index: Boundary index for source words
-        target_word: Optional target word to check against
 
     Returns:
-        Tuple of (would_cause_false_trigger, details_dict)
+        Dict mapping typo -> dict with keys: 'start_val', 'end_val', 'substring_val',
+        'start_src', 'end_src', 'substring_src'
     """
-    result = _would_cause_false_trigger(
-        typo,
-        boundary,
-        validation_index,
-        source_index,
-        target_word=target_word,
-        return_details=True,
-    )
-    # _would_cause_false_trigger with return_details=True always returns tuple
-    assert isinstance(result, tuple)
-    return result
+    # Batch check all typos at once
+    start_val_results = validation_index.batch_check_start(typos)
+    end_val_results = validation_index.batch_check_end(typos)
+    substring_val_results = validation_index.batch_check_substring(typos)
+    start_src_results = source_index.batch_check_start(typos)
+    end_src_results = source_index.batch_check_end(typos)
+    substring_src_results = source_index.batch_check_substring(typos)
+
+    # Combine results
+    batch_results: dict[str, dict[str, bool]] = {}
+    for typo in typos:
+        batch_results[typo] = {
+            "start_val": start_val_results[typo],
+            "end_val": end_val_results[typo],
+            "substring_val": substring_val_results[typo],
+            "start_src": start_src_results[typo],
+            "end_src": end_src_results[typo],
+            "substring_src": substring_src_results[typo],
+        }
+
+    return batch_results

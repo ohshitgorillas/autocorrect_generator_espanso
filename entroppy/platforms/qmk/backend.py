@@ -117,7 +117,6 @@ class QMKBackend(PlatformBackend):
     def generate_platform_report(
         self,
         final_corrections: list[Correction],
-        ranked_corrections_before_limit: list[Correction],
         all_corrections: list[Correction],
         patterns: list[Correction],
         pattern_replacements: dict[Correction, list[Correction]],
@@ -128,7 +127,6 @@ class QMKBackend(PlatformBackend):
         """Generate QMK ranking report."""
         return generate_qmk_ranking_report(
             final_corrections,
-            ranked_corrections_before_limit,
             all_corrections,
             patterns,
             pattern_replacements,

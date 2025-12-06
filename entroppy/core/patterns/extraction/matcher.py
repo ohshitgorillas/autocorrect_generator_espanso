@@ -96,7 +96,11 @@ def _extract_patterns_from_correction(
     is_suffix: bool,
     is_debug: bool,
     pattern_cache: (
-        dict[tuple[str, str, BoundaryType, bool], list[tuple[str, str, BoundaryType, int]]] | None
+        dict[
+            tuple[str, str, BoundaryType, bool],
+            list[tuple[str, str, BoundaryType, int]],
+        ]
+        | None
     ) = None,
     debug_corrections: (
         dict[tuple[str, str, BoundaryType], list[tuple[int, str, str, str]]] | None

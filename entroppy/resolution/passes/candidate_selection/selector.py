@@ -8,9 +8,8 @@ from loguru import logger
 from tqdm import tqdm
 
 from entroppy.core import BoundaryType
-from entroppy.resolution.passes.candidate_selection_workers import (
-    _process_typo_batch_worker,
-)
+from entroppy.resolution.false_trigger_check import batch_check_false_triggers
+from entroppy.resolution.passes.candidate_selection_workers import _process_typo_batch_worker
 from entroppy.resolution.solver import Pass
 from entroppy.resolution.state import RejectionReason
 from entroppy.resolution.worker_context import (
@@ -44,9 +43,34 @@ class CandidateSelectionPass(Pass):
         Args:
             state: The dictionary state to modify
         """
-        # Get typos to process (not already covered)
-        # Use uncovered_typos set if available and not first iteration
-        uncovered_typos = state._caching._uncovered_typos
+        typos_to_process = self._get_typos_to_process(state)
+        if not typos_to_process:
+            return
+
+        # Batch check all typos for false triggers (optimization)
+        all_typos = [typo for typo, _ in typos_to_process]
+        if all_typos:
+            batch_results = batch_check_false_triggers(
+                all_typos, self.context.validation_index, self.context.source_index
+            )
+            state.caching.set_batch_false_trigger_results(batch_results)
+
+        # Use multiprocessing if jobs > 1 and we have enough work
+        if self.context.jobs > 1 and len(typos_to_process) > 100:
+            self._run_parallel(state, typos_to_process)
+        else:
+            self._run_sequential(state, typos_to_process)
+
+    def _get_typos_to_process(self, state: "DictionaryState") -> list[tuple[str, list[str]]]:
+        """Get list of typos to process in this iteration.
+
+        Args:
+            state: The dictionary state
+
+        Returns:
+            List of (typo, word_list) tuples to process
+        """
+        uncovered_typos = state.caching.get_uncovered_typos()
         if state.current_iteration == 1:
             # First iteration: check all typos and build uncovered set
             typos_to_process = []
@@ -54,25 +78,17 @@ class CandidateSelectionPass(Pass):
                 if not state.is_typo_covered(typo):
                     typos_to_process.append((typo, word_list))
                     uncovered_typos.add(typo)
-        else:
-            # Subsequent iterations: early termination if no uncovered typos
-            if not uncovered_typos:
-                return
-            # Only process uncovered typos
-            typos_to_process = [
-                (typo, state.raw_typo_map[typo])
-                for typo in uncovered_typos
-                if typo in state.raw_typo_map
-            ]
+            return typos_to_process
 
-        if not typos_to_process:
-            return
-
-        # Use multiprocessing if jobs > 1 and we have enough work
-        if self.context.jobs > 1 and len(typos_to_process) > 100:
-            self._run_parallel(state, typos_to_process)
-        else:
-            self._run_sequential(state, typos_to_process)
+        # Subsequent iterations: early termination if no uncovered typos
+        if not uncovered_typos:
+            return []
+        # Only process uncovered typos
+        return [
+            (typo, state.raw_typo_map[typo])
+            for typo in uncovered_typos
+            if typo in state.raw_typo_map
+        ]
 
     def _run_sequential(
         self, state: "DictionaryState", typos_to_process: list[tuple[str, list[str]]]
@@ -205,6 +221,76 @@ class CandidateSelectionPass(Pass):
             for i in range(0, len(typos_to_process), chunk_size)
         ]
 
+    def _try_boundary_for_correction(
+        self,
+        state: "DictionaryState",
+        typo: str,
+        word: str,
+        boundary: BoundaryType,
+    ) -> bool:
+        """Try to add a correction with the given boundary.
+
+        Args:
+            state: The dictionary state
+            typo: The typo string
+            word: The correct word
+            boundary: The boundary type to try
+
+        Returns:
+            True if correction was added, False otherwise
+        """
+        # Check if this is in the graveyard
+        if state.is_in_graveyard(typo, word, boundary):
+            return False
+
+        # Check length constraints
+        if not _check_length_constraints(typo, word, self.context.min_typo_length):
+            state.add_to_graveyard(
+                typo,
+                word,
+                boundary,
+                RejectionReason.TOO_SHORT,
+                pass_name=self.name,
+            )
+            return False
+
+        # Check exclusions
+        if _is_excluded(typo, word, boundary, self.context.exclusion_matcher):
+            state.add_to_graveyard(
+                typo,
+                word,
+                boundary,
+                RejectionReason.EXCLUDED_BY_PATTERN,
+                pass_name=self.name,
+            )
+            return False
+
+        # Check for false triggers (using cache)
+        would_cause, details = state.caching.get_cached_false_trigger(
+            typo,
+            boundary,
+            self.context.validation_index,
+            self.context.source_index,
+            target_word=word,
+        )
+        if would_cause:
+            # This boundary would cause false triggers - add to graveyard
+            reason_value = details.get("reason", "false trigger")
+            reason_str = reason_value if isinstance(reason_value, str) else "false trigger"
+            state.add_to_graveyard(
+                typo,
+                word,
+                boundary,
+                RejectionReason.FALSE_TRIGGER,
+                blocker=reason_str,
+                pass_name=self.name,
+            )
+            return False
+
+        # Add the correction
+        state.add_correction(typo, word, boundary, self.name)
+        return True
+
     def _process_single_word(
         self,
         state: "DictionaryState",
@@ -219,7 +305,7 @@ class CandidateSelectionPass(Pass):
             word: The correct word
         """
         # Determine the natural boundary for this typo (using cache)
-        natural_boundary = state._caching.get_cached_boundary(
+        natural_boundary = state.caching.get_cached_boundary(
             typo,
             self.context.validation_index,
             self.context.source_index,
@@ -230,61 +316,8 @@ class CandidateSelectionPass(Pass):
         boundaries_to_try = _get_boundary_order(natural_boundary)
 
         for boundary in boundaries_to_try:
-            # Check if this is in the graveyard
-            if state.is_in_graveyard(typo, word, boundary):
-                continue
-
-            # Check length constraints
-            if not _check_length_constraints(typo, word, self.context.min_typo_length):
-                state.add_to_graveyard(
-                    typo,
-                    word,
-                    boundary,
-                    RejectionReason.TOO_SHORT,
-                    pass_name=self.name,
-                )
-                continue
-
-            # Check exclusions
-            if _is_excluded(typo, word, boundary, self.context.exclusion_matcher):
-                state.add_to_graveyard(
-                    typo,
-                    word,
-                    boundary,
-                    RejectionReason.EXCLUDED_BY_PATTERN,
-                    pass_name=self.name,
-                )
-                continue
-
-            # Check for false triggers (using cache)
-            # pylint: disable=duplicate-code
-            # Intentional duplication: Same false trigger check pattern used in multiple places
-            # (worker functions, sequential functions, and boundary_selection.py) to ensure
-            # consistent validation logic across all code paths where corrections are added.
-            would_cause, details = state._caching.get_cached_false_trigger(
-                typo,
-                boundary,
-                self.context.validation_index,
-                self.context.source_index,
-                target_word=word,
-            )
-            if would_cause:
-                # This boundary would cause false triggers - add to graveyard and try next boundary
-                reason_value = details.get("reason", "false trigger")
-                reason_str = reason_value if isinstance(reason_value, str) else "false trigger"
-                state.add_to_graveyard(
-                    typo,
-                    word,
-                    boundary,
-                    RejectionReason.FALSE_TRIGGER,
-                    blocker=reason_str,
-                    pass_name=self.name,
-                )
-                continue
-
-            # Add the correction
-            state.add_correction(typo, word, boundary, self.name)
-            return  # Successfully added, no need to try other boundaries
+            if self._try_boundary_for_correction(state, typo, word, boundary):
+                return  # Successfully added
 
     def _process_collision(
         self,
@@ -300,7 +333,7 @@ class CandidateSelectionPass(Pass):
             unique_words: List of competing words
         """
         # Determine boundaries for each word (using cache - same typo for all words)
-        boundary = state._caching.get_cached_boundary(
+        boundary = state.caching.get_cached_boundary(
             typo,
             self.context.validation_index,
             self.context.source_index,
@@ -342,51 +375,8 @@ class CandidateSelectionPass(Pass):
         boundaries_to_try = _get_boundary_order(boundary)
 
         for bound in boundaries_to_try:
-            # Check if this is in the graveyard
-            if state.is_in_graveyard(typo, word, bound):
-                continue
-
-            # Check length constraints
-            if not _check_length_constraints(typo, word, self.context.min_typo_length):
-                state.add_to_graveyard(
-                    typo,
-                    word,
-                    bound,
-                    RejectionReason.TOO_SHORT,
-                    pass_name=self.name,
-                )
-                continue
-
-            # Check exclusions
-            if _is_excluded(typo, word, bound, self.context.exclusion_matcher):
-                state.add_to_graveyard(
-                    typo,
-                    word,
-                    bound,
-                    RejectionReason.EXCLUDED_BY_PATTERN,
-                    pass_name=self.name,
-                )
-                continue
-
-            # Check for false triggers (using cache)
-            # pylint: disable=duplicate-code
-            # Intentional duplication: Same false trigger check pattern used in multiple places
-            # (worker functions, sequential functions, and boundary_selection.py) to ensure
-            # consistent validation logic across all code paths where corrections are added.
-            would_cause, _ = state._caching.get_cached_false_trigger(
-                typo,
-                bound,
-                self.context.validation_index,
-                self.context.source_index,
-                target_word=word,
-            )
-            if would_cause:
-                # This boundary would cause false triggers - try next boundary
-                continue
-
-            # Add the correction
-            state.add_correction(typo, word, bound, self.name)
-            return  # Successfully added
+            if self._try_boundary_for_correction(state, typo, word, bound):
+                return  # Successfully added
 
     def _resolve_collision_by_frequency(
         self,
@@ -452,48 +442,5 @@ class CandidateSelectionPass(Pass):
         boundaries_to_try = _get_boundary_order(boundary)
 
         for bound in boundaries_to_try:
-            # Check if this is in the graveyard
-            if state.is_in_graveyard(typo, word, bound):
-                continue
-
-            # Check length constraints
-            if not _check_length_constraints(typo, word, self.context.min_typo_length):
-                state.add_to_graveyard(
-                    typo,
-                    word,
-                    bound,
-                    RejectionReason.TOO_SHORT,
-                    pass_name=self.name,
-                )
-                continue
-
-            # Check exclusions
-            if _is_excluded(typo, word, bound, self.context.exclusion_matcher):
-                state.add_to_graveyard(
-                    typo,
-                    word,
-                    bound,
-                    RejectionReason.EXCLUDED_BY_PATTERN,
-                    pass_name=self.name,
-                )
-                continue
-
-            # Check for false triggers (using cache)
-            # pylint: disable=duplicate-code
-            # Intentional duplication: Same false trigger check pattern used in multiple places
-            # (worker functions, sequential functions, and boundary_selection.py) to ensure
-            # consistent validation logic across all code paths where corrections are added.
-            would_cause, _ = state._caching.get_cached_false_trigger(
-                typo,
-                bound,
-                self.context.validation_index,
-                self.context.source_index,
-                target_word=word,
-            )
-            if would_cause:
-                # This boundary would cause false triggers - try next boundary
-                continue
-
-            # Add the correction
-            state.add_correction(typo, word, bound, self.name)
-            return  # Successfully added
+            if self._try_boundary_for_correction(state, typo, word, bound):
+                return  # Successfully added

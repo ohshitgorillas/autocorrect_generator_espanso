@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 import time
+from typing import TYPE_CHECKING
 
 from entroppy.core import BoundaryType, Correction
 from entroppy.resolution.history import (
@@ -10,11 +11,15 @@ from entroppy.resolution.history import (
     PatternHistoryEntry,
     RejectionReason,
 )
+from entroppy.resolution.state_caching import StateCaching
 from entroppy.resolution.state_types import DebugTraceEntry, GraveyardEntry
 
 # Re-export for backward compatibility
 __all__ = ["DictionaryState", "DebugTraceEntry", "GraveyardEntry", "RejectionReason"]
 from entroppy.utils.debug import DebugTypoMatcher
+
+if TYPE_CHECKING:
+    pass
 
 
 class DictionaryState:
@@ -73,9 +78,7 @@ class DictionaryState:
         self._formatted_cache: dict[Correction, str] = {}
 
         # Optimization caches for CandidateSelection pass
-        from entroppy.resolution.state_caching import StateCaching  # noqa: PLC0415
-
-        self._caching = StateCaching()
+        self.caching = StateCaching()
 
     def is_in_graveyard(
         self,
@@ -180,9 +183,9 @@ class DictionaryState:
         self._coverage_map[typo].add(correction)
         self.is_dirty = True
         # Mark typo as covered (remove from uncovered set)
-        self._caching._uncovered_typos.discard(typo)
+        self.caching.get_uncovered_typos().discard(typo)
         # Invalidate pattern coverage cache for this typo (coverage may have changed)
-        self._caching.invalidate_pattern_coverage_for_typo(typo)
+        self.caching.invalidate_pattern_coverage_for_typo(typo)
 
         # Track comprehensive history if enabled
         if self.debug_corrections:
@@ -243,12 +246,12 @@ class DictionaryState:
         self._coverage_map[typo].discard(correction)
         self.is_dirty = True
         # If typo is no longer covered, mark it as uncovered
-        if not self._coverage_map.get(typo) and not self._caching.is_typo_covered_by_pattern(
+        if not self._coverage_map.get(typo) and not self.caching.is_typo_covered_by_pattern(
             typo, self.active_patterns
         ):
-            self._caching._uncovered_typos.add(typo)
+            self.caching.get_uncovered_typos().add(typo)
         # Invalidate pattern coverage cache for this typo (coverage may have changed)
-        self._caching.invalidate_pattern_coverage_for_typo(typo)
+        self.caching.invalidate_pattern_coverage_for_typo(typo)
 
         # Track comprehensive history if enabled
         if self.debug_corrections:
@@ -307,7 +310,7 @@ class DictionaryState:
         self.active_patterns.add(pattern)
         self.is_dirty = True
         # Invalidate pattern coverage cache when patterns change
-        self._caching.invalidate_pattern_coverage_cache()
+        self.caching.invalidate_pattern_coverage_cache()
 
         # Track comprehensive history if enabled
         if self.debug_patterns:
@@ -367,7 +370,7 @@ class DictionaryState:
         self.active_patterns.remove(pattern)
         self.is_dirty = True
         # Invalidate pattern coverage cache when patterns change
-        self._caching.invalidate_pattern_coverage_cache()
+        self.caching.invalidate_pattern_coverage_cache()
 
         # Track comprehensive history if enabled
         if self.debug_patterns:
@@ -409,25 +412,7 @@ class DictionaryState:
         Returns:
             True if the typo is covered by any active correction or pattern
         """
-        # Check cache first
-        if typo in self._caching._pattern_coverage_cache:
-            return self._caching._pattern_coverage_cache[typo]
-
-        # Check if any active correction covers this typo (fast: O(1))
-        if typo in self._coverage_map and self._coverage_map[typo]:
-            self._caching._pattern_coverage_cache[typo] = True
-            return True
-
-        # Check if any pattern covers this typo (slow: O(P) where P=2000-2300)
-        # For now, exact match (patterns will be enhanced in PatternGeneralizationPass)
-        for pattern_typo, _, _ in self.active_patterns:
-            if pattern_typo == typo:
-                self._caching._pattern_coverage_cache[typo] = True
-                return True
-
-        # Not covered
-        self._caching._pattern_coverage_cache[typo] = False
-        return False
+        return self.caching.is_typo_covered(typo, self._coverage_map, self.active_patterns)
 
     def clear_dirty_flag(self) -> None:
         """Mark the state as clean (no changes in this iteration)."""
@@ -437,9 +422,9 @@ class DictionaryState:
         """Mark the start of a new iteration."""
         self.current_iteration += 1
         self.clear_dirty_flag()
-        # Clear false trigger cache at start of each iteration
+        # Clear false trigger cache and batch results at start of each iteration
         # (validation/source sets don't change, but corrections/patterns do)
-        self._caching.clear_false_trigger_cache()
+        self.caching.clear_false_trigger_cache()
 
     def get_debug_summary(self) -> str:
         """Get a summary of debug trace for reporting.

@@ -143,7 +143,12 @@ def should_remove_shorter(
     """
     # Identify the less restrictive boundary
     result = _identify_less_restrictive_boundary(
-        shorter_typo, longer_typo, shorter_word, longer_word, shorter_boundary, longer_boundary
+        shorter_typo,
+        longer_typo,
+        shorter_word,
+        longer_word,
+        shorter_boundary,
+        longer_boundary,
     )
 
     if result is None:

@@ -6,6 +6,7 @@ from loguru import logger
 
 from entroppy.core.boundaries import BoundaryType
 from entroppy.core.types import Correction
+from entroppy.utils.logging import is_debug_enabled
 
 # Minimum length for the non-pattern part when extracting patterns
 # This prevents extracting nonsensical patterns that are too short
@@ -274,7 +275,9 @@ def _log_debug_summary(
         patterns: Dict of final patterns
         debug_corrections: Dict of debug corrections
     """
-    debug_enabled = len(debug_corrections) > 0
+    # Enable debug logging if either specific corrections are being debugged
+    # OR global debug is enabled
+    debug_enabled = len(debug_corrections) > 0 or is_debug_enabled()
 
     if debug_enabled:
         logger.debug(
@@ -283,12 +286,13 @@ def _log_debug_summary(
 
     if debug_enabled:
         logger.debug(f"[PATTERN EXTRACTION] Final: {len(patterns)} patterns with 2+ occurrences")
-        # Show debug corrections summary
-        for (typo, word, _), candidates in debug_corrections.items():
-            if candidates:
-                logger.debug(
-                    f"[PATTERN EXTRACTION] '{typo}' → '{word}': "
-                    f"{len(candidates)} valid pattern candidates"
-                )
-                for length, tp, wp, op in candidates:
-                    logger.debug(f"  - Length {length}: '{tp}'→'{wp}' (other_part='{op}')")
+        # Show debug corrections summary (only if specific corrections are being debugged)
+        if len(debug_corrections) > 0:
+            for (typo, word, _), candidates in debug_corrections.items():
+                if candidates:
+                    logger.debug(
+                        f"[PATTERN EXTRACTION] '{typo}' → '{word}': "
+                        f"{len(candidates)} valid pattern candidates"
+                    )
+                    for length, tp, wp, op in candidates:
+                        logger.debug(f"  - Length {length}: '{tp}'→'{wp}' (other_part='{op}')")

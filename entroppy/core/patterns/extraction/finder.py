@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from entroppy.core.boundaries import BoundaryType
 from entroppy.core.types import Correction
+from entroppy.utils.logging import is_debug_enabled
 
 from .filters import (
     _filter_corrections_by_boundary,
@@ -56,7 +57,8 @@ def _find_patterns(
         Dict mapping (typo_pattern, word_pattern, boundary) to list of
         (full_typo, full_word, original_boundary) tuples that match this pattern.
     """
-    debug_enabled = debug_typos is not None and len(debug_typos) > 0
+    # Enable debug logging if either specific typos are being debugged OR global debug is enabled
+    debug_enabled = (debug_typos is not None and len(debug_typos) > 0) or is_debug_enabled()
 
     # Filter corrections by boundary type
     filtered_corrections = _filter_corrections_by_boundary(corrections, boundary_type)

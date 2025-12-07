@@ -45,6 +45,25 @@ def setup_logger(verbose: bool = False, debug: bool = False) -> None:
     )
 
 
+def is_debug_enabled() -> bool:
+    """Check if debug logging is currently enabled.
+
+    Returns:
+        True if logger is configured to log DEBUG level messages, False otherwise
+    """
+    # Check if any handler has DEBUG level enabled
+    # loguru uses numeric levels: DEBUG=10, INFO=20, WARNING=30, etc.
+    # pylint: disable=protected-access
+    # We need to access loguru's internal API to check handler levels
+    for handler in logger._core.handlers.values():
+        if handler._sink is not None:
+            # Get the minimum level for this handler
+            # levelno is the minimum level that will be logged by this handler
+            if handler.levelno <= 10:  # DEBUG level is 10
+                return True
+    return False
+
+
 def add_log_file_handler(log_file: str | Path, verbose: bool = False, debug: bool = False) -> None:
     """Add a file handler to the existing logger configuration.
 

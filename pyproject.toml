@@ -209,3 +209,8 @@ replace = 'version = "{new_version}"'
 filename = "CHANGELOG.md"
 search = "## Unreleased"
 replace = "## [{new_version}] - {utcnow:%%Y-%%m-%%d}"
+
+[[tool.bumpversion.files]]
+filename = "README.md"
+search = 'Version {current_version}'
+replace = 'Version {new_version}'

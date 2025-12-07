@@ -3,7 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Version 0.8.0 (Beta)** | [Changelog](CHANGELOG.md)
+**Version 0.8.1 (Beta)** | [Changelog](CHANGELOG.md)
 
 A Python-based autocorrect dictionary generator for text expansion platforms. Algorithmically generates typos from English words and maps them to correct spellings, focusing on mechanical typing errors rather than spelling mistakes made from a lack of knowledge.
 

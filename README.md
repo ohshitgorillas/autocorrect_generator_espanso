@@ -32,7 +32,7 @@ However, different platforms have different constraints. Keyboard firmware like 
 * **Platform-Specific Optimization**: Tailored output for each platform's constraints
 * **Comprehensive Reports**: Detailed analysis of decisions and optimizations
 * **Debug Reports**: Complete lifecycle tracking for corrections, patterns, and graveyard entries with iteration/pass context
-* **High-Performance Rust Extensions**: Optional Rust extensions via PyO3 provide ~100x faster substring indexing and parallelized pattern checking. Automatically used when Rust toolchain is installed, falls back to Python implementation otherwise. See [Rust Setup Guide](docs/RUST_SETUP.md) for installation instructions.
+* **High-Performance Rust Extensions**: Rust extensions via PyO3 provide ~100x faster substring indexing and parallelized pattern checking.
 
 ## Documentation
 
@@ -49,8 +49,40 @@ The backend is the software that will actually be using the generated dictionary
 * Espanso
 * More to come...
 
-### 2. Environment Setup
-It is recommended to run EntropPy inside a virtual environment:
+### 2. Install Rust
+Rust is required for EntropPy's high-performance extensions.
+
+**Linux (Debian/Ubuntu):**
+```bash
+sudo apt update
+sudo apt install rustc cargo
+```
+
+**Linux (Fedora/RHEL):**
+```bash
+sudo dnf install rust cargo
+```
+
+**Linux (Arch):**
+```bash
+sudo pacman -S rust
+```
+
+**macOS:**
+```bash
+brew install rust
+```
+
+**Windows:**
+Download and run [rustup-init.exe](https://rustup.rs/) from rustup.rs, then restart your terminal.
+
+**Other systems or if you prefer rustup:**
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+```
+
+### 3. Set up Python Virtual Environment
 
 ```bash
 # Clone the repository
@@ -63,8 +95,18 @@ mkdir corrections settings reports
 cd /path/to/entroppy
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
 
-# Install EntropPy
+### 4. Install EntropPy
+
+```bash
+# If you installed Rust via rustup, ensure cargo is in PATH:
+# source $HOME/.cargo/env  # (only needed if rustup was just installed in this session)
+
+# Verify Rust is available:
+cargo --version
+
+# Install EntropPy:
 pip install -e .
 ```
 

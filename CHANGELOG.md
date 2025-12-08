@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## Unreleased
+
+## [0.9.0] - 2025-12-08
+
+### Added
+
+- **PatternType enum for type-safe pattern classification**: Added `PatternType` enum (`PREFIX`, `SUFFIX`, `SUBSTRING`) to replace string-based pattern type classification, improving type safety and code clarity throughout the pattern validation system.
+
+- **Pre-commit hook for single assertion per test**: Added `check-single-assertion` pre-commit hook that verifies each test function has at most one assertion, enforcing the one-assertion-per-test best practice.
+
+- **Comprehensive test coverage improvements**: Added integration tests for exclusion patterns, platform substring conflicts, pattern boundary assignment, pattern generalization regression, and solver debug logging. Expanded unit tests for iterative solver, conflict resolution, false trigger checking, pattern extraction, stages, and word processing.
+
+### Changed
+
+- **Enhanced debug typo and word reports**: Completely rewrote debug typo and word report generation to be far more comprehensive and organized by iteration first, then by pass/stage. Reports now include:
+  - Full pattern extraction details with all occurrences
+  - Complete pattern validation information (acceptances and rejections with detailed reasons)
+  - Platform conflict checks (boundary comparisons and false trigger checks)
+  - Ranking information (scores, positions, tiers)
+  - Organized by iteration, showing the complete lifecycle of each typo/word through the solver
+  - All messages mentioning the typo/word are now extracted and displayed, not just [DEBUG TYPO/WORD:] messages
+
+- **Debug logging infrastructure refactoring**: Refactored debug word and typo logging to use centralized message collection infrastructure instead of direct logger calls. Stage 1 (dictionary loading) and Stage 3+ (solver) debug messages are now collected into `debug_messages` lists and merged with Stage 2 messages for comprehensive debug reports. All logging functions (`log_debug_word`, `log_debug_typo`, etc.) now accept an optional `debug_messages` parameter to collect messages for reports while still logging directly for immediate visibility. This ensures debug messages from all stages appear in the generated debug reports.
+
+- **Substring conflict detection now finds conflicts in both directions**: `find_conflicts` (formerly `find_substring_conflicts`) now detects conflicts bidirectionally: it finds both typos that contain the query string (superstring conflicts) and typos that are substrings of the query string (substring conflicts). Previously, it only detected superstring conflicts, causing unresolved conflicts in QMK output where boundary markers create substring relationships (e.g., both `aemr` and `:aemr` were preserved, causing QMK compilation errors). The Rust implementation was refactored into smaller helper functions (`find_superstring_conflicts`, `find_contained_typos`, `position_to_typo_index`, `deduplicate_and_filter_self`) for better maintainability.
+
+### Fixed
+
+- **Multiprocessing pickling error in ConflictRemovalPass**: Fixed `AttributeError` when using parallel processing in ConflictRemovalPass on macOS. The worker function `process_conflict_batch_worker` was imported from a helper module, causing pickling issues with multiprocessing's spawn method. Added a module-level wrapper function to ensure proper serialization.
+
+- **Pattern extraction no longer inherits boundaries from corrections**: Patterns are now extracted with `NONE` boundary instead of inheriting the correction's boundary (e.g., `BOTH`). This allows the solver to independently determine appropriate boundaries for patterns during validation, preventing invalid `BOTH` boundary patterns from being created and incorrectly blocking other corrections.
+
+- **Pattern validation now tries appropriate boundaries**: When pattern validation fails with `NONE` boundary, the solver now automatically tries stricter boundaries based on pattern type: prefix patterns try `LEFT` boundary, suffix patterns try `RIGHT` boundary. Patterns never use `BOTH` boundary, and true substrings (patterns in the middle of words) are rejected if `NONE` fails.
+
+- **Pattern extraction now includes BOTH boundary corrections**: Fixed bug where corrections with BOTH boundary were excluded from suffix and prefix pattern extraction. Since BOTH includes both LEFT and RIGHT boundaries, these corrections can contribute to both prefix and suffix patterns. This fix allows patterns like "thre" → "the" to be found from corrections like "whethre" → "whether" and "bathre" → "bathe" that have BOTH boundary.
+
+- **Pattern validation performance**: Added pre-validation filter to skip patterns shorter than `min_typo_length` before sending them to validation, avoiding unnecessary validation work for patterns that will definitely be rejected.
+
+- **Stage 6 debug logging now appears**: Fixed missing debug logging in PlatformConstraintsPass (Stage 6). The pass now logs debug messages for both words and typos when they pass or fail platform constraint checks, matching the behavior of other stages.
+
+- **Slow test now properly marked**: Added `@pytest.mark.slow` to `test_qmk_solver_contains_patterns` in `test_pattern_generalization_regression.py` so it's skipped during pre-commit runs, preventing it from slowing down the pre-commit hook.
+
+### Removed
+
+- **GPU acceleration feature**: Removed `use_gpu` configuration option and all GPU-related code. GPU functionality was never implemented and has been replaced by Rust-based substring detection which provides better performance.
+
 ## [0.8.1] - 2025-12-07
 
 ### Fixed
@@ -24,7 +70,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Pattern validation thin worker architecture**: Refactored pattern validation to use thin worker architecture, eliminating expensive index building in worker processes. Pre-calculates `would_corrupt` checks using Rust batch function in main process, then passes pre-built indexes and results to workers. This eliminates the "half a minute" worker startup time, making worker initialization nearly instant. Similar optimization to CandidateSelection pass.
 - **Pattern validation pickle optimization**: Fixed 30-45 second worker initialization hang by pre-calculating all validation checks (start/end/substring triggers) and passing only lightweight results to workers instead of expensive `BoundaryIndex` objects. This eliminates expensive pickle/unpickle operations that were causing the delay. Workers now receive a simple dict mapping pattern -> validation results instead of the full index structure.
 - **Pattern validation batch optimization**: Optimized pre-calculation of validation checks by using batch operations (`batch_check_start`, `batch_check_end`) and suffix array queries instead of calling individual functions per pattern. This reduces the pre-calculation time from minutes to seconds for large pattern sets by eliminating O(N) per-pattern overhead.
-- **Helper modules for collision processing and GPU utilities**: Added `collision_helpers.py` for collision resolution utilities and `gpu.py` placeholder for future GPU acceleration features.
+- **Helper modules for collision processing**: Added `collision_helpers.py` for collision resolution utilities.
 
 ### Changed
 

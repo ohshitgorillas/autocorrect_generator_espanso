@@ -53,27 +53,27 @@ def _generate_state_debug_reports(
 
 def _generate_word_typo_debug_reports(
     config: "Config",
-    debug_messages: list[str],
     debug_trace: list["DebugTraceEntry"],
     report_dir: Path,
+    state: "DictionaryState | None" = None,
 ) -> int:
     """Generate word/typo debug reports.
 
     Args:
         config: Configuration object
-        debug_messages: Stage 2 debug messages
         debug_trace: Debug trace entries
         report_dir: Report directory
+        state: Optional dictionary state with structured debug data
 
     Returns:
         Number of reports generated
     """
     count = 0
     if config.debug_words:
-        generate_debug_words_report(debug_messages, debug_trace, report_dir)
+        generate_debug_words_report(debug_trace, report_dir, config.debug_words, state)
         count += 1
     if config.debug_typos:
-        generate_debug_typos_report(debug_messages, debug_trace, report_dir)
+        generate_debug_typos_report(debug_trace, report_dir, config.debug_typo_matcher, state)
         count += 1
     return count
 
@@ -81,7 +81,6 @@ def _generate_word_typo_debug_reports(
 def _generate_all_debug_reports(
     config: "Config | None",
     state: "DictionaryState | None",
-    debug_messages: list[str] | None,
     debug_trace: list["DebugTraceEntry"] | None,
     report_dir: Path,
 ) -> int:
@@ -90,7 +89,6 @@ def _generate_all_debug_reports(
     Args:
         config: Configuration object
         state: Dictionary state
-        debug_messages: Stage 2 debug messages
         debug_trace: Debug trace entries
         report_dir: Report directory
 
@@ -104,11 +102,8 @@ def _generate_all_debug_reports(
     if state:
         count += _generate_state_debug_reports(config, state, report_dir)
     if config.debug_words or config.debug_typos:
-        debug_messages_list = debug_messages or []
         debug_trace_list = debug_trace or []
-        count += _generate_word_typo_debug_reports(
-            config, debug_messages_list, debug_trace_list, report_dir
-        )
+        count += _generate_word_typo_debug_reports(config, debug_trace_list, report_dir, state)
     return count
 
 
@@ -152,7 +147,6 @@ def generate_reports(
     verbose: bool = False,
     report_dir: Path | None = None,
     state: "DictionaryState | None" = None,
-    debug_messages: list[str] | None = None,
     debug_trace: list["DebugTraceEntry"] | None = None,
     config: "Config | None" = None,
 ) -> Path:
@@ -165,7 +159,6 @@ def generate_reports(
         verbose: Whether to print progress messages
         report_dir: Optional pre-created report directory. If None, creates a new one.
         state: Optional dictionary state for debug reports
-        debug_messages: Optional Stage 2 debug messages
         debug_trace: Optional debug trace entries
         config: Optional config for checking debug flags
 
@@ -184,9 +177,7 @@ def generate_reports(
     report_count = 7
 
     # Generate debug reports if enabled
-    report_count += _generate_all_debug_reports(
-        config, state, debug_messages, debug_trace, report_dir
-    )
+    report_count += _generate_all_debug_reports(config, state, debug_trace, report_dir)
 
     if verbose:
         logger.info(f"  Generated {report_count} report files")

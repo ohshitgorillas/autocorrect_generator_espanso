@@ -18,6 +18,7 @@ def log_word_loading(
     config_top_n: int | None,
     config_max_word_length: int,
     config_min_word_length: int,
+    debug_messages: list[str] | None = None,
 ) -> None:
     """Log debug information about word loading for debug words.
 
@@ -28,10 +29,11 @@ def log_word_loading(
         config_top_n: Top N words configuration
         config_max_word_length: Maximum word length
         config_min_word_length: Minimum word length
+        debug_messages: Optional list to collect messages into (for reports)
     """
     # Check if word is in user words
     if word in user_words_set:
-        log_debug_word(word, "Found in user word list (include file)", "Stage 1")
+        log_debug_word(word, "Found in user word list (include file)", "Stage 1", debug_messages)
 
     # Check if word is in source words
     source_words_set = set(source_words)
@@ -43,17 +45,21 @@ def log_word_loading(
             word,
             f"Included from wordfreq (rank: {rank}, zipf freq: {freq:.2f})",
             "Stage 1",
+            debug_messages,
         )
     else:
         # Word not in source words - explain why
         if config_top_n is None:
-            log_debug_word(word, "NOT in source words (top_n not specified)", "Stage 1")
+            log_debug_word(
+                word, "NOT in source words (top_n not specified)", "Stage 1", debug_messages
+            )
         elif len(word) > config_max_word_length:
             log_debug_word(
                 word,
                 f"NOT in source words (length {len(word)} > max_word_length "
                 f"{config_max_word_length})",
                 "Stage 1",
+                debug_messages,
             )
         elif len(word) < config_min_word_length:
             log_debug_word(
@@ -61,6 +67,7 @@ def log_word_loading(
                 f"NOT in source words (length {len(word)} < min_word_length "
                 f"{config_min_word_length})",
                 "Stage 1",
+                debug_messages,
             )
         else:
             freq = zipf_frequency(word, "en")
@@ -68,6 +75,7 @@ def log_word_loading(
                 word,
                 f"NOT in source words (not in top {config_top_n}, zipf freq: {freq:.2f})",
                 "Stage 1",
+                debug_messages,
             )
 
 
@@ -76,6 +84,7 @@ def log_typo_validation_check(
     pattern_str: str,
     validation_set: set[str],
     exclusion_matcher: "ExclusionMatcher",
+    debug_messages: list[str] | None = None,
 ) -> None:
     """Log debug information about typo validation for debug typos.
 
@@ -84,6 +93,7 @@ def log_typo_validation_check(
         pattern_str: The original pattern string
         validation_set: Set of validation words
         exclusion_matcher: Exclusion matcher for checking exclusion rules
+        debug_messages: Optional list to collect messages into (for reports)
     """
     # Check if typo is a valid word
     if typo in validation_set:
@@ -92,6 +102,7 @@ def log_typo_validation_check(
             "WARNING: Typo exists as valid word in dictionary",
             [pattern_str],
             "Stage 1",
+            debug_messages,
         )
 
     # Check if typo would be excluded by any exclusion rule
@@ -110,5 +121,6 @@ def log_typo_validation_check(
                 f"Typo matches exclusion rule (boundary={boundary.value}): {matching_rule}",
                 [pattern_str],
                 "Stage 1",
+                debug_messages,
             )
             break  # Only log once

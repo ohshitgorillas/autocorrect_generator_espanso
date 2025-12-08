@@ -5,13 +5,18 @@ from typing import TextIO
 
 from entroppy.core import format_boundary_display
 from entroppy.core.patterns.data_models import (
+    IterationData,
     PatternExtraction,
-    PlatformConflict,
     PatternValidation,
     RankingInfo,
     TypoLifecycle,
 )
-from entroppy.reports.helpers import write_section_header, write_subsection_header
+from entroppy.reports.helpers import (
+    write_report_header,
+    write_section_header,
+    write_subsection_header,
+)
+from entroppy.utils.helpers import write_file_safely
 
 
 def write_pattern_extraction_section(
@@ -105,6 +110,97 @@ def write_pattern_validation_section(
     f.write("\n")
 
 
+def _write_solver_trace(iter_data: IterationData, f: TextIO) -> None:
+    """Write solver trace section.
+
+    Args:
+        iter_data: Iteration data
+        f: File to write to
+    """
+    if not iter_data.solver_events:
+        return
+
+    write_subsection_header(f, "Solver Trace:")
+    for entry in sorted(iter_data.solver_events, key=lambda e: e.pass_name):
+        boundary_str = format_boundary_display(entry.boundary)
+        f.write(
+            f"  [{entry.pass_name}] {entry.action}: "
+            f"{entry.typo} -> {entry.word} ({boundary_str})\n"
+        )
+        if entry.reason:
+            for line in entry.reason.split("\n"):
+                if line.strip():
+                    f.write(f"    Reason: {line.strip()}\n")
+    f.write("\n")
+
+
+def _write_pattern_sections(iter_data: IterationData, f: TextIO) -> None:
+    """Write pattern extraction and validation sections.
+
+    Args:
+        iter_data: Iteration data
+        f: File to write to
+    """
+    # Write pattern extractions
+    if iter_data.pattern_extractions:
+        write_subsection_header(f, "[PatternGeneralization]")
+        write_pattern_extraction_section(iter_data.pattern_extractions, f)
+
+    # Write pattern validations
+    if iter_data.pattern_validations:
+        # Check if we already wrote the header in pattern extractions
+        if not iter_data.pattern_extractions:
+            write_subsection_header(f, "[PatternGeneralization]")
+        write_pattern_validation_section(iter_data.pattern_validations, f)
+
+
+def _write_platform_conflicts(
+    iter_data: IterationData, f: TextIO, include_conflict_details: bool
+) -> None:
+    """Write platform conflicts section.
+
+    Args:
+        iter_data: Iteration data
+        f: File to write to
+        include_conflict_details: Whether to include conflict details
+    """
+    if not iter_data.platform_conflicts:
+        return
+
+    f.write("  Platform Conflicts:\n")
+    for conflict in iter_data.platform_conflicts:
+        f.write(
+            f"    {conflict.conflict_type}: {conflict.typo} → {conflict.word} "
+            f"({conflict.boundary}) - {conflict.result}\n"
+        )
+        if include_conflict_details:
+            f.write(f"      {conflict.details}\n")
+    f.write("\n")
+
+
+def write_iteration_section(
+    iter_data: IterationData,
+    iteration: int,
+    f: TextIO,
+    include_conflict_details: bool = False,
+) -> None:
+    """Write a single iteration section.
+
+    Args:
+        iter_data: Iteration data to write
+        iteration: Iteration number
+        f: File to write to
+        include_conflict_details: Whether to include conflict details (for typo reports)
+    """
+    write_section_header(f, f"ITERATION {iteration}")
+
+    _write_solver_trace(iter_data, f)
+    _write_pattern_sections(iter_data, f)
+    _write_platform_conflicts(iter_data, f, include_conflict_details)
+
+    f.write("\n")
+
+
 def write_ranking_section(
     ranking: RankingInfo | None,
     f: TextIO,
@@ -158,8 +254,6 @@ def write_typo_report_from_lifecycle(
         lifecycle: TypoLifecycle object with all structured data
         filepath: Path to write the report to
     """
-    from entroppy.reports.helpers import write_report_header
-    from entroppy.utils.helpers import write_file_safely
 
     def write_content(f: TextIO) -> None:
         pattern_info = (
@@ -189,53 +283,13 @@ def write_typo_report_from_lifecycle(
                 continue  # Stage 2 already handled
 
             iter_data = lifecycle.iterations[iteration]
-            write_section_header(f, f"ITERATION {iteration}")
-
-            # Write solver trace
-            if iter_data.solver_events:
-                write_subsection_header(f, "Solver Trace:")
-                for entry in sorted(iter_data.solver_events, key=lambda e: e.pass_name):
-                    boundary_str = format_boundary_display(entry.boundary)
-                    f.write(
-                        f"  [{entry.pass_name}] {entry.action}: "
-                        f"{entry.typo} -> {entry.word} ({boundary_str})\n"
-                    )
-                    if entry.reason:
-                        for line in entry.reason.split("\n"):
-                            if line.strip():
-                                f.write(f"    Reason: {line.strip()}\n")
-                f.write("\n")
-
-            # Write pattern extractions
-            if iter_data.pattern_extractions:
-                write_subsection_header(f, "[PatternGeneralization]")
-                write_pattern_extraction_section(iter_data.pattern_extractions, f)
-
-            # Write pattern validations
-            if iter_data.pattern_validations:
-                # Check if we already wrote the header in pattern extractions
-                if not iter_data.pattern_extractions:
-                    write_subsection_header(f, "[PatternGeneralization]")
-                write_pattern_validation_section(iter_data.pattern_validations, f)
-
-            # Write platform conflicts
-            if iter_data.platform_conflicts:
-                f.write("  Platform Conflicts:\n")
-                for conflict in iter_data.platform_conflicts:
-                    f.write(
-                        f"    {conflict.conflict_type}: {conflict.typo} → {conflict.word} "
-                        f"({conflict.boundary}) - {conflict.result}\n"
-                    )
-                    f.write(f"      {conflict.details}\n")
-                f.write("\n")
+            write_iteration_section(iter_data, iteration, f, include_conflict_details=True)
 
             # Write other messages
             if iter_data.other_messages:
                 for msg in iter_data.other_messages:
                     f.write(f"  {msg}\n")
                 f.write("\n")
-
-            f.write("\n")
 
         # Write Stage 7 ranking
         if lifecycle.stage7_events:

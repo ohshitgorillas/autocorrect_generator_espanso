@@ -1,8 +1,13 @@
 """Data models for passing information between pipeline stages."""
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, Field
 
 from entroppy.matching import ExclusionMatcher
+
+if TYPE_CHECKING:
+    from entroppy.resolution.state import DictionaryState
 
 
 class StageResult(BaseModel):
@@ -22,6 +27,7 @@ class DictionaryData(StageResult):
     source_words: list[str] = Field(default_factory=list)
     source_words_set: set[str] = Field(default_factory=set)
     user_words_set: set[str] = Field(default_factory=set)
+    debug_messages: list[str] = Field(default_factory=list)
 
     model_config = {
         "arbitrary_types_allowed": True,  # For ExclusionMatcher
@@ -33,3 +39,8 @@ class TypoGenerationResult(StageResult):
 
     typo_map: dict[str, list[str]] = Field(default_factory=dict)
     debug_messages: list[str] = Field(default_factory=list)
+    state: "DictionaryState | None" = Field(default=None, exclude=True)
+
+    model_config = {
+        "arbitrary_types_allowed": True,  # For DictionaryState
+    }

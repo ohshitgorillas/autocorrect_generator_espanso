@@ -42,7 +42,6 @@ class PassContext:
     collision_threshold: float
     jobs: int
     verbose: bool
-    use_gpu: bool
 
     @classmethod
     def from_dictionary_data(
@@ -53,7 +52,6 @@ class PassContext:
         collision_threshold: float,
         jobs: int = 1,
         verbose: bool = False,
-        use_gpu: bool = False,
     ) -> "PassContext":
         """Create context from dictionary data.
 
@@ -64,7 +62,6 @@ class PassContext:
             collision_threshold: Collision resolution threshold
             jobs: Number of parallel jobs
             verbose: Whether to show progress bars
-            use_gpu: Whether to enable GPU acceleration
 
         Returns:
             PassContext instance
@@ -89,7 +86,6 @@ class PassContext:
             collision_threshold=collision_threshold,
             jobs=jobs,
             verbose=verbose,
-            use_gpu=use_gpu,
         )
 
 

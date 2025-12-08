@@ -3,9 +3,11 @@
 from typing import TYPE_CHECKING
 
 from entroppy.core import Correction
+from entroppy.core.patterns.data_models import RankingInfo
 from entroppy.utils.debug import is_debug_correction, log_debug_correction
 
 if TYPE_CHECKING:
+    from entroppy.resolution.state import DictionaryState
     from entroppy.utils.debug import DebugTypoMatcher
 
 
@@ -26,7 +28,7 @@ def log_separation_by_type(
         debug_typo_matcher: Matcher for debug typos
     """
     if is_debug_correction(correction, debug_words, debug_typo_matcher):
-        log_debug_correction(correction, message, debug_words, debug_typo_matcher, "Stage 6")
+        log_debug_correction(correction, message, debug_words, debug_typo_matcher, "Stage 7")
 
 
 def log_pattern_scoring(
@@ -54,7 +56,7 @@ def log_pattern_scoring(
             f"{replacement_count} replacements: {replacement_list})",
             debug_words,
             debug_typo_matcher,
-            "Stage 6",
+            "Stage 7",
         )
 
 
@@ -78,7 +80,7 @@ def log_direct_scoring(
             f"Scored direct correction: {freq:.2e} (word frequency)",
             debug_words,
             debug_typo_matcher,
-            "Stage 6",
+            "Stage 7",
         )
 
 
@@ -90,10 +92,11 @@ def log_ranking_position(
     tier_name: str,
     tier_pos: int,
     tier_total: int,
-    score_info: str,
-    nearby_info: str,
+    score: float | None,
+    nearby_corrections: list[str] | None,
     debug_words: set[str],
     debug_typo_matcher: "DebugTypoMatcher | None",
+    state: "DictionaryState | None" = None,
 ) -> None:
     """Log the final ranking position of a correction.
 
@@ -105,20 +108,39 @@ def log_ranking_position(
         tier_name: Name of the tier
         tier_pos: Position within tier (1-indexed)
         tier_total: Total in tier
-        score_info: Score information string
-        nearby_info: Nearby corrections information
+        score: Score for this correction
+        nearby_corrections: List of nearby corrections (for debug logging)
         debug_words: Set of words to debug
         debug_typo_matcher: Matcher for debug typos
+        state: Optional dictionary state for storing structured debug data
     """
     if is_debug_correction(correction, debug_words, debug_typo_matcher):
+        score_info = f"score: {score:.2e}" if score is not None else "score: N/A"
+        nearby_info = f" (nearby: {', '.join(nearby_corrections)})" if nearby_corrections else ""
         log_debug_correction(
             correction,
             f"Ranked at position {position}/{total} (tier {tier}: {tier_name}, "
             f"position {tier_pos}/{tier_total}, {score_info}){nearby_info}",
             debug_words,
             debug_typo_matcher,
-            "Stage 6",
+            "Stage 7",
         )
+
+    # Store structured data if state is provided
+    if state is not None:
+        typo, word, boundary = correction
+
+        ranking = RankingInfo(
+            typo=typo,
+            word=word,
+            boundary=boundary.value,
+            classification=f"tier_{tier}_{tier_name}",
+            tier=tier,
+            score=score,
+            overall_position=position,
+            tier_position=tier_pos,
+        )
+        state.ranking_info.append(ranking)
 
 
 def log_max_corrections_limit(
@@ -129,6 +151,7 @@ def log_max_corrections_limit(
     within_limit: bool,
     debug_words: set[str],
     debug_typo_matcher: "DebugTypoMatcher | None",
+    state: "DictionaryState | None" = None,
 ) -> None:
     """Log when a correction is affected by max_corrections limit.
 
@@ -140,6 +163,7 @@ def log_max_corrections_limit(
         within_limit: Whether correction is within the limit
         debug_words: Set of words to debug
         debug_typo_matcher: Matcher for debug typos
+        state: Optional dictionary state for storing structured debug data
     """
     # pylint: disable=duplicate-code
     # This function intentionally duplicates logic from
@@ -155,7 +179,7 @@ def log_max_corrections_limit(
                 f"Made the cut: position {position} (within limit of {max_corrections})",
                 debug_words,
                 debug_typo_matcher,
-                "Stage 6",
+                "Stage 7",
             )
         else:
             log_debug_correction(
@@ -164,5 +188,15 @@ def log_max_corrections_limit(
                 f"(limit: {max_corrections}, total ranked: {total_ranked})",
                 debug_words,
                 debug_typo_matcher,
-                "Stage 6",
+                "Stage 7",
             )
+
+    # Update ranking info with final status if state is provided
+    if state is not None:
+        typo, word, boundary = correction
+        # Find existing ranking info for this correction
+        for ranking in state.ranking_info:
+            if ranking.typo == typo and ranking.word == word and ranking.boundary == boundary.value:
+                ranking.final_status = "MADE_CUT" if within_limit else "CUT_OFF"
+                ranking.limit = max_corrections
+                break

@@ -11,14 +11,12 @@ from entroppy.core.patterns.data_models import (
     WordProcessingEvent,
 )
 from entroppy.reports.debug_report_writers import (
-    write_pattern_extraction_section,
-    write_pattern_validation_section,
+    write_iteration_section,
     write_ranking_section,
 )
 from entroppy.reports.helpers import (
     write_report_header,
     write_section_header,
-    write_subsection_header,
 )
 from entroppy.resolution.state import DebugTraceEntry
 from entroppy.utils.helpers import write_file_safely
@@ -282,45 +280,7 @@ def _generate_word_report(
                 continue
 
             iter_data = iterations_map[iteration]
-            write_section_header(f, f"ITERATION {iteration}")
-
-            # Write solver trace
-            if iter_data.solver_events:
-                write_subsection_header(f, "Solver Trace:")
-                for entry in sorted(iter_data.solver_events, key=lambda e: e.pass_name):
-                    boundary_str = format_boundary_display(entry.boundary)
-                    f.write(
-                        f"  [{entry.pass_name}] {entry.action}: "
-                        f"{entry.typo} -> {entry.word} ({boundary_str})\n"
-                    )
-                    if entry.reason:
-                        for line in entry.reason.split("\n"):
-                            if line.strip():
-                                f.write(f"    Reason: {line.strip()}\n")
-                f.write("\n")
-
-            # Write pattern extractions
-            if iter_data.pattern_extractions:
-                write_subsection_header(f, "[PatternGeneralization]")
-                write_pattern_extraction_section(iter_data.pattern_extractions, f)
-
-            # Write pattern validations
-            if iter_data.pattern_validations:
-                if not iter_data.pattern_extractions:
-                    write_subsection_header(f, "[PatternGeneralization]")
-                write_pattern_validation_section(iter_data.pattern_validations, f)
-
-            # Write platform conflicts
-            if iter_data.platform_conflicts:
-                f.write("  Platform Conflicts:\n")
-                for conflict in iter_data.platform_conflicts:
-                    f.write(
-                        f"    {conflict.conflict_type}: {conflict.typo} → {conflict.word} "
-                        f"({conflict.boundary}) - {conflict.result}\n"
-                    )
-                f.write("\n")
-
-            f.write("\n")
+            write_iteration_section(iter_data, iteration, f, include_conflict_details=False)
 
         # Write ranking info
         word_ranking_info = [r for r in state.ranking_info if r.word == word]

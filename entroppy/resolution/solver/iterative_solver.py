@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from entroppy.resolution.state_debug import get_debug_summary
+
 from .convergence import _check_convergence, _get_state_counts
 from .pass_context import Pass, SolverResult
 
@@ -269,7 +271,7 @@ class IterativeSolver:
             iterations=iteration,
             converged=converged,
             graveyard_size=len(state.graveyard),
-            debug_trace=state.get_debug_summary(),
+            debug_trace=get_debug_summary(state.debug_trace),
         )
 
     def solve(self, state: "DictionaryState") -> SolverResult:

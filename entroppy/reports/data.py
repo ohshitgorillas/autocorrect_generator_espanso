@@ -1,8 +1,14 @@
 """Report data models."""
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from entroppy.core import BoundaryType, Correction
+if TYPE_CHECKING:
+    from entroppy.core.boundaries import BoundaryType
+    from entroppy.core.types import Correction
+else:
+    from entroppy.core.boundaries import BoundaryType
+    from entroppy.core.types import Correction
 
 
 @dataclass

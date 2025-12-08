@@ -9,7 +9,7 @@ from loguru import logger
 
 from entroppy.core import Config, Correction
 from entroppy.platforms import PlatformBackend, PlatformConstraints
-from entroppy.processing.stages import generate_typos, load_dictionaries
+from entroppy.processing.stages import TypoGenerationResult, generate_typos, load_dictionaries
 from entroppy.reports import ReportData, generate_reports
 from entroppy.resolution.passes import (
     CandidateSelectionPass,
@@ -23,8 +23,11 @@ from entroppy.resolution.state import DictionaryState
 
 from .pipeline_reporting import extract_graveyard_data_for_reporting
 
+# Rebuild TypoGenerationResult model after DictionaryState is available
+TypoGenerationResult.model_rebuild()
+
 if TYPE_CHECKING:
-    from entroppy.processing.stages import DictionaryData, TypoGenerationResult
+    from entroppy.processing.stages import DictionaryData
     from entroppy.resolution.solver import SolverResult
 
 
@@ -34,6 +37,7 @@ def run_iterative_solver(
     platform: PlatformBackend,
     config: Config,
     verbose: bool,
+    state: DictionaryState | None = None,
 ) -> tuple["SolverResult", DictionaryState]:
     """Run the iterative solver for stages 3-6.
 
@@ -43,19 +47,24 @@ def run_iterative_solver(
         platform: Platform backend
         config: Configuration object
         verbose: Whether to show verbose output
+        state: Optional pre-created state (from Stage 2)
 
     Returns:
         Tuple of (solver_result, state)
     """
-    # Create dictionary state
-    state = DictionaryState(
-        raw_typo_map=typo_result.typo_map,
-        debug_words=config.debug_words,
-        debug_typo_matcher=config.debug_typo_matcher,
-        debug_graveyard=config.debug_graveyard,
-        debug_patterns=config.debug_patterns,
-        debug_corrections=config.debug_corrections,
-    )
+    # Use provided state or create new one
+    if state is None:
+        state = DictionaryState(
+            raw_typo_map=typo_result.typo_map,
+            debug_words=config.debug_words,
+            debug_typo_matcher=config.debug_typo_matcher,
+            debug_graveyard=config.debug_graveyard,
+            debug_patterns=config.debug_patterns,
+            debug_corrections=config.debug_corrections,
+        )
+    else:
+        # Ensure typo_map is set
+        state.raw_typo_map = typo_result.typo_map
 
     # Create pass context
     pass_context = PassContext.from_dictionary_data(
@@ -65,7 +74,6 @@ def run_iterative_solver(
         collision_threshold=config.freq_ratio,
         jobs=config.jobs,
         verbose=verbose,
-        use_gpu=config.use_gpu,
     )
 
     # Create passes
@@ -115,13 +123,24 @@ def apply_platform_ranking(
         if pattern not in pattern_replacements:
             pattern_replacements[pattern] = []
 
-    return platform.rank_corrections(
-        all_corrections,
-        solver_result.patterns,
-        pattern_replacements,
-        dict_data.user_words_set,
-        config,
-    )
+    # Attach state to config temporarily for ranking
+    if hasattr(config, "_state"):
+        config._state = state  # pylint: disable=protected-access
+    else:
+        # Create a temporary attribute
+        setattr(config, "_state", state)  # pylint: disable=protected-access
+    try:
+        return platform.rank_corrections(
+            all_corrections,
+            solver_result.patterns,
+            pattern_replacements,
+            dict_data.user_words_set,
+            config,
+        )
+    finally:
+        # Clean up temporary attribute
+        if hasattr(config, "_state"):
+            delattr(config, "_state")
 
 
 def generate_platform_reports(
@@ -212,7 +231,24 @@ def run_stage_2_generate_typos(
     """
     if verbose:
         logger.info("Stage 2: Generating typos...")
-    typo_result = generate_typos(dict_data, config, verbose)
+    # Create state early with empty typo_map for Stage 2 event tracking
+    # The typo_map will be populated after generation
+    state = DictionaryState(
+        raw_typo_map={},  # Will be updated after generation
+        debug_words=config.debug_words,
+        debug_typo_matcher=config.debug_typo_matcher,
+        debug_graveyard=config.debug_graveyard if config else False,
+        debug_patterns=config.debug_patterns if config else False,
+        debug_corrections=config.debug_corrections if config else False,
+    )
+    typo_result = generate_typos(dict_data, config, verbose, state)
+    # Update state with actual typo_map
+    state.raw_typo_map = typo_result.typo_map
+
+    # Merge Stage 1 debug messages with Stage 2 messages
+    all_debug_messages = list(dict_data.debug_messages)
+    all_debug_messages.extend(typo_result.debug_messages)
+    typo_result.debug_messages = all_debug_messages
 
     if report_data:
         report_data.stage_times["Generating typos"] = typo_result.elapsed_time
@@ -225,6 +261,8 @@ def run_stage_2_generate_typos(
         )
         logger.info("")
 
+    # Store state in typo_result for transfer to Stage 3
+    typo_result.state = state
     return typo_result
 
 
@@ -253,7 +291,10 @@ def run_stage_3_6_solver(
         logger.info("Stage 3-6: Running iterative solver...")
 
     solver_start = time.time()
-    solver_result, state = run_iterative_solver(typo_result, dict_data, platform, config, verbose)
+    # Use state from Stage 2 if available
+    solver_result, state = run_iterative_solver(
+        typo_result, dict_data, platform, config, verbose, typo_result.state
+    )
     solver_elapsed = time.time() - solver_start
 
     if verbose:
@@ -277,7 +318,6 @@ def run_stage_3_6_solver(
             collision_threshold=config.freq_ratio,
             jobs=config.jobs,
             verbose=verbose,
-            use_gpu=config.use_gpu,
         )
 
         # Extract data from graveyard for reporting
@@ -388,7 +428,6 @@ def run_stage_9_reports(
     config: Config,
     verbose: bool,
     state: DictionaryState | None = None,
-    typo_result: "TypoGenerationResult | None" = None,
 ) -> None:
     """Run Stage 9: Generate reports.
 
@@ -405,7 +444,6 @@ def run_stage_9_reports(
         config: Configuration object
         verbose: Whether to show verbose output
         state: Optional dictionary state for debug reports
-        typo_result: Optional typo generation result for debug messages
     """
     if verbose:
         logger.info("Stage 9: Generating reports...")
@@ -416,7 +454,6 @@ def run_stage_9_reports(
     reports_path = config.reports if config.reports else ""
 
     # Extract debug data
-    debug_messages = typo_result.debug_messages if typo_result else None
     debug_trace = state.debug_trace if state else None
 
     generate_reports(
@@ -426,7 +463,6 @@ def run_stage_9_reports(
         verbose,
         report_dir=report_dir,
         state=state,
-        debug_messages=debug_messages,
         debug_trace=debug_trace,
         config=config,
     )

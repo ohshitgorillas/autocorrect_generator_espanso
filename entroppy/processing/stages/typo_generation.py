@@ -3,27 +3,89 @@
 from collections import defaultdict
 from multiprocessing import Pool
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from tqdm import tqdm
 
 from entroppy.core import Config
+from entroppy.core.boundaries import BoundaryType
+from entroppy.core.patterns.data_collection import create_typo_generated_event
+from entroppy.core.patterns.data_models import (
+    TypoAcceptedEvent,
+    TypoGeneratedEvent,
+    WordProcessingEvent,
+)
 from entroppy.processing.stages.data_models import DictionaryData, TypoGenerationResult
 from entroppy.processing.stages.worker_context import WorkerContext, get_worker_context, init_worker
 from entroppy.resolution import process_word
 from entroppy.utils.debug import DebugTypoMatcher
 
+if TYPE_CHECKING:
+    from entroppy.resolution.state import DictionaryState
 
-def process_word_worker(word: str) -> tuple[str, list[tuple[str, str]], list[str]]:
-    """Worker function for multiprocessing.
+
+def _merge_stage2_events_into_state(
+    state: "DictionaryState", all_stage2_events: list[dict]
+) -> None:
+    """Merge Stage 2 events from workers into state.
 
     Args:
-        word: The word to process
+        state: Dictionary state to merge events into
+        all_stage2_events: List of event dictionaries from workers
+    """
+    for event_dict in all_stage2_events:
+        event_type = event_dict.get("event_type")
+        if event_type == "processing_start":
+            event = WordProcessingEvent(**event_dict)
+        elif event_type == "typo_generated":
+            event = TypoGeneratedEvent(**event_dict)
+        elif event_type == "typo_accepted":
+            event = TypoAcceptedEvent(**event_dict)
+        else:
+            continue
+        state.stage2_word_events.append(event)
+
+
+def _collect_typo_events_for_word(
+    word: str,
+    corrections: list[tuple[str, str]],
+    debug_typo_matcher: "DebugTypoMatcher | None",
+    stage2_events: list,
+) -> None:
+    """Collect typo events for a debug word.
+
+    Args:
+        word: The word being processed
+        corrections: List of (typo, correction_word) pairs
+        debug_typo_matcher: Optional matcher for debug typo patterns
+        stage2_events: List to append events to
+    """
+    for typo, _correction_word in corrections:
+        # Check if typo matches debug patterns
+        matched_patterns: list[str] | None = None
+        if debug_typo_matcher:
+            matched = debug_typo_matcher.get_matching_patterns(typo, BoundaryType.NONE)
+            if matched:
+                matched_patterns = list(matched)
+
+        stage2_events.append(create_typo_generated_event(word, typo, matched_patterns).model_dump())
+        stage2_events.append(
+            TypoAcceptedEvent(
+                word=word,
+                event_type="typo_accepted",
+                typo=typo,
+                boundary=BoundaryType.NONE.value,
+                iteration=0,
+            ).model_dump()
+        )
+
+
+def _setup_worker_context() -> tuple[dict[str, str] | None, "DebugTypoMatcher | None"]:
+    """Set up worker context for processing.
 
     Returns:
-        Tuple of (word, list of (typo, word) pairs, list of debug messages)
-        Note: Boundaries are determined later in Stage 3 (collision resolution)
+        Tuple of (adj_map, debug_typo_matcher)
     """
     context = get_worker_context()
     # Convert dict[str, list[str]] to dict[str, str] for process_word
@@ -39,6 +101,50 @@ def process_word_worker(word: str) -> tuple[str, list[tuple[str, str]], list[str
         else None
     )
 
+    return adj_map, debug_typo_matcher
+
+
+def _is_debug_word(word: str) -> bool:
+    """Check if word is being debugged.
+
+    Args:
+        word: Word to check
+
+    Returns:
+        True if word is being debugged
+    """
+    context = get_worker_context()
+    return word.lower() in {w.lower() for w in context.debug_words}
+
+
+def process_word_worker(word: str) -> tuple[str, list[tuple[str, str]], list[str], list]:
+    """Worker function for multiprocessing.
+
+    Args:
+        word: The word to process
+
+    Returns:
+        Tuple of (word, list of (typo, word) pairs, list of debug messages, list of Stage 2 events)
+        Note: Boundaries are determined later in Stage 3 (collision resolution)
+    """
+    context = get_worker_context()
+    adj_map, debug_typo_matcher = _setup_worker_context()
+
+    # Collect Stage 2 events in worker (state not available in multiprocessing)
+    stage2_events: list = []
+
+    # Track if word is being debugged
+    is_debug_word = _is_debug_word(word)
+
+    if is_debug_word:
+        stage2_events.append(
+            WordProcessingEvent(
+                word=word,
+                event_type="processing_start",
+                iteration=0,
+            ).model_dump()
+        )
+
     corrections, debug_messages = process_word(
         word,
         set(context.validation_set),
@@ -48,16 +154,33 @@ def process_word_worker(word: str) -> tuple[str, list[tuple[str, str]], list[str
         set(context.exclusions_set),
         frozenset(context.debug_words),
         debug_typo_matcher,
+        state=None,  # State not available in multiprocessing workers
     )
-    return (word, corrections, debug_messages)
+
+    # Collect events for generated/accepted typos
+    if is_debug_word:
+        _collect_typo_events_for_word(word, corrections, debug_typo_matcher, stage2_events)
+
+    return (word, corrections, debug_messages, stage2_events)
 
 
 def _process_multiprocessing(
     dict_data: DictionaryData,
     config: Config,
     verbose: bool,
+    state: "DictionaryState | None" = None,
 ) -> tuple[defaultdict[str, list[str]], list[str]]:
-    """Process words using multiprocessing."""
+    """Process words using multiprocessing.
+
+    Args:
+        dict_data: Dictionary data
+        config: Configuration object
+        verbose: Whether to show verbose output
+        state: Optional dictionary state for storing structured debug data
+
+    Returns:
+        Tuple of (typo_map, debug_messages)
+    """
     if verbose:
         logger.info(f"  Using {config.jobs} parallel workers")
         logger.info("  Initializing workers and building indexes...")
@@ -67,6 +190,7 @@ def _process_multiprocessing(
 
     typo_map = defaultdict(list)
     all_debug_messages = []
+    all_stage2_events: list[dict] = []
 
     with Pool(
         processes=config.jobs,
@@ -86,15 +210,21 @@ def _process_multiprocessing(
         else:
             results_wrapped_iter = results
 
-        for _word, corrections, debug_messages in results_wrapped_iter:
+        for _word, corrections, debug_messages, stage2_events in results_wrapped_iter:
             for typo, correction_word in corrections:
                 typo_map[typo].append(correction_word)
             # Collect debug messages from workers
             all_debug_messages.extend(debug_messages)
+            # Collect Stage 2 events from workers
+            all_stage2_events.extend(stage2_events)
 
     # Print all collected debug messages after workers complete
     for message in all_debug_messages:
         logger.debug(message)
+
+    # Merge Stage 2 events into state if available
+    if state:
+        _merge_stage2_events_into_state(state, all_stage2_events)
 
     return typo_map, all_debug_messages
 
@@ -103,6 +233,7 @@ def _process_single_threaded(
     dict_data: DictionaryData,
     config: Config,
     verbose: bool,
+    state: "DictionaryState | None" = None,
 ) -> tuple[defaultdict[str, list[str]], list[str]]:
     """Process words using single-threaded mode."""
     typo_map = defaultdict(list)
@@ -127,6 +258,7 @@ def _process_single_threaded(
             dict_data.exclusions,
             frozenset(config.debug_words),
             config.debug_typo_matcher,
+            state,
         )
         for typo, correction_word in corrections:
             typo_map[typo].append(correction_word)
@@ -143,6 +275,7 @@ def generate_typos(
     dict_data: DictionaryData,
     config: Config,
     verbose: bool = False,
+    state: "DictionaryState | None" = None,
 ) -> TypoGenerationResult:
     """Generate typos for all source words.
 
@@ -150,6 +283,7 @@ def generate_typos(
         dict_data: Dictionary data from loading stage
         config: Configuration object
         verbose: Whether to print verbose output
+        state: Optional dictionary state for storing structured debug data
 
     Returns:
         TypoGenerationResult containing typo map
@@ -160,9 +294,9 @@ def generate_typos(
         logger.info(f"  Processing {len(dict_data.source_words)} words...")
 
     if config.jobs > 1:
-        typo_map, debug_messages = _process_multiprocessing(dict_data, config, verbose)
+        typo_map, debug_messages = _process_multiprocessing(dict_data, config, verbose, state)
     else:
-        typo_map, debug_messages = _process_single_threaded(dict_data, config, verbose)
+        typo_map, debug_messages = _process_single_threaded(dict_data, config, verbose, state)
 
     elapsed_time = time.time() - start_time
 

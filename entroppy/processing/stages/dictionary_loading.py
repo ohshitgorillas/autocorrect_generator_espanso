@@ -65,8 +65,18 @@ def _process_debug_logging(
     source_words: list[str],
     validation_set: set[str],
     exclusion_matcher: ExclusionMatcher,
+    debug_messages: list[str],
 ) -> None:
-    """Process debug logging for words and typos."""
+    """Process debug logging for words and typos.
+
+    Args:
+        config: Configuration object
+        user_words_set: Set of user-provided words
+        source_words: List of source words
+        validation_set: Set of validation words
+        exclusion_matcher: Exclusion matcher
+        debug_messages: List to collect debug messages into
+    """
     if config.debug_words:
         for word in config.debug_words:
             log_word_loading(
@@ -76,6 +86,7 @@ def _process_debug_logging(
                 config.top_n,
                 config.max_word_length,
                 config.min_word_length,
+                debug_messages,
             )
 
     if config.debug_typo_matcher:
@@ -86,7 +97,9 @@ def _process_debug_logging(
             # For exact patterns, check directly
             if "*" not in pattern_str and ":" not in pattern_str:
                 typo = pattern_str
-                log_typo_validation_check(typo, pattern_str, validation_set, exclusion_matcher)
+                log_typo_validation_check(
+                    typo, pattern_str, validation_set, exclusion_matcher, debug_messages
+                )
 
 
 def load_dictionaries(config: Config, verbose: bool = False) -> DictionaryData:
@@ -118,8 +131,11 @@ def load_dictionaries(config: Config, verbose: bool = False) -> DictionaryData:
     source_words = _load_source_words(config, user_words, verbose)
     source_words_set = set(source_words)
 
-    # Debug logging for Stage 1
-    _process_debug_logging(config, user_words_set, source_words, validation_set, exclusion_matcher)
+    # Debug logging for Stage 1 - collect messages
+    debug_messages: list[str] = []
+    _process_debug_logging(
+        config, user_words_set, source_words, validation_set, exclusion_matcher, debug_messages
+    )
 
     elapsed_time = time.time() - start_time
 
@@ -132,5 +148,6 @@ def load_dictionaries(config: Config, verbose: bool = False) -> DictionaryData:
         source_words=source_words,
         source_words_set=source_words_set,
         user_words_set=user_words_set,
+        debug_messages=debug_messages,
         elapsed_time=elapsed_time,
     )

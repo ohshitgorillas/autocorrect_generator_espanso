@@ -374,20 +374,30 @@ def is_debug_correction(
 # Logging functions
 
 
-def log_debug_word(word: str, message: str, stage: str = "") -> None:
+def log_debug_word(
+    word: str, message: str, stage: str = "", debug_messages: list[str] | None = None
+) -> None:
     """Log a debug message for a word.
 
     Args:
         word: The word being debugged
         message: The message to log
         stage: Optional stage name (e.g., "Stage 1")
+        debug_messages: Optional list to collect message into (for reports)
     """
     stage_prefix = f"[{stage}] " if stage else ""
-    logger.debug(f"[DEBUG WORD: '{word}'] {stage_prefix}{message}")
+    formatted_message = f"[DEBUG WORD: '{word}'] {stage_prefix}{message}"
+    logger.debug(formatted_message)
+    if debug_messages is not None:
+        debug_messages.append(formatted_message)
 
 
 def log_debug_typo(
-    typo: str, message: str, matched_patterns: list[str] | None = None, stage: str = ""
+    typo: str,
+    message: str,
+    matched_patterns: list[str] | None = None,
+    stage: str = "",
+    debug_messages: list[str] | None = None,
 ) -> None:
     """Log a debug message for a typo.
 
@@ -396,13 +406,19 @@ def log_debug_typo(
         message: The message to log
         matched_patterns: List of patterns that matched (for pattern-based matching)
         stage: Optional stage name (e.g., "Stage 2")
+        debug_messages: Optional list to collect message into (for reports)
     """
     stage_prefix = f"[{stage}] " if stage else ""
     if matched_patterns:
         patterns_str = ", ".join(matched_patterns)
-        logger.debug(f"[DEBUG TYPO: '{typo}' (matched: {patterns_str})] {stage_prefix}{message}")
+        formatted_message = (
+            f"[DEBUG TYPO: '{typo}' (matched: {patterns_str})] {stage_prefix}{message}"
+        )
     else:
-        logger.debug(f"[DEBUG TYPO: '{typo}'] {stage_prefix}{message}")
+        formatted_message = f"[DEBUG TYPO: '{typo}'] {stage_prefix}{message}"
+    logger.debug(formatted_message)
+    if debug_messages is not None:
+        debug_messages.append(formatted_message)
 
 
 def log_debug_correction(
@@ -411,6 +427,7 @@ def log_debug_correction(
     debug_words: set[str],
     debug_typo_matcher: DebugTypoMatcher | None,
     stage: str = "",
+    debug_messages: list[str] | None = None,
 ):
     """Log a debug message for a correction.
 
@@ -422,18 +439,21 @@ def log_debug_correction(
         debug_words: Set of debug words
         debug_typo_matcher: The debug typo matcher (or None)
         stage: Optional stage name (e.g., "Stage 3")
+        debug_messages: Optional list to collect messages into (for reports)
     """
     typo, word, boundary = correction
 
     # Check if word is being debugged
     if is_debug_word(word, debug_words):
-        log_debug_word(word, f"{message} (typo: {typo})", stage)
+        log_debug_word(word, f"{message} (typo: {typo})", stage, debug_messages)
 
     # Check if typo is being debugged
     if debug_typo_matcher:
         matched_patterns = debug_typo_matcher.get_matching_patterns(typo, boundary)
         if matched_patterns:
-            log_debug_typo(typo, f"{message} (word: {word})", matched_patterns, stage)
+            log_debug_typo(
+                typo, f"{message} (word: {word})", matched_patterns, stage, debug_messages
+            )
 
 
 def log_if_debug_correction(
@@ -442,6 +462,7 @@ def log_if_debug_correction(
     debug_words: set[str],
     debug_typo_matcher: DebugTypoMatcher | None,
     stage: str = "",
+    debug_messages: list[str] | None = None,
 ) -> None:
     """Helper function to check if correction is debugged and log if so.
 
@@ -455,6 +476,9 @@ def log_if_debug_correction(
         debug_words: Set of debug words
         debug_typo_matcher: The debug typo matcher (or None)
         stage: Optional stage name (e.g., "Stage 3")
+        debug_messages: Optional list to collect messages into (for reports)
     """
     if is_debug_correction(correction, debug_words, debug_typo_matcher):
-        log_debug_correction(correction, message, debug_words, debug_typo_matcher, stage)
+        log_debug_correction(
+            correction, message, debug_words, debug_typo_matcher, stage, debug_messages
+        )

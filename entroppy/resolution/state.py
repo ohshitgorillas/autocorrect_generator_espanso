@@ -12,12 +12,9 @@ from entroppy.resolution.history import (
     RejectionReason,
 )
 from entroppy.resolution.state_caching import StateCaching
-from entroppy.resolution.state_debug import get_debug_summary
+from entroppy.resolution.state_debug import is_debug_target
 from entroppy.resolution.state_types import DebugTraceEntry, GraveyardEntry
-
-# Re-export for backward compatibility
-__all__ = ["DictionaryState", "DebugTraceEntry", "GraveyardEntry", "RejectionReason"]
-from entroppy.utils.debug import DebugTypoMatcher
+from entroppy.utils.debug import DebugTypoMatcher, log_if_debug_correction
 
 if TYPE_CHECKING:
     pass
@@ -56,8 +53,16 @@ class DictionaryState:
         self.debug_words = debug_words or set()
         self.debug_typo_matcher = debug_typo_matcher
         self.debug_trace: list[DebugTraceEntry] = []
+        self.debug_messages: list[str] = []  # Collect Stage 3+ debug messages for reports
         self.is_dirty = True  # Start dirty to trigger first iteration
         self.current_iteration = 0
+
+        # Structured debug data for reports (populated during execution)
+        self.pattern_extractions: list = []
+        self.pattern_validations: list = []
+        self.platform_conflicts: list = []
+        self.ranking_info: list = []
+        self.stage2_word_events: list = []  # Stage 2 word processing events
 
         # Debug flags for comprehensive history tracking
         self.debug_graveyard = debug_graveyard
@@ -98,6 +103,32 @@ class DictionaryState:
             True if this correction has been rejected
         """
         return (typo, word, boundary) in self.graveyard
+
+    def is_rejected_for_platform_constraint(
+        self,
+        typo: str,
+        word: str,
+    ) -> bool:
+        """Check if a typo+word combination was rejected for platform constraints.
+
+        Platform constraint rejections (like substring conflicts) apply to ALL boundaries
+        for that typo+word combination, so we should never retry with a different boundary.
+
+        Args:
+            typo: The typo string
+            word: The correct word
+
+        Returns:
+            True if this typo+word was rejected for platform constraints with any boundary
+        """
+        for (g_typo, g_word, _), entry in self.graveyard.items():
+            if (
+                g_typo == typo
+                and g_word == word
+                and entry.reason == RejectionReason.PLATFORM_CONSTRAINT
+            ):
+                return True
+        return False
 
     def add_to_graveyard(
         self,
@@ -144,7 +175,7 @@ class DictionaryState:
             )
 
         # Log if this is a debug target
-        if self._is_debug_target(typo, word, boundary):
+        if is_debug_target(typo, word, boundary, self.debug_words, self.debug_typo_matcher):
             self.debug_trace.append(
                 DebugTraceEntry(
                     iteration=self.current_iteration,
@@ -209,7 +240,7 @@ class DictionaryState:
             )
 
         # Log if this is a debug target
-        if self._is_debug_target(typo, word, boundary):
+        if is_debug_target(typo, word, boundary, self.debug_words, self.debug_typo_matcher):
             self.debug_trace.append(
                 DebugTraceEntry(
                     iteration=self.current_iteration,
@@ -220,6 +251,19 @@ class DictionaryState:
                     boundary=boundary,
                 )
             )
+            # Map pass name to stage number for logging
+            stage_map = {
+                "CandidateSelection": "Stage 3",
+            }
+            stage = stage_map.get(pass_name, "")
+            if stage:
+                log_if_debug_correction(
+                    correction,
+                    f"Added correction (boundary: {boundary.value})",
+                    self.debug_words,
+                    self.debug_typo_matcher,
+                    stage,
+                )
 
         return True
 
@@ -280,7 +324,7 @@ class DictionaryState:
             )
 
         # Log if this is a debug target
-        if self._is_debug_target(typo, word, boundary):
+        if is_debug_target(typo, word, boundary, self.debug_words, self.debug_typo_matcher):
             self.debug_trace.append(
                 DebugTraceEntry(
                     iteration=self.current_iteration,
@@ -344,7 +388,7 @@ class DictionaryState:
             )
 
         # Log if this is a debug target
-        if self._is_debug_target(typo, word, boundary):
+        if is_debug_target(typo, word, boundary, self.debug_words, self.debug_typo_matcher):
             self.debug_trace.append(
                 DebugTraceEntry(
                     iteration=self.current_iteration,
@@ -409,7 +453,7 @@ class DictionaryState:
             )
 
         # Log if this is a debug target
-        if self._is_debug_target(typo, word, boundary):
+        if is_debug_target(typo, word, boundary, self.debug_words, self.debug_typo_matcher):
             self.debug_trace.append(
                 DebugTraceEntry(
                     iteration=self.current_iteration,
@@ -435,6 +479,14 @@ class DictionaryState:
         """
         return self.caching.is_typo_covered(typo, self._coverage_map, self.active_patterns)
 
+    def get_formatted_cache(self) -> dict[Correction, str]:
+        """Get the formatted correction cache.
+
+        Returns:
+            Dictionary mapping corrections to their formatted typo strings
+        """
+        return self._formatted_cache
+
     def clear_dirty_flag(self) -> None:
         """Mark the state as clean (no changes in this iteration)."""
         self.is_dirty = False
@@ -446,38 +498,3 @@ class DictionaryState:
         # Clear false trigger cache and batch results at start of each iteration
         # (validation/source sets don't change, but corrections/patterns do)
         self.caching.clear_false_trigger_cache()
-
-    def get_debug_summary(self) -> str:
-        """Get a summary of debug trace for reporting.
-
-        Returns:
-            Formatted string with debug trace
-        """
-        return get_debug_summary(self.debug_trace)
-
-    def get_formatted_cache(self) -> dict[Correction, str]:
-        """Get the formatted cache for corrections.
-
-        Returns:
-            Dictionary mapping corrections to their formatted typo strings
-        """
-        return self._formatted_cache
-
-    def _is_debug_target(self, typo: str, word: str, boundary: BoundaryType) -> bool:
-        """Check if a correction should be tracked for debugging.
-
-        Args:
-            typo: The typo string
-            word: The correct word
-            boundary: The boundary type
-
-        Returns:
-            True if this should be tracked
-        """
-        if word in self.debug_words:
-            return True
-
-        if self.debug_typo_matcher and self.debug_typo_matcher.matches(typo, boundary):
-            return True
-
-        return False

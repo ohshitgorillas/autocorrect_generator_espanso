@@ -59,6 +59,7 @@ def process_single_word_correction(
         debug_words=debug_words,
         debug_typo_matcher=debug_typo_matcher,
         word=word,
+        debug_messages=None,  # debug_messages - not available in this context
     )
 
     # pylint: disable=duplicate-code
@@ -162,7 +163,9 @@ def process_collision_case(
     )
 
     if is_debug_collision:
-        _log_initial_collision(typo, unique_words, debug_typo_matcher)
+        _log_initial_collision(
+            typo, unique_words, debug_typo_matcher, None
+        )  # debug_messages - not available in this context
 
     # Group words by boundary type
     by_boundary = _group_words_by_boundary(

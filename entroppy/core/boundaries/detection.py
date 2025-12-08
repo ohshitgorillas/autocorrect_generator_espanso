@@ -27,8 +27,8 @@ def _batch_check_substrings(
     substring_val_results = {}
     substring_src_results = {}
     for typo in typos:
-        val_matches = val_suffix_index.find_substring_conflicts(typo)
-        src_matches = src_suffix_index.find_substring_conflicts(typo)
+        val_matches = val_suffix_index.find_conflicts(typo)
+        src_matches = src_suffix_index.find_conflicts(typo)
         substring_val_results[typo] = len(val_matches) > 0
         substring_src_results[typo] = len(src_matches) > 0
 

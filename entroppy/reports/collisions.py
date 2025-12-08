@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import TextIO
 
 from entroppy.reports.data import ReportData
-from entroppy.reports.helpers import write_report_header
+from entroppy.reports.helpers import write_report_header, write_section_header
 from entroppy.utils.helpers import write_file_safely
 
 
@@ -21,7 +21,7 @@ def generate_collisions_report(data: ReportData, report_dir: Path) -> None:
         f.write("skipped. To force a correction, add unwanted mappings to your\n")
         f.write("exclusion file.\n\n")
         f.write(f"Total skipped: {len(data.skipped_collisions)}\n")
-        f.write("=" * 70 + "\n\n")
+        write_section_header(f, "", width=70)
 
         # Sort by ratio (closest ambiguities first)
         sorted_collisions = sorted(data.skipped_collisions, key=lambda x: x[2])

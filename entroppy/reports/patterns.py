@@ -5,7 +5,11 @@ from typing import TextIO
 
 from entroppy.core import format_boundary_display
 from entroppy.reports.data import ReportData
-from entroppy.reports.helpers import write_report_header
+from entroppy.reports.helpers import (
+    write_report_header,
+    write_section_header,
+    write_subsection_header,
+)
 from entroppy.utils.helpers import write_file_safely
 
 
@@ -20,11 +24,11 @@ def generate_patterns_report(data: ReportData, report_dir: Path) -> None:
         replaced_count = sum(len(v) for v in data.pattern_replacements.values())
         f.write(f"Generalized {patterns_count} patterns, ")
         f.write(f"replacing {replaced_count} specific corrections.\n")
-        f.write("=" * 70 + "\n\n")
+        write_section_header(f, "", width=70)
 
         if data.generalized_patterns:
-            f.write("GENERALIZED PATTERNS\n")
-            f.write("-" * 70 + "\n\n")
+            write_subsection_header(f, "GENERALIZED PATTERNS", width=70)
+            f.write("\n")
             for typo_suffix, word_suffix, boundary, count in data.generalized_patterns:
                 f.write(f"✓ {typo_suffix} → {word_suffix} ({format_boundary_display(boundary)})\n")
                 f.write(f"  Replaced {count} specific corrections\n")
@@ -38,8 +42,9 @@ def generate_patterns_report(data: ReportData, report_dir: Path) -> None:
                 f.write("\n")
 
         if data.rejected_patterns:
-            f.write("\nREJECTED PATTERNS\n")
-            f.write("-" * 70 + "\n\n")
+            f.write("\n")
+            write_subsection_header(f, "REJECTED PATTERNS", width=70)
+            f.write("\n")
             for pattern_typo, pattern_word, boundary, reason in data.rejected_patterns:
                 f.write(
                     f"✗ {pattern_typo} → {pattern_word} ({format_boundary_display(boundary)})\n"

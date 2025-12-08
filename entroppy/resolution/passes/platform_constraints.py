@@ -8,6 +8,7 @@ from entroppy.core import BoundaryType
 from entroppy.platforms import PlatformConstraints
 from entroppy.resolution.solver import Pass
 from entroppy.resolution.state import RejectionReason
+from entroppy.utils.debug import log_if_debug_correction
 
 if TYPE_CHECKING:
     from entroppy.resolution.state import DictionaryState
@@ -101,6 +102,7 @@ class PlatformConstraintsPass(Pass):
         items: list[tuple[str, str, BoundaryType]],
         constraints: PlatformConstraints,
         item_type: str,
+        state: "DictionaryState",
     ) -> list[tuple[tuple[str, str, BoundaryType], str]]:
         """Check items against platform constraints.
 
@@ -108,6 +110,7 @@ class PlatformConstraintsPass(Pass):
             items: List of corrections or patterns to check
             constraints: Platform constraints
             item_type: Type of items ("corrections" or "patterns")
+            state: The dictionary state (for debug logging)
 
         Returns:
             List of (item, reason) tuples for items that violate constraints
@@ -127,6 +130,23 @@ class PlatformConstraintsPass(Pass):
             reason = self._check_correction_constraints(item, constraints)
             if reason:
                 items_to_remove.append((item, reason))
+                # Log removal for debug targets
+                log_if_debug_correction(
+                    item,
+                    f"REMOVED - platform constraint violation: {reason}",
+                    state.debug_words,
+                    state.debug_typo_matcher,
+                    "Stage 6",
+                )
+            else:
+                # Log that item passed constraints check
+                log_if_debug_correction(
+                    item,
+                    "Kept - passed platform constraints check",
+                    state.debug_words,
+                    state.debug_typo_matcher,
+                    "Stage 6",
+                )
 
         return items_to_remove
 
@@ -145,12 +165,14 @@ class PlatformConstraintsPass(Pass):
 
         # Check corrections
         corrections_to_remove = self._check_items(
-            list(state.active_corrections), constraints, "corrections"
+            list(state.active_corrections), constraints, "corrections", state
         )
         self._remove_invalid_items(state, corrections_to_remove, is_pattern=False)
 
         # Check patterns
-        patterns_to_remove = self._check_items(list(state.active_patterns), constraints, "patterns")
+        patterns_to_remove = self._check_items(
+            list(state.active_patterns), constraints, "patterns", state
+        )
         self._remove_invalid_items(state, patterns_to_remove, is_pattern=True)
 
     @staticmethod

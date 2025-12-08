@@ -12,7 +12,7 @@ from entroppy.core.boundaries import (
 
 from .config import Config, load_config
 from .pattern_generalization import generalize_patterns
-from .types import Correction, MatchDirection
+from .types import Correction, MatchDirection, PatternType
 from .typos import generate_all_typos
 
 __all__ = [
@@ -21,6 +21,7 @@ __all__ = [
     "Config",
     "Correction",
     "MatchDirection",
+    "PatternType",
     "load_config",
     "determine_boundaries",
     "format_boundary_display",

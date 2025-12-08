@@ -95,6 +95,7 @@ class QMKBackend(PlatformBackend):
             verbose,
             debug_words,
             debug_typo_matcher,
+            getattr(config, "_state", None) if config else None,
         )
 
         return ranked
@@ -118,7 +119,7 @@ class QMKBackend(PlatformBackend):
         self,
         final_corrections: list[Correction],
         all_corrections: list[Correction],
-        patterns: list[Correction],
+        _patterns: list[Correction],
         pattern_replacements: dict[Correction, list[Correction]],
         _user_words: set[str],
         report_dir: Path,
@@ -128,7 +129,6 @@ class QMKBackend(PlatformBackend):
         return generate_qmk_ranking_report(
             final_corrections,
             all_corrections,
-            patterns,
             pattern_replacements,
             self._user_corrections,
             self._pattern_scores,

@@ -2,7 +2,6 @@
 
 from pathlib import Path
 import time
-from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -18,9 +17,6 @@ from entroppy.processing.pipeline_stages import (
     run_stage_9_reports,
 )
 from entroppy.reports import format_time
-
-if TYPE_CHECKING:
-    pass
 
 
 def _log_platform_info(platform: PlatformBackend, verbose: bool) -> None:
@@ -47,7 +43,6 @@ def _generate_reports(
     report_data,
     verbose: bool,
     state=None,
-    typo_result=None,
 ) -> None:
     """Generate reports if enabled."""
     if config.reports and report_data is not None and report_dir is not None:
@@ -69,7 +64,6 @@ def _generate_reports(
             config,
             verbose,
             state=state,
-            typo_result=typo_result,
         )
 
 
@@ -149,7 +143,6 @@ def run_pipeline(config: Config, platform: PlatformBackend | None = None) -> Non
         report_data,
         verbose,
         state=state,
-        typo_result=typo_result,
     )
 
     # Print total time

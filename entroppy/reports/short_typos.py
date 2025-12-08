@@ -4,7 +4,11 @@ from pathlib import Path
 from typing import TextIO
 
 from entroppy.reports.data import ReportData
-from entroppy.reports.helpers import write_report_header
+from entroppy.reports.helpers import (
+    write_report_header,
+    write_section_header,
+    write_subsection_header,
+)
 from entroppy.utils.helpers import write_file_safely
 
 
@@ -20,7 +24,7 @@ def generate_short_typos_report(data: ReportData, report_dir: Path) -> None:
         f.write("These typos were skipped for being too short.\n")
         f.write("Consider adjusting --min-typo-length if needed.\n\n")
         f.write(f"Total skipped: {len(data.skipped_short)}\n")
-        f.write("=" * 70 + "\n\n")
+        write_section_header(f, "", width=70)
 
         # Group by length
         by_length: dict[int, list[tuple[str, str]]] = {}
@@ -31,8 +35,8 @@ def generate_short_typos_report(data: ReportData, report_dir: Path) -> None:
 
         for length in sorted(by_length.keys()):
             items = by_length[length]
-            f.write(f"\nLENGTH {length} ({len(items)} typos)\n")
-            f.write("-" * 70 + "\n")
+            f.write("\n")
+            write_subsection_header(f, f"LENGTH {length} ({len(items)} typos)", width=70)
             for typo, word in items[:30]:
                 f.write(f"{typo} → {word}\n")
             remaining = len(items) - 30

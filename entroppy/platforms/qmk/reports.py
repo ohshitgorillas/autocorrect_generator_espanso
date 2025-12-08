@@ -12,7 +12,6 @@ from entroppy.utils.helpers import write_file_safely
 def generate_qmk_ranking_report(
     final_corrections: list[Correction],
     all_corrections: list[Correction],
-    patterns: list[Correction],
     pattern_replacements: dict[Correction, list[Correction]],
     user_corrections: list[Correction],
     pattern_scores: list[tuple[float, str, str, BoundaryType]],
@@ -36,7 +35,6 @@ def generate_qmk_ranking_report(
         _write_complete_ranked_list(
             f,
             final_corrections,
-            patterns,
             pattern_scores,
             direct_scores,
             user_corrections,
@@ -44,14 +42,13 @@ def generate_qmk_ranking_report(
         _write_enhanced_pattern_details(
             f,
             final_corrections,
-            patterns,
             pattern_scores,
             pattern_replacements,
         )
         _write_enhanced_direct_details(
             f,
             final_corrections,
-            patterns,
+            pattern_scores,
             direct_scores,
         )
         _write_user_words_section(f, user_corrections)
@@ -202,6 +199,7 @@ def _write_summary_by_type(
     total = len(final_corrections)
     final_set = set(final_corrections)
     user_set = set(user_corrections)
+    # Build pattern_set from pattern_scores (authoritative source)
     pattern_set = {(p_typo, p_word) for _, p_typo, p_word, _ in pattern_scores}
 
     # Count corrections by type in final list
@@ -255,7 +253,6 @@ def _build_score_lookup_maps(
 def _write_complete_ranked_list(
     f: TextIO,
     final_corrections: list[Correction],
-    patterns: list[Correction],
     pattern_scores: list[tuple[float, str, str, BoundaryType]],
     direct_scores: list[tuple[float, str, str, BoundaryType]],
     user_corrections: list[Correction],
@@ -267,7 +264,8 @@ def _write_complete_ranked_list(
     # Create lookup dictionaries for scores
     pattern_score_map, direct_score_map = _build_score_lookup_maps(pattern_scores, direct_scores)
     user_set = set(user_corrections)
-    pattern_set = {(p[0], p[1], p[2]) for p in patterns}
+    # Build pattern_set from pattern_scores (authoritative source) not patterns list
+    pattern_set = {(typo, word, boundary) for _, typo, word, boundary in pattern_scores}
 
     for rank, (typo, word, boundary) in enumerate(final_corrections, 1):
         correction_key = (typo, word, boundary)
@@ -298,7 +296,6 @@ def _write_complete_ranked_list(
 def _write_enhanced_pattern_details(
     f: TextIO,
     final_corrections: list[Correction],
-    patterns: list[Correction],
     pattern_scores: list[tuple[float, str, str, BoundaryType]],
     pattern_replacements: dict[Correction, list[Correction]],
 ) -> None:
@@ -306,7 +303,8 @@ def _write_enhanced_pattern_details(
     write_section_header(f, "PATTERN DETAILS")
 
     # Get patterns that are in the final list, ordered by their rank
-    pattern_set = {(p[0], p[1]) for p in patterns}
+    # Build pattern_set from pattern_scores (authoritative source) not patterns list
+    pattern_set = {(typo, word) for _, typo, word, _ in pattern_scores}
     pattern_score_map = {
         (typo, word, boundary): score for score, typo, word, boundary in pattern_scores
     }
@@ -347,14 +345,15 @@ def _write_enhanced_pattern_details(
 def _write_enhanced_direct_details(
     f: TextIO,
     final_corrections: list[Correction],
-    patterns: list[Correction],
+    pattern_scores: list[tuple[float, str, str, BoundaryType]],
     direct_scores: list[tuple[float, str, str, BoundaryType]],
 ) -> None:
     """Write enhanced direct corrections details showing ALL direct corrections."""
     write_section_header(f, "DIRECT CORRECTIONS DETAILS")
 
     # Get direct corrections that are in the final list
-    pattern_set = {(p[0], p[1]) for p in patterns}
+    # Build pattern_set from pattern_scores (authoritative source) not patterns list
+    pattern_set = {(typo, word) for _, typo, word, _ in pattern_scores}
     direct_score_map = {
         (typo, word, boundary): score for score, typo, word, boundary in direct_scores
     }

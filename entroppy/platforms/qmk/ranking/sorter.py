@@ -15,6 +15,7 @@ from .scorer import (
 from .tiers import separate_by_type
 
 if TYPE_CHECKING:
+    from entroppy.resolution.state import DictionaryState
     from entroppy.utils.debug import DebugTypoMatcher
 
 
@@ -26,37 +27,22 @@ def _get_tier_info(
     correction: Correction,
     pattern_score_dict: dict[Correction, float],
     direct_score_dict: dict[Correction, float],
-) -> tuple[int, int, str, int, str]:
-    """Get tier information for a correction at index i."""
+) -> tuple[int, int, str, int, float | None]:
+    """Get tier information for a correction at index i.
+
+    Returns:
+        Tuple of (tier, tier_pos, tier_name, tier_total, score)
+    """
     if i < user_count:
-        return 0, i + 1, "user words", user_count, "infinite priority"
+        return 0, i + 1, "user words", user_count, None
     if i < user_count + pattern_count:
         tier_pos = i - user_count + 1
         pattern_score = pattern_score_dict.get(correction)
-        score_info = (
-            f"score: {pattern_score:.2e}" if pattern_score is not None else "score: unknown"
-        )
-        return 1, tier_pos, "patterns", pattern_count, score_info
+        return 1, tier_pos, "patterns", pattern_count, pattern_score
     # Direct corrections tier
     tier_pos = i - user_count - pattern_count + 1
     direct_score = direct_score_dict.get(correction)
-    score_info = f"score: {direct_score:.2e}" if direct_score is not None else "score: unknown"
-    return 2, tier_pos, "direct corrections", direct_count, score_info
-
-
-def _get_nearby_corrections(ranked: list[Correction], i: int) -> str:
-    """Get nearby corrections for context."""
-    nearby = []
-    for j in range(max(0, i - 2), min(len(ranked), i + 3)):
-        if j != i:
-            nearby_typo, nearby_word, _ = ranked[j]
-            nearby.append(f"{nearby_typo}->{nearby_word}")
-
-    nearby_str = ", ".join(nearby[:3])
-    if len(nearby) > 3:
-        nearby_str += "..."
-
-    return f" [nearby: {nearby_str}]" if nearby_str else ""
+    return 2, tier_pos, "direct corrections", direct_count, direct_score
 
 
 def _log_single_correction_debug(
@@ -68,9 +54,12 @@ def _log_single_correction_debug(
     direct_count: int,
     pattern_score_dict: dict[Correction, float],
     direct_score_dict: dict[Correction, float],
+    debug_words: set[str],
+    debug_typo_matcher: "DebugTypoMatcher | None",
+    state: "DictionaryState | None" = None,
 ) -> None:
     """Log debug information for a single correction."""
-    tier, tier_pos, tier_name, tier_total, score_info = _get_tier_info(
+    tier, tier_pos, tier_name, tier_total, score = _get_tier_info(
         i,
         user_count,
         pattern_count,
@@ -80,8 +69,6 @@ def _log_single_correction_debug(
         direct_score_dict,
     )
 
-    nearby_info = _get_nearby_corrections(ranked, i)
-
     log_ranking_position(
         correction,
         i + 1,
@@ -90,10 +77,11 @@ def _log_single_correction_debug(
         tier_name,
         tier_pos,
         tier_total,
-        score_info,
-        nearby_info,
-        set(),  # debug_words - handled by is_debug_correction check
-        None,  # debug_typo_matcher - handled by is_debug_correction check
+        score,
+        None,  # nearby_corrections removed
+        debug_words,
+        debug_typo_matcher,
+        state,
     )
 
 
@@ -104,6 +92,7 @@ def _log_ranking_debug(
     direct_scores: list[tuple[float, str, str, BoundaryType]],
     debug_words: set[str],
     debug_typo_matcher: "DebugTypoMatcher | None",
+    state: "DictionaryState | None" = None,
 ) -> None:
     """Log ranking debug information for debug corrections.
 
@@ -114,6 +103,7 @@ def _log_ranking_debug(
         direct_scores: Direct correction scores list
         debug_words: Set of words to debug
         debug_typo_matcher: Matcher for debug typos
+        state: Optional dictionary state for storing structured debug data
     """
     # Build lookup dictionaries once instead of searching lists
     pattern_score_dict = {(t, w, b): score for score, t, w, b in pattern_scores}
@@ -135,6 +125,9 @@ def _log_ranking_debug(
                 direct_count,
                 pattern_score_dict,
                 direct_score_dict,
+                debug_words,
+                debug_typo_matcher,
+                state,
             )
 
 
@@ -143,6 +136,7 @@ def _log_max_corrections_debug(
     max_corrections: int,
     debug_words: set[str],
     debug_typo_matcher: "DebugTypoMatcher | None",
+    state: "DictionaryState | None" = None,
 ) -> None:
     """Log max corrections limit debug information.
 
@@ -151,6 +145,7 @@ def _log_max_corrections_debug(
         max_corrections: Maximum number of corrections
         debug_words: Set of words to debug
         debug_typo_matcher: Matcher for debug typos
+        state: Optional dictionary state for storing structured debug data
     """
     # Log if any debug corrections are cut off by the limit
     for i, correction in enumerate(ranked):
@@ -163,6 +158,7 @@ def _log_max_corrections_debug(
                 i < max_corrections,
                 debug_words,
                 debug_typo_matcher,
+                state,
             )
 
 
@@ -177,6 +173,7 @@ def rank_corrections(
     verbose: bool = False,
     debug_words: set[str] | None = None,
     debug_typo_matcher: "DebugTypoMatcher | None" = None,
+    state: "DictionaryState | None" = None,
 ) -> tuple[
     list[Correction],
     list[Correction],
@@ -208,6 +205,7 @@ def rank_corrections(
         verbose: Whether to show progress bars
         debug_words: Set of words to debug (exact matches)
         debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
+        state: Optional dictionary state for storing structured debug data
 
     Returns:
         Tuple of (ranked_corrections, user_corrections, pattern_scores, direct_scores, all_scored)
@@ -272,13 +270,14 @@ def rank_corrections(
             direct_scores,
             debug_words or set(),
             debug_typo_matcher,
+            state,
         )
 
     # Apply max_corrections limit if specified
     if max_corrections:
         if debug_words or debug_typo_matcher:
             _log_max_corrections_debug(
-                ranked, max_corrections, debug_words or set(), debug_typo_matcher
+                ranked, max_corrections, debug_words or set(), debug_typo_matcher, state
             )
         ranked = ranked[:max_corrections]
 

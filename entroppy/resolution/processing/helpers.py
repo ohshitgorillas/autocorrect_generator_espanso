@@ -159,6 +159,7 @@ def _group_words_by_boundary(
             debug_words=debug_words,
             debug_typo_matcher=debug_typo_matcher,
             word=word,  # CRITICAL: Pass target word!
+            debug_messages=None,  # debug_messages - not available in this context
         )
         word_boundary_map[word] = boundary
 
@@ -300,6 +301,7 @@ def _process_collision_boundary_group(
             freq_ratio,
             selected_word is not None,
             debug_typo_matcher,
+            None,  # debug_messages - not available in this context
         )
 
     if selected_word is not None:
@@ -351,7 +353,14 @@ def _process_collision_boundary_group(
     )
     if is_debug:
         _log_collision_debug(
-            typo, words_in_group, boundary, ratio, freq_ratio, False, debug_typo_matcher
+            typo,
+            words_in_group,
+            boundary,
+            ratio,
+            freq_ratio,
+            False,
+            debug_typo_matcher,
+            None,  # debug_messages - not available in this context
         )
     return None, None, (typo, words_in_group, ratio, boundary), None
 

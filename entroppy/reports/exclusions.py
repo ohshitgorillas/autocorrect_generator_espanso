@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import TextIO
 
 from entroppy.reports.data import ReportData
-from entroppy.reports.helpers import write_report_header
+from entroppy.reports.helpers import write_report_header, write_section_header
 from entroppy.utils.helpers import write_file_safely
 
 
@@ -19,7 +19,7 @@ def generate_exclusions_report(data: ReportData, report_dir: Path) -> None:
         write_report_header(f, "EXCLUSIONS REPORT")
         f.write("These corrections were blocked by exclusion rules.\n\n")
         f.write(f"Total excluded: {len(data.excluded_corrections)}\n")
-        f.write("=" * 70 + "\n\n")
+        write_section_header(f, "", width=70)
 
         for typo, word, rule in data.excluded_corrections[:100]:
             f.write(f"{typo} → {word}\n")

@@ -5,7 +5,7 @@ from typing import TextIO
 
 from entroppy.core import BoundaryType, format_boundary_display
 from entroppy.reports.data import ReportData
-from entroppy.reports.helpers import write_report_header
+from entroppy.reports.helpers import write_report_header, write_section_header
 from entroppy.utils.helpers import write_file_safely
 
 
@@ -46,7 +46,7 @@ def generate_conflicts_report(data: ReportData, report_dir: Path) -> None:
             f.write("These corrections were removed because a shorter typo would trigger\n")
             f.write("first, making them unreachable in Espanso.\n\n")
             f.write(f"Total removed: {len(conflicts)}\n")
-            f.write("=" * 70 + "\n\n")
+            write_section_header(f, "", width=70)
 
             # Group by correction word for compact display
             by_word: dict[str, list[tuple[str, str, str]]] = {}

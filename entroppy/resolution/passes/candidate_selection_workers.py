@@ -1,7 +1,5 @@
 """Worker functions for candidate selection parallel processing."""
 
-from typing import TYPE_CHECKING
-
 from entroppy.core import BoundaryType
 from entroppy.core.types import Correction
 from entroppy.matching import ExclusionMatcher
@@ -15,9 +13,6 @@ from entroppy.resolution.worker_context import (
 from entroppy.utils.helpers import cached_word_frequency
 
 from .candidate_selection.helpers import _get_boundary_order, group_words_by_boundary
-
-if TYPE_CHECKING:
-    pass
 
 
 def _check_length_constraints_worker(typo: str, word: str, min_typo_length: int) -> bool:

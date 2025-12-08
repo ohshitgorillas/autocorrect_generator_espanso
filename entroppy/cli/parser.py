@@ -152,11 +152,6 @@ Example config.json:
         type=int,
         help=f"Number of parallel workers (default: {cpu_count()})",
     )
-    parser.add_argument(
-        "--gpu",
-        action="store_true",
-        help="Enable GPU acceleration for substring detection (requires PyTorch)",
-    )
 
     # Debug tracing
     parser.add_argument(

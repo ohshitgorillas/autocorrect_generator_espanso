@@ -44,11 +44,3 @@ _.clear_false_trigger_cache  # unused method (entroppy/resolution/state_caching.
 _.invalidate_pattern_coverage_cache  # unused method (entroppy/resolution/state_caching.py:92)
 _.invalidate_pattern_coverage_for_typo  # unused method (entroppy/resolution/state_caching.py:96)
 _.is_typo_covered_by_pattern  # unused method (entroppy/resolution/state_caching.py:104)
-
-# Protocol classes - used for structural typing, vulture can't detect usage
-IterationPassEntry  # unused class (entroppy/reports/helpers.py:19)
-
-# Functions used via imports - vulture can't detect usage through imports
-format_corrections_parallel  # unused function (entroppy/resolution/platform_conflicts/formatting_helpers.py:20)
-build_index_keys_to_check  # unused function (entroppy/resolution/platform_conflicts/utils.py:41)
-find_substring_conflicts_in_index  # unused function (entroppy/resolution/platform_conflicts/utils.py:70)

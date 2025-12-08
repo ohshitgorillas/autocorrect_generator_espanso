@@ -40,7 +40,6 @@ class Config(BaseModel):
     hurtmycpu: bool = Field(
         False, description="Generate typos for ALL english-words (not just top-n)"
     )
-    use_gpu: bool = Field(False, description="Enable GPU acceleration for substring detection")
 
     # Debug tracing
     debug_words: set[str] = Field(default_factory=set, description="Exact word matches only")
@@ -156,7 +155,6 @@ def _build_config_dict(cli_args, parser: ArgumentParser, json_config: dict) -> d
         "debug_patterns": cli_args.debug_patterns or json_config.get("debug_patterns", False),
         "debug_corrections": cli_args.debug_corrections
         or json_config.get("debug_corrections", False),
-        "use_gpu": cli_args.gpu or json_config.get("use_gpu", False),
     }
 
 

@@ -17,9 +17,9 @@ repos:
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
-        exclude: ^(tests/|examples/|vulture_whitelist\.py)
+        exclude: ^(tests/|examples/|vulture_whitelist\.py|\.pre-commit-hooks/)
       - id: ruff-format
-        exclude: ^(tests/|examples/|vulture_whitelist\.py)
+        exclude: ^(tests/|examples/|vulture_whitelist\.py|\.pre-commit-hooks/)
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.10.1
@@ -27,7 +27,7 @@ repos:
       - id: mypy
         additional_dependencies: [types-tqdm, types-pyyaml]
         args: ['--show-error-codes', '--ignore-missing-imports', '--follow-imports=normal']
-        exclude: ^(tests/|examples/|vulture_whitelist\.py)
+        exclude: ^(tests/|examples/|vulture_whitelist\.py|\.pre-commit-hooks/)
 
   - repo: https://github.com/pylint-dev/pylint
     rev: v3.3.3
@@ -35,7 +35,7 @@ repos:
       - id: pylint
         additional_dependencies: [tqdm, loguru, wordfreq, pydantic, english-words, pyyaml]
         args: [--rcfile=pyproject.toml]
-        exclude: ^(tests/|examples/|vulture_whitelist\.py)
+        exclude: ^(tests/|examples/|vulture_whitelist\.py|\.pre-commit-hooks/)
 
   - repo: local
     hooks:

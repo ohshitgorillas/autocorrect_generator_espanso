@@ -62,11 +62,14 @@ def check_test_file(file_path: str) -> bool:
                 assertion_count = count_assertions(node)
                 if assertion_count > 1:
                     line_no = node.lineno
-                    errors.append(
-                        f"  {file_path}:{line_no}: "
-                        f"Test '{node.name}' has {assertion_count} assertions "
-                        f"(expected at most 1)"
-                    )
+                    # Type narrowing: we know node is FunctionDef or AsyncFunctionDef
+                    # from is_test_function check
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        errors.append(
+                            f"  {file_path}:{line_no}: "
+                            f"Test '{node.name}' has {assertion_count} assertions "
+                            f"(expected at most 1)"
+                        )
 
         if errors:
             print("ERROR: Multiple assertions found in test functions:")
@@ -78,7 +81,7 @@ def check_test_file(file_path: str) -> bool:
     except SyntaxError as e:
         print(f"ERROR: Failed to parse {file_path}: {e}")
         return False
-    except Exception as e:
+    except (OSError, UnicodeDecodeError) as e:
         print(f"ERROR: Failed to check {file_path}: {e}")
         return False
 

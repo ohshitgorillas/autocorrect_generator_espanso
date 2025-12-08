@@ -30,7 +30,7 @@ def check_file_length(file_path: str, max_lines: int = 500) -> bool:
             )
             return False
         return True
-    except Exception as e:  # pylint: disable=W0718
+    except (OSError, IOError) as e:
         print(f"ERROR: Failed to check {file_path}: {e}")
         return False
 

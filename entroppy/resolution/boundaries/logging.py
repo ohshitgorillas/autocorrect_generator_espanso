@@ -91,6 +91,7 @@ def _log_boundary_order_selection(
     word: str | None,
     relationship: tuple[bool, bool, bool],
     debug_typo_matcher: DebugTypoMatcher | None,
+    debug_messages: list[str] | None = None,
 ) -> None:
     """Log the boundary order selection for debugging.
 
@@ -99,6 +100,7 @@ def _log_boundary_order_selection(
         word: Optional word associated with this typo
         relationship: Tuple of (is_prefix, is_suffix, is_middle)
         debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
+        debug_messages: Optional list to collect messages into (for reports)
     """
     target_is_prefix, target_is_suffix, target_is_middle = relationship
     word_info = f" (word: {word})" if word else ""
@@ -130,6 +132,7 @@ def _log_boundary_order_selection(
             else None
         ),
         "Stage 3",
+        debug_messages,
     )
 
 
@@ -278,6 +281,7 @@ def _log_boundary_rejection(
     validation_index: BoundaryIndex,
     source_index: BoundaryIndex,
     debug_typo_matcher: DebugTypoMatcher | None,
+    debug_messages: list[str] | None = None,
 ) -> None:
     """Log why a boundary was rejected with concrete examples.
 
@@ -289,6 +293,7 @@ def _log_boundary_rejection(
         validation_index: Boundary index for validation set
         source_index: Boundary index for source words
         debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
+        debug_messages: Optional list to collect messages into (for reports)
     """
     word_info = f" (word: {word})" if word else ""
     example_lines = []
@@ -323,6 +328,7 @@ def _log_boundary_rejection(
         message,
         (debug_typo_matcher.get_matching_patterns(typo, boundary) if debug_typo_matcher else None),
         "Stage 3",
+        debug_messages,
     )
 
 
@@ -330,6 +336,7 @@ def _log_fallback_boundary(
     typo: str,
     word: str | None,
     debug_typo_matcher: DebugTypoMatcher | None,
+    debug_messages: list[str] | None = None,
 ) -> None:
     """Log when falling back to BOTH boundary.
 
@@ -337,6 +344,7 @@ def _log_fallback_boundary(
         typo: The typo string
         word: Optional word associated with this typo
         debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
+        debug_messages: Optional list to collect messages into (for reports)
     """
     word_info = f" (word: {word})" if word else ""
     log_debug_typo(
@@ -349,4 +357,5 @@ def _log_fallback_boundary(
             else None
         ),
         "Stage 3",
+        debug_messages,
     )

@@ -16,6 +16,7 @@ from .word_processing_logging import (
 )
 
 if TYPE_CHECKING:
+    from entroppy.resolution.state import DictionaryState
     from entroppy.utils.debug import DebugTypoMatcher
 
 
@@ -146,6 +147,7 @@ def process_word(
     exclusions: set[str],
     debug_words: frozenset[str] = frozenset(),
     debug_typo_matcher: "DebugTypoMatcher | None" = None,
+    state: "DictionaryState | None" = None,
 ) -> tuple[list[tuple[str, str]], list[str]]:
     """Process a single word and generate all valid typos.
 
@@ -158,6 +160,7 @@ def process_word(
         exclusions: Set of exclusion patterns
         debug_words: Set of words to debug (exact matches)
         debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
+        state: Optional dictionary state for storing structured debug data
 
     Returns:
         Tuple of (list of (typo, word) pairs, debug messages list)
@@ -167,7 +170,7 @@ def process_word(
     debug_messages: list[str] = []
     is_debug = is_debug_word(word, debug_words)
 
-    log_word_processing_start(debug_messages, word, debug_words)
+    log_word_processing_start(debug_messages, word, debug_words, state)
 
     typos = generate_all_typos(word, adj_letters_map)
 
@@ -183,7 +186,7 @@ def process_word(
         # For now, check with NONE boundary as a placeholder
         typo_debug_check = is_debug_typo(typo, BoundaryType.NONE, debug_typo_matcher)
 
-        log_typo_generated(debug_messages, word, typo, debug_words)
+        log_typo_generated(debug_messages, word, typo, debug_words, state)
 
         # Check if typo should be filtered
         should_filter, filter_reason = _should_filter_typo(
@@ -213,9 +216,9 @@ def process_word(
         # Note: Boundaries are determined in Stage 3 (collision resolution) where
         # they can be properly evaluated in context of all competing words and typos.
         # For debug logging, we use NONE as a placeholder since boundary isn't determined yet.
-        log_typo_pattern_match(debug_messages, typo, word, debug_typo_matcher)
+        log_typo_pattern_match(debug_messages, typo, word, debug_typo_matcher, state)
 
-        log_typo_accepted(debug_messages, word, typo, debug_words)
+        log_typo_accepted(debug_messages, word, typo, debug_words, state, BoundaryType.NONE)
 
         # Store only (typo, word) - boundary will be determined in Stage 3
         corrections.append((typo, word))

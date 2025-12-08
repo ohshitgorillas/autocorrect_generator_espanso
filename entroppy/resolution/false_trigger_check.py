@@ -1,6 +1,6 @@
 """False trigger checking logic for boundary selection."""
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from tqdm import tqdm
 
@@ -14,9 +14,6 @@ from entroppy.core.boundaries import (
 from entroppy.core.boundaries.detection import _batch_check_substrings
 
 from .boundaries.utils import _check_typo_in_target_word
-
-if TYPE_CHECKING:
-    pass
 
 
 def _determine_none_boundary_reason(

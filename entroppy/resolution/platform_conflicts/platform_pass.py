@@ -19,17 +19,18 @@ from tqdm import tqdm
 from entroppy.core.boundaries import BoundaryType
 from entroppy.core.types import MatchDirection
 from entroppy.platforms.qmk.formatting import format_boundary_markers
-from entroppy.resolution.platform_conflicts.conflict_processing import (
-    process_conflict_combinations,
-)
-from entroppy.resolution.platform_conflicts.detection import is_substring
 from entroppy.resolution.platform_conflicts.formatting_helpers import (
     format_corrections_parallel,
 )
 from entroppy.resolution.platform_conflicts.logging import log_platform_substring_conflict
+from entroppy.resolution.platform_conflicts.resolution import should_remove_shorter
 from entroppy.resolution.platform_conflicts.suffix_array_helpers import (
     build_suffix_array,
     find_substring_matches,
+)
+from entroppy.resolution.platform_conflicts.utils import (
+    bulk_remove_losing_formatted_typos,
+    determine_shorter_longer_formatted_typo,
 )
 from entroppy.resolution.solver import Pass
 from entroppy.resolution.state import RejectionReason
@@ -139,10 +140,9 @@ class PlatformSubstringConflictPass(Pass):
             str, list[tuple[tuple[str, str, BoundaryType], str, BoundaryType]]
         ],
         match_direction: MatchDirection,
-        processed_pairs: set[frozenset[tuple[str, str, BoundaryType]]],
-        corrections_to_remove_set: set[tuple[str, str, BoundaryType]],
-        all_corrections_to_remove: list[tuple[tuple[str, str, BoundaryType], str]],
-        all_conflict_pairs: dict[tuple[str, str, BoundaryType], tuple[str, str, BoundaryType]],
+        processed_formatted_pairs: set[frozenset[str]],
+        formatted_typos_to_remove: set[str],
+        losing_to_winning_formatted: dict[str, str],
         sa: SubstringIndex,
         state: "DictionaryState",
     ) -> None:
@@ -155,10 +155,9 @@ class PlatformSubstringConflictPass(Pass):
             formatted_typos: List of all formatted typos
             formatted_to_corrections: Dict mapping typo to corrections
             match_direction: Platform match direction
-            processed_pairs: Set of processed pairs
-            corrections_to_remove_set: Set of corrections to remove
-            all_corrections_to_remove: List to append removals
-            all_conflict_pairs: Dict to update with conflict pairs
+            processed_formatted_pairs: Set of processed formatted typo pairs
+            formatted_typos_to_remove: Set of formatted typos to remove (in-place)
+            losing_to_winning_formatted: Dict mapping losing -> winning formatted typo
             sa: Suffix array
             state: Dictionary state
         """
@@ -171,48 +170,63 @@ class PlatformSubstringConflictPass(Pass):
                 continue  # Skip self
 
             matched_typo = formatted_typos[match_idx]
-            matched_corrections = formatted_to_corrections[matched_typo]
 
-            # Determine which is shorter/longer for conflict resolution
-            if len(formatted_typo) < len(matched_typo):
-                shorter_typo = formatted_typo
-                longer_typo = matched_typo
-                shorter_corrections = corrections_for_typo
-                longer_corrections = matched_corrections
-            elif len(formatted_typo) > len(matched_typo):
-                shorter_typo = matched_typo
-                longer_typo = formatted_typo
-                shorter_corrections = matched_corrections
-                longer_corrections = corrections_for_typo
-            else:
-                # Same length - check if they're actually substrings
-                if formatted_typo != matched_typo:
-                    # Different strings of same length can't be substrings
-                    continue
-                # Same string - skip (duplicate)
+            # Skip if either formatted typo is already marked for removal
+            if (
+                formatted_typo in formatted_typos_to_remove
+                or matched_typo in formatted_typos_to_remove
+            ):
                 continue
 
-            # Suffix array already found this as a substring match
-            # Quick CPU verification to ensure it's actually a substring (handles edge cases)
-            if not is_substring(shorter_typo, longer_typo):
+            # Check if we've already processed this formatted typo pair
+            pair_key = frozenset({formatted_typo, matched_typo})
+            if pair_key in processed_formatted_pairs:
+                continue
+            processed_formatted_pairs.add(pair_key)
+
+            # Determine which is shorter/longer and validate substring relationship
+            result = determine_shorter_longer_formatted_typo(
+                formatted_typo,
+                matched_typo,
+                corrections_for_typo,
+                formatted_to_corrections[matched_typo],
+            )
+            if result is None:
+                continue
+            shorter_typo, longer_typo, shorter_corrections, longer_corrections = result
+
+            # Sample one correction from each formatted typo to make decision
+            # This determines which formatted typo should be removed (all corrections with it)
+            if not shorter_corrections or not longer_corrections:
                 continue
 
-            # Process all combinations of corrections
-            process_conflict_combinations(
-                shorter_typo,
-                longer_typo,
-                shorter_corrections,
-                longer_corrections,
+            shorter_correction, _, shorter_boundary = shorter_corrections[0]
+            longer_correction, _, longer_boundary = longer_corrections[0]
+            shorter_typo_core, shorter_word, _ = shorter_correction
+            longer_typo_core, longer_word, _ = longer_correction
+
+            # Use existing resolution logic to decide which formatted typo to remove
+            remove_shorter = should_remove_shorter(
                 match_direction,
-                processed_pairs,
-                corrections_to_remove_set,
-                all_corrections_to_remove,
-                all_conflict_pairs,
+                shorter_typo_core,
+                longer_typo_core,
+                shorter_word,
+                longer_word,
+                shorter_boundary,
+                longer_boundary,
                 self.context.validation_index,
                 self.context.source_index,
                 state.debug_words,
                 state.debug_typo_matcher,
             )
+
+            # Mark the losing formatted typo for removal
+            if remove_shorter:
+                formatted_typos_to_remove.add(shorter_typo)
+                losing_to_winning_formatted[shorter_typo] = longer_typo
+            else:
+                formatted_typos_to_remove.add(longer_typo)
+                losing_to_winning_formatted[longer_typo] = shorter_typo
 
     def _detect_conflicts(
         self,
@@ -233,6 +247,7 @@ class PlatformSubstringConflictPass(Pass):
         - Suffix array to enable O(log N + M) substring queries instead of O(N²)
         - Build suffix array once from all formatted typos
         - Query for each typo to find all substring matches efficiently
+        - Track formatted typo-level removals for efficient bulk removal
 
         Args:
             formatted_to_corrections: Dict mapping formatted_typo ->
@@ -247,10 +262,11 @@ class PlatformSubstringConflictPass(Pass):
         """
         all_corrections_to_remove: list[tuple[tuple[str, str, BoundaryType], str]] = []
         all_conflict_pairs: dict[tuple[str, str, BoundaryType], tuple[str, str, BoundaryType]] = {}
-        processed_pairs: set[frozenset[tuple[str, str, BoundaryType]]] = set()
+        processed_formatted_pairs: set[frozenset[str]] = set()
 
-        # Track corrections already marked for removal (early termination optimization)
-        corrections_to_remove_set: set[tuple[str, str, BoundaryType]] = set()
+        # Track formatted typos to remove and their conflicting winners (efficient bulk removal)
+        formatted_typos_to_remove: set[str] = set()
+        losing_to_winning_formatted: dict[str, str] = {}
 
         # Build suffix array from all formatted typos
         formatted_typos = list(formatted_to_corrections.keys())
@@ -276,6 +292,10 @@ class PlatformSubstringConflictPass(Pass):
             if progress_bar is not None:
                 progress_bar.update(1)
 
+            # Skip if this formatted typo is already marked for removal
+            if formatted_typo in formatted_typos_to_remove:
+                continue
+
             corrections_for_typo = formatted_to_corrections[formatted_typo]
 
             # Process conflicts for this typo
@@ -286,16 +306,24 @@ class PlatformSubstringConflictPass(Pass):
                 formatted_typos,
                 formatted_to_corrections,
                 match_direction,
-                processed_pairs,
-                corrections_to_remove_set,
-                all_corrections_to_remove,
-                all_conflict_pairs,
+                processed_formatted_pairs,
+                formatted_typos_to_remove,
+                losing_to_winning_formatted,
                 sa,
                 state,
             )
 
         if progress_bar is not None:
             progress_bar.close()
+
+        # Bulk remove ALL corrections with losing formatted typos
+        bulk_remove_losing_formatted_typos(
+            formatted_typos_to_remove,
+            losing_to_winning_formatted,
+            formatted_to_corrections,
+            all_corrections_to_remove,
+            all_conflict_pairs,
+        )
 
         return all_corrections_to_remove, all_conflict_pairs
 
@@ -337,6 +365,7 @@ class PlatformSubstringConflictPass(Pass):
                 reason,
                 state.debug_words,
                 state.debug_typo_matcher,
+                state,
             )
 
         # Remove from active set
@@ -359,9 +388,6 @@ class PlatformSubstringConflictPass(Pass):
             reason,
             pass_name=self.name,
         )
-
-    # GPU verification removed - suffix array already handles substring detection efficiently
-    # GPU would only be useful for additional validation beyond substring checking
 
     def _remove_conflicts_and_log(
         self,

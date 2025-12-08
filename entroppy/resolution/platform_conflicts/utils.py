@@ -10,6 +10,88 @@ if TYPE_CHECKING:
     from entroppy.utils.debug import DebugTypoMatcher
 
 
+def determine_shorter_longer_formatted_typo(
+    formatted_typo: str,
+    matched_typo: str,
+    corrections_for_typo: list[tuple[tuple[str, str, BoundaryType], str, BoundaryType]],
+    matched_corrections: list[tuple[tuple[str, str, BoundaryType], str, BoundaryType]],
+) -> tuple[str, str, list, list] | None:
+    """Determine which formatted typo is shorter/longer and validate substring.
+
+    Args:
+        formatted_typo: Current formatted typo
+        matched_typo: Matched formatted typo
+        corrections_for_typo: Corrections for current typo
+        matched_corrections: Corrections for matched typo
+
+    Returns:
+        Tuple of (shorter_typo, longer_typo, shorter_corrections, longer_corrections)
+        or None if not a valid substring conflict
+    """
+    if len(formatted_typo) < len(matched_typo):
+        shorter_typo = formatted_typo
+        longer_typo = matched_typo
+        shorter_corrections = corrections_for_typo
+        longer_corrections = matched_corrections
+    elif len(formatted_typo) > len(matched_typo):
+        shorter_typo = matched_typo
+        longer_typo = formatted_typo
+        shorter_corrections = matched_corrections
+        longer_corrections = corrections_for_typo
+    else:
+        # Same length - check if they're actually substrings
+        if formatted_typo != matched_typo:
+            # Different strings of same length can't be substrings
+            return None
+        # Same string - skip (duplicate)
+        return None
+
+    # Suffix array already found this as a substring match
+    # Quick CPU verification to ensure it's actually a substring (handles edge cases)
+    if not is_substring(shorter_typo, longer_typo):
+        return None
+
+    return shorter_typo, longer_typo, shorter_corrections, longer_corrections
+
+
+def bulk_remove_losing_formatted_typos(
+    formatted_typos_to_remove: set[str],
+    losing_to_winning_formatted: dict[str, str],
+    formatted_to_corrections: dict[
+        str, list[tuple[tuple[str, str, BoundaryType], str, BoundaryType]]
+    ],
+    all_corrections_to_remove: list[tuple[tuple[str, str, BoundaryType], str]],
+    all_conflict_pairs: dict[tuple[str, str, BoundaryType], tuple[str, str, BoundaryType]],
+) -> None:
+    """Bulk remove all corrections with losing formatted typos.
+
+    Args:
+        formatted_typos_to_remove: Set of formatted typos to remove
+        losing_to_winning_formatted: Dict mapping losing -> winning formatted typo
+        formatted_to_corrections: Dict mapping formatted typo -> corrections
+        all_corrections_to_remove: List to append removals
+        all_conflict_pairs: Dict to update with conflict pairs
+    """
+    for losing_formatted_typo in formatted_typos_to_remove:
+        if losing_formatted_typo not in formatted_to_corrections:
+            continue
+        losing_corrections = formatted_to_corrections[losing_formatted_typo]
+        winning_formatted_typo = losing_to_winning_formatted.get(losing_formatted_typo)
+        # Remove all corrections with losing formatted typo
+        for correction, _, _ in losing_corrections:
+            reason = (
+                f"Cross-boundary substring conflict: "
+                f"'{losing_formatted_typo}' conflicts with "
+                f"'{winning_formatted_typo if winning_formatted_typo else 'another typo'}'"
+            )
+            all_corrections_to_remove.append((correction, reason))
+            # Create conflict pair if we found a winner
+            if winning_formatted_typo and winning_formatted_typo in formatted_to_corrections:
+                winning_corrections = formatted_to_corrections[winning_formatted_typo]
+                if winning_corrections:
+                    all_conflict_pairs[correction] = winning_corrections[0][0]
+
+
 def is_substring(shorter: str, longer: str) -> bool:
     """Check if shorter is a substring of longer.
 

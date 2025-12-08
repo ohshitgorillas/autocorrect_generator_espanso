@@ -55,5 +55,5 @@ def find_substring_matches(
         Set of indices of typos that contain formatted_typo as substring
     """
     # Use Rust implementation - O(log N + M) query, no linear scan
-    matched_indices = sa.find_substring_conflicts(formatted_typo)
+    matched_indices = sa.find_conflicts(formatted_typo)
     return set(matched_indices)

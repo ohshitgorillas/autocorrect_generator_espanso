@@ -68,56 +68,111 @@ impl RustSubstringIndex {
         })
     }
 
-    /// Find all typos that contain the given typo as a substring.
+    /// Find all substring conflicts involving the given typo (bidirectional).
+    ///
+    /// Finds conflicts in both directions:
+    /// - Superstring conflicts: typos that contain the query string as a substring
+    /// - Substring conflicts: typos that are substrings of the query string
     ///
     /// Uses binary search for O(log N) position lookup instead of O(N) linear scan.
     ///
     /// Args:
-    ///     typo: The substring to search for
+    ///     typo: The typo string to search for conflicts
     ///
     /// Returns:
-    ///     List of indices where typo appears as substring (excluding self)
+    ///     List of indices of conflicting typos (excluding self)
     pub fn find_substring_conflicts(&self, typo: &str) -> PyResult<Vec<usize>> {
-        // Find all occurrences using suffix array
-        // The suffix crate's positions() method returns &[u32] (slice of positions)
-        let matches = self.suffix_array.positions(typo);
-
-        // Map match positions back to typo indices using binary search
         let mut matched_typo_indices = Vec::new();
+
+        // 1. Superstring Search: Find all typos that contain the query string
+        matched_typo_indices.extend(self.find_superstring_conflicts(typo));
+
+        // 2. Substring Search: Find all typos that are substrings of the query string
+        matched_typo_indices.extend(self.find_contained_typos(typo));
+
+        // Filter out self-matches and deduplicate
+        Ok(self.deduplicate_and_filter_self(typo, matched_typo_indices))
+    }
+
+    /// Find all typos that contain the query string as a substring (superstring conflicts).
+    ///
+    /// Uses the suffix array to find all occurrences of the query string in the dictionary.
+    fn find_superstring_conflicts(&self, typo: &str) -> Vec<usize> {
+        let matches = self.suffix_array.positions(typo);
+        let mut matched_indices = Vec::new();
+
         for &pos_u32 in matches {
-            let pos = pos_u32 as usize; // Convert u32 to usize
+            let pos = pos_u32 as usize;
+            if let Some(idx) = self.position_to_typo_index(pos) {
+                matched_indices.push(idx);
+            }
+        }
 
-            // Binary search to find which typo contains this position
-            let idx = match self.cumulative_starts.binary_search(&pos) {
-                Ok(i) => i,
-                Err(i) => {
-                    // Position is between cumulative_starts[i-1] and cumulative_starts[i]
-                    if i > 0 {
-                        i - 1
-                    } else {
-                        continue; // Position is before first typo
-                    }
+        matched_indices
+    }
+
+    /// Find all typos that are substrings of the query string (substring conflicts).
+    ///
+    /// Generates all substrings of the query string and checks if they exist in the dictionary.
+    fn find_contained_typos(&self, typo: &str) -> Vec<usize> {
+        let len = typo.len();
+        let mut matched_indices = Vec::new();
+
+        for start in 0..len {
+            for end in (start + 1)..=len {
+                let sub = &typo[start..end];
+                // Skip self (the full query string)
+                if sub.len() == len {
+                    continue;
                 }
-            };
-
-            if idx < self.typos.len() {
-                // Verify position is actually within this typo's range
-                let typo_start = self.cumulative_starts[idx];
-                let typo_end = typo_start + self.typos[idx].len();
-                if typo_start <= pos && pos < typo_end {
-                    matched_typo_indices.push(idx);
+                // Check if this substring exists in the dictionary
+                if let Some(&idx) = self.typo_to_idx.get(sub) {
+                    matched_indices.push(idx);
                 }
             }
         }
 
-        // Filter out self-matches
-        let self_idx = self.typo_to_idx.get(typo);
-        let result: Vec<usize> = matched_typo_indices
-            .into_iter()
-            .filter(|idx| Some(idx) != self_idx)
-            .collect();
+        matched_indices
+    }
 
-        Ok(result)
+    /// Map a position in the concatenated string to a typo index.
+    ///
+    /// Uses binary search on cumulative_starts for O(log N) lookup.
+    fn position_to_typo_index(&self, pos: usize) -> Option<usize> {
+        // Binary search to find which typo contains this position
+        let idx = match self.cumulative_starts.binary_search(&pos) {
+            Ok(i) => i,
+            Err(i) => {
+                // Position is between cumulative_starts[i-1] and cumulative_starts[i]
+                if i > 0 {
+                    i - 1
+                } else {
+                    return None; // Position is before first typo
+                }
+            }
+        };
+
+        if idx < self.typos.len() {
+            // Verify position is actually within this typo's range
+            let typo_start = self.cumulative_starts[idx];
+            let typo_end = typo_start + self.typos[idx].len();
+            if typo_start <= pos && pos < typo_end {
+                Some(idx)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Filter out self-matches and deduplicate the result.
+    fn deduplicate_and_filter_self(&self, typo: &str, mut indices: Vec<usize>) -> Vec<usize> {
+        let self_idx = self.typo_to_idx.get(typo);
+        indices.retain(|idx| Some(idx) != self_idx);
+        indices.sort_unstable();
+        indices.dedup();
+        indices
     }
 
     /// Get the list of typos (for compatibility/testing).

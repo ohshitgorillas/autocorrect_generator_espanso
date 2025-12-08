@@ -6,8 +6,8 @@ from typing import Any
 from loguru import logger
 from tqdm import tqdm
 
-from entroppy.core import BoundaryType, Correction
-from entroppy.core.boundaries import BoundaryIndex
+from entroppy.core.boundaries import BoundaryIndex, BoundaryType
+from entroppy.core.types import Correction
 from entroppy.matching import ExclusionMatcher
 from entroppy.utils.debug import DebugTypoMatcher
 
@@ -207,6 +207,7 @@ def _process_parallel_collisions(
                     BoundaryType(bd["boundary"]),
                     bd["details"],
                     debug_typo_matcher,
+                    None,  # debug_messages - not available in this context
                 )
 
     return final_corrections, skipped_collisions, skipped_short, excluded_corrections

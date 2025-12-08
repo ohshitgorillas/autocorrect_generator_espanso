@@ -175,7 +175,9 @@ def _process_collision_case_wrapper(
 
 
 def _log_boundary_details(
-    boundary_details_list: list, debug_typo_matcher: DebugTypoMatcher
+    boundary_details_list: list,
+    debug_typo_matcher: DebugTypoMatcher,
+    debug_messages: list[str] | None = None,
 ) -> None:
     """Log boundary selection details for accepted corrections."""
     for bd in boundary_details_list:
@@ -185,4 +187,5 @@ def _log_boundary_details(
             BoundaryType(bd["boundary"]),
             bd["details"],
             debug_typo_matcher,
+            debug_messages,
         )

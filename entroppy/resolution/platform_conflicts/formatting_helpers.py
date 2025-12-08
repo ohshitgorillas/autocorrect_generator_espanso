@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 from multiprocessing import Pool
-from typing import TYPE_CHECKING, Any, Callable
+from typing import Any, Callable
 
 from tqdm import tqdm
 
@@ -12,9 +12,6 @@ from entroppy.resolution.platform_conflicts.formatting import (
     _format_correction_worker,
     init_formatting_worker,
 )
-
-if TYPE_CHECKING:
-    pass
 
 
 def format_corrections_parallel(

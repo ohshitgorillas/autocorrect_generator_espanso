@@ -20,6 +20,7 @@ def choose_boundary_for_typo(
     debug_words: set[str] | None = None,
     debug_typo_matcher: DebugTypoMatcher | None = None,
     word: str | None = None,
+    debug_messages: list[str] | None = None,
 ) -> BoundaryType:
     """Choose the least restrictive boundary that doesn't produce garbage corrections.
 
@@ -37,6 +38,7 @@ def choose_boundary_for_typo(
         debug_words: Set of words to debug (exact matches)
         debug_typo_matcher: Matcher for debug typos (with wildcards/boundaries)
         word: Optional word associated with this typo (for debug logging)
+        debug_messages: Optional list to collect messages into (for reports)
 
     Returns:
         The chosen boundary type (least restrictive that doesn't cause false triggers)
@@ -49,7 +51,7 @@ def choose_boundary_for_typo(
 
     # Log boundary order selection if debugging
     if is_debug:
-        _log_boundary_order_selection(typo, word, relationship, debug_typo_matcher)
+        _log_boundary_order_selection(typo, word, relationship, debug_typo_matcher, debug_messages)
 
     # Check each boundary from least to most restrictive
     for boundary in boundary_order:
@@ -79,12 +81,13 @@ def choose_boundary_for_typo(
                 validation_index,
                 source_index,
                 debug_typo_matcher,
+                debug_messages,
             )
 
     # If all boundaries would cause false triggers, return BOTH as safest fallback
     # (most restrictive, least likely to cause issues)
     if is_debug:
-        _log_fallback_boundary(typo, word, debug_typo_matcher)
+        _log_fallback_boundary(typo, word, debug_typo_matcher, debug_messages)
     return BoundaryType.BOTH
 
 
@@ -135,8 +138,18 @@ def log_boundary_selection_details(
     boundary: BoundaryType,
     details: dict,
     debug_typo_matcher: DebugTypoMatcher | None,
+    debug_messages: list[str] | None = None,
 ) -> None:
-    """Log boundary selection details for debug typos."""
+    """Log boundary selection details for debug typos.
+
+    Args:
+        typo: The typo string
+        word: Optional word associated with this typo
+        boundary: The selected boundary type
+        details: Details dictionary from false trigger check
+        debug_typo_matcher: Matcher for debug typos
+        debug_messages: Optional list to collect messages into (for reports)
+    """
     if not debug_typo_matcher or not is_debug_typo(typo, boundary, debug_typo_matcher):
         return
 
@@ -152,4 +165,5 @@ def log_boundary_selection_details(
         f"Selected boundary '{boundary.value}'{word_info} - {'; '.join(safety_details)}",
         debug_typo_matcher.get_matching_patterns(typo, boundary),
         "Stage 3",
+        debug_messages,
     )

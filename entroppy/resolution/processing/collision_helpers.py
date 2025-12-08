@@ -43,6 +43,7 @@ def _log_collision_debug(
     freq_ratio: float,
     is_resolved: bool,
     debug_typo_matcher: "DebugTypoMatcher | None",
+    debug_messages: list[str] | None = None,
 ) -> None:
     """Log debug information for collision resolution.
 
@@ -54,6 +55,7 @@ def _log_collision_debug(
         freq_ratio: Minimum frequency ratio threshold
         is_resolved: Whether collision was resolved
         debug_typo_matcher: Matcher for debug typos
+        debug_messages: Optional list to collect messages into (for reports)
     """
     word_freqs = [(w, cached_word_frequency(w, "en")) for w in words_in_group]
     words_with_freqs = ", ".join([f"{w} (freq: {f:.2e})" for w, f in word_freqs])
@@ -68,6 +70,7 @@ def _log_collision_debug(
             f"(ratio: {ratio:.2f})",
             matched_patterns,
             "Stage 3",
+            debug_messages,
         )
     else:
         log_debug_typo(
@@ -76,6 +79,7 @@ def _log_collision_debug(
             f"{words_in_group}, ratio {ratio:.2f} <= threshold {freq_ratio}",
             matched_patterns,
             "Stage 3",
+            debug_messages,
         )
 
 
@@ -83,6 +87,7 @@ def _log_initial_collision(
     typo: str,
     unique_words: list[str],
     debug_typo_matcher: "DebugTypoMatcher | None",
+    debug_messages: list[str] | None = None,
 ) -> None:
     """Log initial collision detection for debugging.
 
@@ -90,6 +95,7 @@ def _log_initial_collision(
         typo: The typo string
         unique_words: List of unique words competing for this typo
         debug_typo_matcher: Matcher for debug typos
+        debug_messages: Optional list to collect messages into (for reports)
     """
     word_freqs = [(w, cached_word_frequency(w, "en")) for w in unique_words]
     words_with_freqs = ", ".join([f"{w} (freq: {f:.2e})" for w, f in word_freqs])
@@ -103,4 +109,5 @@ def _log_initial_collision(
         f"Collision detected: {typo} → [{words_with_freqs}]",
         matched_patterns,
         "Stage 3",
+        debug_messages,
     )
